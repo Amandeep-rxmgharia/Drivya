@@ -14,7 +14,24 @@
     />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary" />
+    <meta id="theme-color-meta" name="theme-color" content="#f4f6f9" />
     <title>Drivya — Cloud storage for modern teams</title>
+    <script>
+      (function () {
+        try {
+          var k = "drivya-theme";
+          var t = localStorage.getItem(k);
+          var dark = false;
+          if (t === "dark") dark = true;
+          else if (t === "light") dark = false;
+          else dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+          document.documentElement.classList.toggle("dark", dark);
+          document.documentElement.dataset.theme = dark ? "dark" : "light";
+          var meta = document.getElementById("theme-color-meta");
+          if (meta) meta.setAttribute("content", dark ? "#0b0e18" : "#f4f6f9");
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

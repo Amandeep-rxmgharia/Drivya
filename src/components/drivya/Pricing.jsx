@@ -76,7 +76,7 @@ export function Pricing() {
               className={`relative rounded-2xl p-7 transition-all duration-300 ${
                 p.highlighted
                   ? "glass border-primary/50 shadow-glow scale-[1.02]"
-                  : "glass hover:-translate-y-1"
+                  : "glass"
               }`}
             >
               {p.highlighted && (

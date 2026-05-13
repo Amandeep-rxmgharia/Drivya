@@ -14,9 +14,9 @@ export function CTA() {
         transition={{ type: "tween", duration: 0.82, ease: easeSmooth }}
         className="relative overflow-hidden rounded-3xl glass p-12 md:p-20 text-center shadow-elegant"
       >
-        <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_center,oklch(0.7_0.2_255/0.35),transparent_70%)]" />
-        <div className="absolute -top-20 -right-20 h-60 w-60 rounded-full bg-[oklch(0.65_0.25_290/0.4)] blur-3xl" />
-        <div className="absolute -bottom-20 -left-20 h-60 w-60 rounded-full bg-[oklch(0.7_0.2_255/0.4)] blur-3xl" />
+        <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_center,var(--ambient-blob-c),transparent_70%)]" />
+        <div className="absolute -top-20 -right-20 h-60 w-60 rounded-full blur-3xl bg-[radial-gradient(closest-side,var(--ambient-blob-b),transparent)]" />
+        <div className="absolute -bottom-20 -left-20 h-60 w-60 rounded-full blur-3xl bg-[radial-gradient(closest-side,var(--ambient-blob-a),transparent)]" />
 
         <h2 className="font-display text-4xl md:text-6xl font-semibold tracking-tight text-foreground">
           Start storing <span className="text-gradient">smarter</span> with Drivya.

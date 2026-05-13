@@ -11,7 +11,7 @@ export function MouseGlow() {
     <div
       className="pointer-events-none fixed inset-0 z-0 transition-opacity"
       style={{
-        background: `radial-gradient(600px circle at ${pos.x}px ${pos.y}px, oklch(0.7 0.2 255 / 0.08), transparent 60%)`,
+        background: `radial-gradient(600px circle at ${pos.x}px ${pos.y}px, var(--mouse-glow), transparent 60%)`,
       }}
     />
   );

@@ -37,7 +37,7 @@ export function Security() {
           transition={{ type: "tween", duration: 0.88, ease: easeSmooth }}
           className="relative aspect-square max-w-md mx-auto"
         >
-          <div className="absolute inset-0 rounded-full bg-[radial-gradient(closest-side,oklch(0.7_0.2_255/0.3),transparent)] blur-2xl" />
+          <div className="absolute inset-0 rounded-full blur-2xl bg-[radial-gradient(closest-side,var(--ambient-radial-large),transparent)]" />
           <div className="absolute inset-8 rounded-full border border-primary/30 animate-pulse" />
           <div className="absolute inset-16 rounded-full border border-primary/20" />
           <div className="absolute inset-0 flex items-center justify-center">
@@ -46,7 +46,7 @@ export function Security() {
               transition={{ duration: 4, repeat: Infinity, ease: easeSmooth }}
               className="relative h-40 w-40 rounded-3xl glass flex items-center justify-center shadow-glow"
             >
-              <Shield className="h-20 w-20 text-primary drop-shadow-[0_0_20px_oklch(0.7_0.2_255/0.8)]" />
+              <Shield className="h-20 w-20 text-primary drop-shadow-primary-glow" />
             </motion.div>
           </div>
         </motion.div>

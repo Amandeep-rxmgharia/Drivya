@@ -12,11 +12,14 @@ import "@fontsource/space-grotesk/700.css";
 
 import "./styles.css";
 import App from "./App.jsx";
+import { ThemeProvider } from "@/components/theme/ThemeProvider";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <MotionConfig reducedMotion="user">
-      <App />
-    </MotionConfig>
+    <ThemeProvider>
+      <MotionConfig reducedMotion="user">
+        <App />
+      </MotionConfig>
+    </ThemeProvider>
   </StrictMode>,
 );

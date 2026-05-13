@@ -7,8 +7,8 @@ const loopEase = [0.45, 0.05, 0.55, 0.95];
 export function DashboardMockup() {
   return (
     <div className="relative w-full aspect-[5/4] max-w-xl mx-auto">
-      <div className="absolute -inset-10 bg-[radial-gradient(closest-side,oklch(0.7_0.2_255/0.35),transparent)] blur-2xl" />
-      <div className="absolute -right-10 top-10 h-40 w-40 rounded-full bg-[oklch(0.65_0.25_290/0.4)] blur-3xl" />
+      <div className="absolute -inset-10 blur-2xl bg-[radial-gradient(closest-side,var(--ambient-radial-large),transparent)]" />
+      <div className="absolute -right-10 top-10 h-40 w-40 rounded-full blur-3xl bg-[radial-gradient(closest-side,var(--ambient-blob-b),transparent)]" />
 
       <motion.div
         initial={{ y: 16, opacity: 0 }}

@@ -72,7 +72,7 @@ export function Features() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-60px" }}
             transition={{ type: "tween", duration: 0.68, ease: easeSmooth, delay: (i % 4) * 0.07 }}
-            className="group relative glass rounded-2xl p-6 hover:-translate-y-1 transition-all duration-300 hover:shadow-glow overflow-hidden"
+            className="group relative glass rounded-2xl p-6 hover:shadow-glow overflow-hidden"
           >
             <div className="absolute -inset-px rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-br from-primary/20 via-transparent to-accent/20 pointer-events-none" />
             <div className="relative">
