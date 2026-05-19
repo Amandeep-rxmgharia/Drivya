@@ -2,6 +2,26 @@
 @source "../src";
 @import "tw-animate-css";
 
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255,255,255,0.03);
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    #3b82f6,
+    #8b5cf6,
+    #9248ec
+  );
+
+  border-radius: 999px;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -223,6 +243,11 @@
   .drop-shadow-primary-glow {
     filter: var(--icon-glow-filter);
   }
+  .file-list-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: oklch(0.7 0.2 255 / 0.45) transparent;
+  }
+
   .noise::before {
     content: "";
     position: absolute;
