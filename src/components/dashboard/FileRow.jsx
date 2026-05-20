@@ -14,7 +14,7 @@ import { detectFileKind } from "@/lib/file-types";
 import { easeSmooth } from "@/lib/motion-presets";
 import { FileTypeIcon } from "./FileTypeIcon";
 
-const rowEase = "duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]";
+const rowEase = "duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]";
 
 /**
  * @typedef {import('@/lib/file-types').FileKind} FileKind
@@ -34,6 +34,7 @@ const rowEase = "duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]";
 /**
  * @param {{
  *   file: FileRowData;
+ *   viewType?: 'list' | 'grid';
  *   selected?: boolean;
  *   active?: boolean;
  *   index?: number;
@@ -47,6 +48,7 @@ const rowEase = "duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]";
  */
 export function FileRow({
   file,
+  viewType = "list",
   selected = false,
   active = false,
   index = 0,
@@ -56,10 +58,10 @@ export function FileRow({
   onDownload,
   onDelete,
   className,
-  viewType
 }) {
   const [hovered, setHovered] = useState(false);
   const kind = detectFileKind(file.name, file.kind);
+  const isGrid = viewType === "grid";
   const isUploading =
     file.uploadProgress != null &&
     file.uploadProgress >= 0 &&
@@ -69,138 +71,207 @@ export function FileRow({
     <motion.article
       role="row"
       aria-selected={selected}
-      initial={{ opacity: 0, y: 10 }}
+      initial={{ opacity: 0, y: 8 }}
       whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-32px" }}
+      viewport={{ once: true, margin: "-24px" }}
       transition={{
         type: "tween",
-        duration: 0.55,
-        delay: index * 0.05,
+        duration: 0.5,
+        delay: index * 0.04,
         ease: easeSmooth,
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className={cn("group relative px-2 sm:px-3", className)}
+      className={cn("group", isGrid ? "min-w-0" : "px-1 sm:px-2", className)}
     >
       <button
         type="button"
         onClick={() => onSelect?.(file.id)}
         className={cn(
-          "relative w-full text-left rounded-2xl border outline-none",
-          "bg-white/[0.03] backdrop-blur-md border-white/[0.08]",
+          "relative w-full text-left rounded-xl border outline-none",
+          "bg-card border-border shadow-sm dark:bg-card/50 dark:backdrop-blur-sm dark:shadow-none",
           rowEase,
           "transition-[transform,box-shadow,border-color,background-color]",
           hovered &&
             !selected && [
-              "-translate-y-0.5 border-primary/35 bg-white/[0.06]",
-              "shadow-[0_8px_32px_-12px_rgba(59,130,246,0.35),inset_0_1px_0_0_rgba(255,255,255,0.06)]",
+              "-translate-y-px border-primary/25 bg-secondary/60",
+              "shadow-sm dark:shadow-[0_8px_24px_-12px_rgba(59,130,246,0.2)]",
             ],
           selected && [
-            "border-primary/50 bg-primary/[0.08]",
-            "shadow-[0_0_0_1px_rgba(99,102,241,0.25),0_12px_40px_-16px_rgba(99,102,241,0.45)] ring-1 ring-primary/20",
+            "border-primary/40 bg-primary/5",
+            "ring-1 ring-primary/20 shadow-sm",
           ],
-          active && !selected && "bg-secondary/50 border-white/12",
-          "focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+          active && !selected && "bg-secondary/70",
+          "focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+          isGrid && "flex h-full flex-col p-4",
+          !isGrid && "p-3.5 sm:p-4",
         )}
       >
-        <span
-          className={cn(
-            "pointer-events-none absolute inset-0 rounded-2xl opacity-0 transition-opacity",
-            rowEase,
-            (hovered || selected) &&
-              "opacity-100 bg-gradient-to-b from-white/[0.06] to-transparent",
-          )}
-          aria-hidden
-        />
-
-        <div className={`relative flex flex-col gap-3 ${viewType === 'grid' ? 'sm:min-h-40 md:min-h-45 lg:min-h-46' : ''} h-full justify-between p-3.5 sm:p-4 ${viewType !== 'grid' ? 'md:grid md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-4' : ''}`}>
-          <div className="flex min-w-0 items-start gap-3.5 sm:gap-4">
-            <FileTypeIcon kind={kind} hovered={hovered || selected} />
-
-            <div className="min-w-0 flex-1 self-center-safe space-y-1.5">
-              { <div className="flex flex-wrap items-center gap-2">
-                {<h4 className="text-nowrap text-[15px] font-semibold tracking-tight text-foreground sm:text-base">
-                  {file.name}
-                </h4> }
-              {file.starred && (
-                  <span className="inline-flex items-center gap-1 rounded-md border border-amber-400/20 bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-200/90">
-                    <Star className="h-3 w-3 fill-amber-300/80 text-amber-300" aria-hidden />
-                    Starred
-                  </span>
-                )}
-                {file.shared && (
-                  <span className="inline-flex items-center gap-1 rounded-md border border-violet-400/20 bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-violet-200/90">
-                    <Users className="h-3 w-3" aria-hidden />
-                    Shared
-                  </span>
-                )}
-              </div> }
-
-              <p className={`flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground ${viewType !== 'grid' ? 'md:hidden' : ''}`}>
-                <span>{file.modifiedAt}</span>
-              </p>
-              <p className={`flex flex-wrap sm:hidden md:block items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground ${viewType !== 'grid' ? 'md:hidden' : ''}`}>
-                <span>Size {file.size}</span>
-              </p>
-
-              {isUploading && (
-                <div className="space-y-1.5 pt-0.5">
-                  <div className="flex items-center justify-between text-[10px] font-medium">
-                    <span className="inline-flex items-center gap-1.5 text-primary">
-                      <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
-                      Uploading…
-                    </span>
-                    <span className="tabular-nums text-muted-foreground">
-                      {file.uploadProgress}%
-                    </span>
-                  </div>
-                  <div className="h-1 overflow-hidden rounded-full bg-white/10">
-                    <motion.div
-                      className="h-full rounded-full bg-gradient-primary shadow-glow"
-                      initial={{ width: 0 }}
-                      animate={{ width: `${file.uploadProgress}%` }}
-                      transition={{ duration: 0.6, ease: easeSmooth }}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between gap-3 md:justify-end md:gap-6">
-            <dl className="hidden md:grid md:grid-cols-[minmax(7rem,1fr)_5.5rem_4.5rem] md:items-center md:gap-6 md:text-right">
-              {file.name && (
-                <div>
-                  <dt className="sr-only">Namu</dt>
-                </div>
-              )}
-              <div>
-                <dt className="sr-only">Modified</dt>
-                <dd className={`text-sm text-center text-muted-foreground/90 tabular-nums ${viewType === 'grid' ? 'md:hidden' : ''}`}>
-                  {file.modifiedAt}
-                </dd>
-              </div>
-              <div>
-                <dt className="sr-only">Size</dt>
-                <dd className={`text-sm text-left font-medium text-foreground/80 tabular-nums ${viewType === 'grid' ? 'md:hidden' : ''}`}>
-                  {file.size}
-                </dd>
-              </div>
-            </dl>
-
-            <FileRowActions
-              fileId={file.id}
-              starred={file.starred}
-              visible={hovered || selected}
-              onStar={onStar}
-              onShare={onShare}
-              onDownload={onDownload}
-              onDelete={onDelete}
-            />
-          </div>
-        </div>
+        {isGrid ? (
+          <GridLayout
+            file={file}
+            kind={kind}
+            isUploading={isUploading}
+            hovered={hovered}
+            selected={selected}
+            onStar={onStar}
+            onShare={onShare}
+            onDownload={onDownload}
+            onDelete={onDelete}
+          />
+        ) : (
+          <ListLayout
+            file={file}
+            kind={kind}
+            isUploading={isUploading}
+            hovered={hovered}
+            selected={selected}
+            onStar={onStar}
+            onShare={onShare}
+            onDownload={onDownload}
+            onDelete={onDelete}
+          />
+        )}
       </button>
     </motion.article>
+  );
+}
+
+function GridLayout({
+  file,
+  kind,
+  isUploading,
+  hovered,
+  selected,
+  onStar,
+  onShare,
+  onDownload,
+  onDelete,
+}) {
+  return (
+    <>
+      <div className="flex items-start justify-between gap-2">
+        <FileTypeIcon kind={kind} />
+        <FileRowActions
+          fileId={file.id}
+          starred={file.starred}
+          visible={hovered || selected}
+          compact
+          onStar={onStar}
+          onShare={onShare}
+          onDownload={onDownload}
+          onDelete={onDelete}
+        />
+      </div>
+
+      <div className="mt-3 min-w-0 flex-1 space-y-1">
+        <h4 className="line-clamp-2 text-sm font-semibold leading-snug tracking-tight text-foreground">
+          {file.name}
+        </h4>
+        <p className="text-[11px] text-muted-foreground tabular-nums">
+          {file.size} · {file.modifiedAt}
+        </p>
+        {(file.starred || file.shared) && (
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {file.starred && <Badge variant="star">Starred</Badge>}
+            {file.shared && <Badge variant="shared">Shared</Badge>}
+          </div>
+        )}
+        {isUploading && <UploadProgress percent={file.uploadProgress} />}
+      </div>
+    </>
+  );
+}
+
+function ListLayout({
+  file,
+  kind,
+  isUploading,
+  hovered,
+  selected,
+  onStar,
+  onShare,
+  onDownload,
+  onDelete,
+}) {
+  return (
+    <div className="flex flex-col gap-3 md:grid md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-4">
+      <div className="flex min-w-0 items-start gap-3 sm:items-center">
+        <FileTypeIcon kind={kind} />
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="truncate text-sm font-semibold text-foreground sm:text-[15px]">
+              {file.name}
+            </h4>
+            {file.starred && <Badge variant="star">Starred</Badge>}
+            {file.shared && <Badge variant="shared">Shared</Badge>}
+          </div>
+          <p className="text-[11px] text-muted-foreground md:hidden">
+            {file.modifiedAt} · {file.size}
+          </p>
+          {isUploading && <UploadProgress percent={file.uploadProgress} />}
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between gap-3 md:justify-end">
+        <dl className="hidden md:flex md:items-center md:gap-6 md:text-right text-sm text-muted-foreground">
+          {/* {file.owner && (
+            <div className="min-w-[5rem] truncate">{file.owner}</div>
+          )} */}
+          <div className="tabular-nums">{file.modifiedAt}</div>
+          <div className="tabular-nums font-medium text-foreground/80">{file.size}</div>
+        </dl>
+        <FileRowActions
+          fileId={file.id}
+          starred={file.starred}
+          visible={hovered || selected}
+          onStar={onStar}
+          onShare={onShare}
+          onDownload={onDownload}
+          onDelete={onDelete}
+        />
+      </div>
+    </div>
+  );
+}
+
+function Badge({ variant, children }) {
+  const styles =
+    variant === "star"
+      ? "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+      : "border-violet-500/25 bg-violet-500/10 text-violet-700 dark:text-violet-300";
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium",
+        styles,
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+function UploadProgress({ percent }) {
+  return (
+    <div className="space-y-1 pt-1">
+      <div className="flex items-center justify-between text-[10px] font-medium text-muted-foreground">
+        <span className="inline-flex items-center gap-1 text-primary">
+          <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+          Uploading
+        </span>
+        <span className="tabular-nums">{percent}%</span>
+      </div>
+      <div className="h-1 overflow-hidden rounded-full bg-border">
+        <motion.div
+          className="h-full rounded-full bg-gradient-primary"
+          initial={{ width: 0 }}
+          animate={{ width: `${percent}%` }}
+          transition={{ duration: 0.6, ease: easeSmooth }}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -208,55 +279,45 @@ function FileRowActions({
   fileId,
   starred,
   visible,
+  compact,
   onStar,
   onShare,
   onDownload,
   onDelete,
 }) {
   const stop = (e) => e.stopPropagation();
-
   const btn =
-    "inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
+    "inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30";
 
   return (
     <div
       role="toolbar"
       aria-label="File actions"
       className={cn(
-        "flex items-center gap-0.5 rounded-xl border border-white/10 bg-black/20 p-0.5 backdrop-blur-md",
-        "transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+        "flex items-center gap-0.5 rounded-lg border border-border bg-background/80 p-0.5 backdrop-blur-sm",
+        "transition-all duration-200",
         visible
-          ? "opacity-100 translate-y-0"
-          : "opacity-0 translate-y-1 pointer-events-none md:group-hover:opacity-100 md:group-hover:translate-y-0 md:group-hover:pointer-events-auto md:group-focus-within:opacity-100 md:group-focus-within:pointer-events-auto",
-        "max-md:opacity-100 max-md:translate-y-0 max-md:pointer-events-auto",
+          ? "opacity-100"
+          : "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto",
+        compact ? "" : "max-md:opacity-100 max-md:pointer-events-auto",
       )}
       onClick={stop}
       onKeyDown={stop}
     >
       <button
         type="button"
-        className={cn(btn, starred && "text-amber-300 hover:text-amber-200")}
+        className={cn(btn, starred && "text-amber-600 dark:text-amber-400")}
         title={starred ? "Unstar" : "Star"}
         aria-pressed={starred}
         onClick={() => onStar?.(fileId)}
       >
-        <Star className={cn("h-4 w-4", starred && "fill-current")} />
+        <Star className={cn("h-3.5 w-3.5", starred && "fill-current")} />
       </button>
-      <button
-        type="button"
-        className={btn}
-        title="Share"
-        onClick={() => onShare?.(fileId)}
-      >
-        <Share2 className="h-4 w-4" />
+      <button type="button" className={btn} title="Share" onClick={() => onShare?.(fileId)}>
+        <Share2 className="h-3.5 w-3.5" />
       </button>
-      <button
-        type="button"
-        className={btn}
-        title="Download"
-        onClick={() => onDownload?.(fileId)}
-      >
-        <Download className="h-4 w-4" />
+      <button type="button" className={btn} title="Download" onClick={() => onDownload?.(fileId)}>
+        <Download className="h-3.5 w-3.5" />
       </button>
       <button
         type="button"
@@ -264,16 +325,13 @@ function FileRowActions({
         title="Delete"
         onClick={() => onDelete?.(fileId)}
       >
-        <Trash2 className="h-4 w-4" />
+        <Trash2 className="h-3.5 w-3.5" />
       </button>
-      <button
-        type="button"
-        className={btn}
-        title="More options"
-        aria-label="More options"
-      >
-        <MoreHorizontal className="h-4 w-4" />
-      </button>
+      {!compact && (
+        <button type="button" className={btn} title="More" aria-label="More options">
+          <MoreHorizontal className="h-3.5 w-3.5" />
+        </button>
+      )}
     </div>
   );
 }

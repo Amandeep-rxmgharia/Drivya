@@ -12,77 +12,68 @@ import {
 /** @typedef {'folder'|'image'|'video'|'pdf'|'archive'|'document'|'audio'|'code'|'file'} FileKind */
 
 /**
+ * Muted, professional type styles — work in light and dark via semantic tints.
  * @type {Record<FileKind, {
  *   label: string;
  *   icon: import('lucide-react').LucideIcon;
- *   gradient: string;
- *   glow: string;
- *   ring: string;
+ *   tile: string;
+ *   iconColor: string;
  * }>}
  */
 export const FILE_TYPE_STYLES = {
   folder: {
     label: "Folder",
     icon: Folder,
-    gradient: "from-blue-500/90 via-violet-500/85 to-purple-600/90",
-    glow: "shadow-[0_0_24px_-4px_rgba(99,102,241,0.55)]",
-    ring: "ring-violet-400/25",
+    tile: "bg-violet-500/10 border-violet-500/20 dark:bg-violet-500/15 dark:border-violet-400/25",
+    iconColor: "text-violet-600 dark:text-violet-400",
   },
   image: {
     label: "Image",
     icon: Image,
-    gradient: "from-pink-500/90 via-rose-400/85 to-orange-400/90",
-    glow: "shadow-[0_0_24px_-4px_rgba(244,114,182,0.5)]",
-    ring: "ring-pink-400/25",
+    tile: "bg-rose-500/10 border-rose-500/20 dark:bg-rose-500/15 dark:border-rose-400/25",
+    iconColor: "text-rose-600 dark:text-rose-400",
   },
   video: {
     label: "Video",
     icon: Film,
-    gradient: "from-red-500/90 via-rose-600/85 to-purple-600/90",
-    glow: "shadow-[0_0_24px_-4px_rgba(239,68,68,0.45)]",
-    ring: "ring-red-400/25",
+    tile: "bg-red-500/10 border-red-500/20 dark:bg-red-500/15 dark:border-red-400/25",
+    iconColor: "text-red-600 dark:text-red-400",
   },
   pdf: {
     label: "PDF",
     icon: FileText,
-    gradient: "from-red-600/95 via-rose-700/90 to-red-800/95",
-    glow: "shadow-[0_0_24px_-4px_rgba(220,38,38,0.5)]",
-    ring: "ring-red-500/30",
+    tile: "bg-red-600/10 border-red-600/20 dark:bg-red-500/15 dark:border-red-400/25",
+    iconColor: "text-red-700 dark:text-red-400",
   },
   archive: {
     label: "Archive",
     icon: Archive,
-    gradient: "from-amber-400/95 via-yellow-500/90 to-orange-500/90",
-    glow: "shadow-[0_0_24px_-4px_rgba(245,158,11,0.45)]",
-    ring: "ring-amber-400/25",
+    tile: "bg-amber-500/10 border-amber-500/25 dark:bg-amber-500/15 dark:border-amber-400/25",
+    iconColor: "text-amber-700 dark:text-amber-400",
   },
   document: {
     label: "Document",
     icon: FileText,
-    gradient: "from-cyan-500/90 via-sky-500/85 to-blue-600/90",
-    glow: "shadow-[0_0_24px_-4px_rgba(6,182,212,0.45)]",
-    ring: "ring-cyan-400/25",
+    tile: "bg-sky-500/10 border-sky-500/20 dark:bg-sky-500/15 dark:border-sky-400/25",
+    iconColor: "text-sky-700 dark:text-sky-400",
   },
   audio: {
     label: "Audio",
     icon: Music,
-    gradient: "from-emerald-500/90 via-teal-500/85 to-green-600/90",
-    glow: "shadow-[0_0_24px_-4px_rgba(16,185,129,0.45)]",
-    ring: "ring-emerald-400/25",
+    tile: "bg-emerald-500/10 border-emerald-500/20 dark:bg-emerald-500/15 dark:border-emerald-400/25",
+    iconColor: "text-emerald-700 dark:text-emerald-400",
   },
   code: {
     label: "Code",
     icon: Code2,
-    gradient: "from-indigo-500/90 via-violet-600/85 to-purple-700/90",
-    glow: "shadow-[0_0_24px_-4px_rgba(99,102,241,0.5)]",
-    ring: "ring-indigo-400/25",
+    tile: "bg-indigo-500/10 border-indigo-500/20 dark:bg-indigo-500/15 dark:border-indigo-400/25",
+    iconColor: "text-indigo-700 dark:text-indigo-400",
   },
   file: {
     label: "File",
     icon: File,
-    gradient: "from-slate-500/80 via-slate-600/75 to-slate-700/80",
-    glow: "shadow-[0_0_20px_-6px_rgba(148,163,184,0.35)]",
-    ring: "ring-white/10",
+    tile: "bg-muted/60 border-border dark:bg-secondary/50",
+    iconColor: "text-muted-foreground",
   },
 };
 
@@ -92,9 +83,46 @@ const EXT_MAP = {
   video: ["mp4", "mov", "avi", "mkv", "webm", "m4v"],
   pdf: ["pdf"],
   archive: ["zip", "rar", "7z", "tar", "gz", "bz2", "xz"],
-  document: ["doc", "docx", "txt", "md", "rtf", "odt", "key", "pages", "ppt", "pptx", "xls", "xlsx", "csv"],
+  document: [
+    "doc",
+    "docx",
+    "txt",
+    "md",
+    "rtf",
+    "odt",
+    "key",
+    "pages",
+    "ppt",
+    "pptx",
+    "xls",
+    "xlsx",
+    "csv",
+  ],
   audio: ["mp3", "wav", "flac", "aac", "ogg", "m4a"],
-  code: ["js", "jsx", "ts", "tsx", "py", "rb", "go", "rs", "java", "c", "cpp", "h", "css", "scss", "html", "json", "yaml", "yml", "sql", "sh", "vue", "svelte"],
+  code: [
+    "js",
+    "jsx",
+    "ts",
+    "tsx",
+    "py",
+    "rb",
+    "go",
+    "rs",
+    "java",
+    "c",
+    "cpp",
+    "h",
+    "css",
+    "scss",
+    "html",
+    "json",
+    "yaml",
+    "yml",
+    "sql",
+    "sh",
+    "vue",
+    "svelte",
+  ],
 };
 
 /**

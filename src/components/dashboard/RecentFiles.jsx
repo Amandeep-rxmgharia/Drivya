@@ -46,7 +46,7 @@ export const RECENT_FILES = [
     id: "3",
     name: "Hero-shot-005.png",
     size: "8.1 MB",
-    modifiedAt: "May 12, 2026, 12:10 PM",
+    modifiedAt: "May 12, 2026",
     owner: "Amelia M.",
     starred: true,
     shared: true,
@@ -75,6 +75,30 @@ export const RECENT_FILES = [
     kind: "folder",
     shared: true,
   },
+  {
+    id: "7",
+    name: "api-routes.ts",
+    size: "24 KB",
+    modifiedAt: "May 10, 2026",
+    owner: "Dev",
+    kind: "code",
+  },
+  {
+    id: "8",
+    name: "podcast-ep12.mp3",
+    size: "48 MB",
+    modifiedAt: "May 9, 2026",
+    owner: "Marketing",
+    kind: "audio",
+  },
+  {
+    id: "9",
+    name: "launch-assets",
+    size: "1.2 GB",
+    modifiedAt: "May 8, 2026",
+    owner: "Design",
+    kind: "folder",
+  },
 ];
 
 const SORT_OPTIONS = [
@@ -97,7 +121,7 @@ export function RecentFiles({ files = RECENT_FILES, className }) {
   );
   const [sortBy, setSortBy] = useState("modified");
   const [filter, setFilter] = useState("all");
-  const [view, setView] = useState("list");
+  const [view, setView] = useState("grid");
   const [sortOpen, setSortOpen] = useState(false);
 
   const visibleFiles = useMemo(() => {
@@ -116,23 +140,25 @@ export function RecentFiles({ files = RECENT_FILES, className }) {
     setStarred((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
+  const isGrid = view === "grid";
+
   return (
     <motion.section
       {...fadeInView(0.12)}
       className={cn(card, "overflow-hidden", className)}
       aria-labelledby="recent-files-heading"
     >
-      <header className="border-b border-white/[0.06] px-5 py-5 sm:px-6 sm:py-6">
-        <motion.div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <motion.div>
-            <motion.div className="flex items-center gap-2">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-primary">
+      <header className="border-b border-border px-5 py-5 sm:px-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-border bg-secondary/50 text-primary">
                 <FileStack className="h-4 w-4" />
               </span>
-              <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 Library
               </span>
-            </motion.div>
+            </div>
             <h3
               id="recent-files-heading"
               className="mt-3 font-display text-lg font-semibold tracking-tight text-foreground sm:text-xl"
@@ -140,12 +166,15 @@ export function RecentFiles({ files = RECENT_FILES, className }) {
               Recent files
             </h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              {visibleFiles.length} item{visibleFiles.length === 1 ? "" : "s"} · Across all folders
+              {visibleFiles.length} item{visibleFiles.length === 1 ? "" : "s"}
             </p>
-          </motion.div>
+          </div>
 
-          <motion.div className="flex flex-wrap items-center gap-2">
-            <motion.div className="flex rounded-xl border border-white/10 bg-white/[0.03] p-0.5" role="tablist">
+          <div className="flex flex-wrap items-center gap-2">
+            <div
+              className="flex rounded-xl border border-border bg-secondary/40 p-0.5"
+              role="tablist"
+            >
               {FILTER_OPTIONS.map((opt) => (
                 <button
                   key={opt.id}
@@ -156,20 +185,20 @@ export function RecentFiles({ files = RECENT_FILES, className }) {
                   className={cn(
                     "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
                     filter === opt.id
-                      ? "bg-gradient-primary text-primary-foreground shadow-glow"
-                      : "text-muted-foreground hover:text-foreground hover:bg-white/[0.06]",
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:bg-secondary hover:text-foreground",
                   )}
                 >
                   {opt.label}
                 </button>
               ))}
-            </motion.div>
+            </div>
 
-            <motion.div className="relative">
+            <div className="relative">
               <button
                 type="button"
                 onClick={() => setSortOpen((o) => !o)}
-                className="inline-flex h-9 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 text-xs font-medium text-foreground/90 hover:bg-white/[0.06] transition-colors"
+                className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-secondary/40 px-3 text-xs font-medium text-foreground hover:bg-secondary transition-colors"
                 aria-expanded={sortOpen}
               >
                 <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
@@ -191,8 +220,8 @@ export function RecentFiles({ files = RECENT_FILES, className }) {
                       className={cn(
                         "w-full rounded-lg px-3 py-2 text-left text-sm transition-colors",
                         sortBy === opt.id
-                          ? "bg-secondary/80 text-foreground"
-                          : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground",
+                          ? "bg-secondary text-foreground"
+                          : "text-muted-foreground hover:bg-secondary/80 hover:text-foreground",
                       )}
                     >
                       {opt.label}
@@ -200,16 +229,16 @@ export function RecentFiles({ files = RECENT_FILES, className }) {
                   ))}
                 </motion.div>
               )}
-            </motion.div>
+            </div>
 
-            <motion.div className="hidden sm:flex rounded-xl border border-white/10 bg-white/[0.03] p-0.5">
+            <div className="flex rounded-xl border border-border bg-secondary/40 p-0.5">
               <button
                 type="button"
                 onClick={() => setView("list")}
                 className={cn(
                   "inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors",
                   view === "list"
-                    ? "bg-white/10 text-foreground"
+                    ? "bg-background text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground",
                 )}
                 aria-label="List view"
@@ -223,7 +252,7 @@ export function RecentFiles({ files = RECENT_FILES, className }) {
                 className={cn(
                   "inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors",
                   view === "grid"
-                    ? "bg-white/10 text-foreground"
+                    ? "bg-background text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground",
                 )}
                 aria-label="Grid view"
@@ -231,26 +260,30 @@ export function RecentFiles({ files = RECENT_FILES, className }) {
               >
                 <LayoutGrid className="h-4 w-4" />
               </button>
-            </motion.div>
-          </motion.div>
-        </motion.div>
+            </div>
+          </div>
+        </div>
       </header>
 
-      <motion.div className="hidden md:grid md:grid-cols-[minmax(0,1fr)_auto] md:gap-4 px-5 sm:px-6 py-2">
-        <motion.div className="grid grid-cols-[minmax(7rem,1fr)_5.5rem_4.5rem] gap-6 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/60">
-          <span className="w-[188px] text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/60 pr-1">Name</span>
-          <span >Modified</span>
-          <span className="">Size</span>
-        </motion.div>
-        <span className="w-[188px] text-right text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/60 pr-1">
-          Actions
-        </span>
-      </motion.div>
+      {!isGrid && (
+        <div className="hidden md:grid md:grid-cols-[1fr_auto] gap-4 border-b border-border/60 px-5 py-2 sm:px-6">
+          <motion.div className="grid grid-cols-[minmax(0,1fr)_6rem_4.5rem] gap-6 pl-14 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            <span>Name</span>
+            <span>Modified</span>
+            <span className="text-right">Size</span>
+          </motion.div>
+          <span className="w-36 text-right text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground pr-1">
+            Actions
+          </span>
+        </div>
+      )}
 
-      <motion.div
+      <div
         className={cn(
-          "file-list-scroll max-h-[min(520px,60vh)] overflow-y-auto py-2",
-          view === "grid" ? "grid  grid-cols-1 sm:grid-cols-2 gap-2 px-3 sm:px-4" : "flex flex-col gap-3"
+          "file-list-scroll max-h-[min(560px,65vh)] overflow-y-auto p-npm run dev -- --host3 sm:p-4",
+          isGrid
+            ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
+            : "flex flex-col gap-2",
         )}
         role="list"
       >
@@ -259,8 +292,8 @@ export function RecentFiles({ files = RECENT_FILES, className }) {
         ) : (
           visibleFiles.map((file, i) => (
             <FileRow
-              viewType={view}
               key={file.id}
+              viewType={view}
               file={{ ...file, starred: Boolean(starred[file.id] ?? file.starred) }}
               index={i}
               selected={selectedId === file.id}
@@ -273,9 +306,9 @@ export function RecentFiles({ files = RECENT_FILES, className }) {
             />
           ))
         )}
-      </motion.div>
+      </div>
 
-      <footer className="border-t border-white/[0.06] p-4 sm:p-5">
+      <footer className="border-t border-border p-4 sm:p-5">
         <DropZone />
       </footer>
     </motion.section>
@@ -284,27 +317,22 @@ export function RecentFiles({ files = RECENT_FILES, className }) {
 
 function EmptyState() {
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.98 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ type: "tween", duration: 0.6, ease: easeSmooth }}
-      className="mx-4 my-8 flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/12 bg-white/[0.02] px-6 py-14 text-center"
-    >
-      <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-gradient-to-br from-primary/20 to-violet-500/20 text-primary shadow-glow">
-        <FolderOpen className="h-6 w-6" />
+    <div className="col-span-full mx-auto flex max-w-sm flex-col items-center justify-center rounded-xl border border-dashed border-border bg-secondary/30 px-6 py-14 text-center">
+      <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-border bg-secondary/60 text-primary">
+        <FolderOpen className="h-5 w-5" />
       </span>
-      <h4 className="mt-5 font-display text-base font-semibold text-foreground">No files here yet</h4>
-      <p className="mt-2 max-w-xs text-sm text-muted-foreground leading-relaxed">
+      <h4 className="mt-4 font-display text-base font-semibold text-foreground">No files here yet</h4>
+      <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
         Upload documents, images, or folders to see them in your recent list.
       </p>
       <button
         type="button"
-        className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gradient-primary px-4 h-10 text-sm font-medium text-primary-foreground shadow-glow hover:opacity-90 transition-opacity"
+        className="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary px-4 h-9 text-sm font-medium text-primary-foreground shadow-sm hover:opacity-90 transition-opacity"
       >
         <UploadCloud className="h-4 w-4" />
         Upload files
       </button>
-    </motion.div>
+    </div>
   );
 }
 
@@ -312,7 +340,7 @@ function DropZone() {
   const [dragOver, setDragOver] = useState(false);
 
   return (
-    <motion.div
+    <div
       onDragOver={(e) => {
         e.preventDefault();
         setDragOver(true);
@@ -322,23 +350,20 @@ function DropZone() {
         e.preventDefault();
         setDragOver(false);
       }}
-      animate={{
-        borderColor: dragOver ? "rgba(99,102,241,0.5)" : "rgba(255,255,255,0.1)",
-        backgroundColor: dragOver ? "rgba(99,102,241,0.08)" : "rgba(255,255,255,0.02)",
-      }}
-      transition={{ duration: 0.25, ease: easeSmooth }}
       className={cn(
-        "flex flex-col items-center justify-center rounded-2xl border border-dashed px-4 py-6 text-center",
-        dragOver && "shadow-glow",
+        "flex flex-col items-center justify-center rounded-xl border border-dashed px-4 py-5 text-center transition-colors",
+        dragOver
+          ? "border-primary/40 bg-primary/5"
+          : "border-border bg-secondary/30 hover:bg-secondary/50",
       )}
     >
-      <UploadCloud className="h-5 w-5 text-primary drop-shadow-primary-glow" />
+      <UploadCloud className="h-5 w-5 text-primary" />
       <p className="mt-2 text-sm font-medium text-foreground">
         Drop files to upload · <span className="text-primary">browse</span>
       </p>
       <p className="mt-1 text-[11px] text-muted-foreground">
         Encrypted in transit · Resumable uploads
       </p>
-    </motion.div>
+    </div>
   );
 }

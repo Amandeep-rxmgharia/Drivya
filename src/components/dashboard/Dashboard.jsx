@@ -589,93 +589,6 @@ function AnalyticsCard() {
   );
 }
 
-/* legacy removed */
-
-if (false) {
-  void (
-    <motion.div {...fadeInView(0.12)} className={`${card} overflow-hidden`}>
-      <div className="flex items-center justify-between p-6 pb-4">
-        <div>
-          <h3 className="font-display text-base font-semibold text-foreground">
-            Recent files
-          </h3>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Across all your folders
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button className={ghostBtn}>
-            <span className="text-muted-foreground">Sort:</span> Modified
-            <ChevronDown className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </div>
-      <div className="px-3 pb-3">
-        <div className="hidden md:grid grid-cols-[1fr_140px_120px_100px_120px] gap-4 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 border-b border-border/60">
-          <span></span>
-          <span>Name</span>
-          <span>Date</span>
-          <span>Size</span>
-          <span className="text-right">Actions</span>
-        </div>
-        {[].map((f, i) => (
-          <motion.div
-            key={f.name}
-            initial={{ opacity: 0, y: 8 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-40px" }}
-            transition={{ type: "tween", duration: 0.55, delay: i * 0.06, ease: easeSmooth }}
-            className="group grid grid-cols-1 md:grid-cols-[1fr_140px_120px_100px_120px] gap-4 items-center px-4 py-3 rounded-xl hover:bg-secondary/40 transition-colors"
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-secondary/60 border border-border/50 text-foreground/80">
-                <f.icon className="h-4 w-4" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-sm font-medium text-foreground truncate">
-                  {f.name}
-                </div>
-                {/* <div className="text-[11px] text-muted-foreground md:hidden">
-                  {f.owner} · {f.modified} · {f.size}
-                </div> */}
-              </div>
-            </div>
-            <div className="hidden md:flex items-center gap-2 text-sm text-muted-foreground">
-              {/* <div className="h-6 w-6 rounded-full bg-gradient-primary ring-1 ring-border text-[10px] font-semibold flex items-center justify-center text-primary-foreground">
-                {f.owner.split(" ")[0][0]}
-              </div> */}
-              {f.name}
-            </div>
-            <div className="hidden md:block text-sm text-muted-foreground">
-              {f.Date}
-            </div>
-            <div className="hidden md:block text-sm text-muted-foreground tabular-nums">
-              {f.size}
-            </div>
-            <div className="hidden md:flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button className={iconBtn} title="Share">
-                <Share2 className="h-4 w-4" />
-              </button>
-              <button className={iconBtn} title="Download">
-                <Download className="h-4 w-4" />
-              </button>
-              <button className={iconBtn} title="Star">
-                <Star className="h-4 w-4" />
-              </button>
-              <button
-                className={`${iconBtn} hover:text-destructive`}
-                title="Delete"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
-          </motion.div>
-        ))}
-      </div>
-    </motion.div>
-  );
-}
-
 /* ───────────────────────── Upload queue ───────────────────────── */
 
 const uploads = [
@@ -1086,14 +999,14 @@ export function Dashboard() {
             onToggleSidebar={() => setCollapsed((c) => !c)}
             onMobileMenu={() => setMobileOpen(true)}
           />
-          <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 lg:p-8 space-y-6">
+          <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden scroll-smooth p-4 md:p-6 lg:p-8 space-y-6" style={{ scrollbarGutter: "stable" }}>
             <HeroSection />
 
             <motion.div
               {...fadeInView(0.06)}
               className=""
             >
-              <motion.div className="lg:col-span-2 space-y-6">
+              <motion.div style={{ transform: "none" }} className="lg:col-span-2 space-y-6">
                 <AnalyticsCard />
                 <RecentFilesPanel />
                 <ActivityTimeline />
