@@ -280,7 +280,7 @@ export function RecentFiles({ files = RECENT_FILES, className }) {
 
       <div
         className={cn(
-          "file-list-scroll max-h-[min(560px,65vh)] overflow-y-auto p-npm run dev -- --host3 sm:p-4",
+          "file-list-scroll max-h-[min(560px,65vh)] overflow-y-auto p-4 sm:p-4",
           isGrid
             ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
             : "flex flex-col gap-2",
