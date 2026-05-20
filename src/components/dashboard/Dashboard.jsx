@@ -36,6 +36,7 @@ import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { Link } from "react-router-dom";
 import { RecentFiles as RecentFilesPanel } from "./RecentFiles";
 
+
 /* ───────────────────────── Tokens / helpers ─────────────────────────
    Aligned with the Drivya landing page design system:
    - semantic color tokens (background / foreground / primary / muted / border)
@@ -977,8 +978,8 @@ export function Dashboard() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showUploadQueue,setShowUploadQueue] = useState(true)
   return (
-    <div className="relative flex h-dvh w-full flex-col text-foreground overflow-hidden">
-      {/* ambient page glow — same as landing page body gradients */}
+    <div className="relative flex h-dvh w-full flex-col overflow-hidden text-foreground">
+      {/* ambient page glow */}
       <div
         className="pointer-events-none fixed inset-0 -z-10"
         style={{
@@ -999,13 +1000,13 @@ export function Dashboard() {
             onToggleSidebar={() => setCollapsed((c) => !c)}
             onMobileMenu={() => setMobileOpen(true)}
           />
-          <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden scroll-smooth p-4 md:p-6 lg:p-8 space-y-6" style={{ scrollbarGutter: "stable" }}>
+          <main
+            className="dashboard-main min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 lg:p-8 space-y-6"
+            style={{ scrollbarGutter: "stable" }}
+          >
             <HeroSection />
 
-            <motion.div
-              {...fadeInView(0.06)}
-              className=""
-            >
+            <motion.div {...fadeInView(0.06)} className="">
               <motion.div style={{ transform: "none" }} className="lg:col-span-2 space-y-6">
                 <AnalyticsCard />
                 <RecentFilesPanel />
@@ -1020,7 +1021,6 @@ export function Dashboard() {
                     />
                   )} */}
                 </AnimatePresence>
-                {/* <SecurityPanel /> */}
               </motion.div>
             </motion.div>
 
@@ -1031,8 +1031,7 @@ export function Dashboard() {
               <div className="flex items-center gap-2">
                 <Command className="h-3.5 w-3.5" />
                 <span>
-                  Press <Kbd>⌘</Kbd> <Kbd>K</Kbd> to search · <Kbd>U</Kbd> to
-                  upload
+                  Press <Kbd>⌘</Kbd> <Kbd>K</Kbd> to search · <Kbd>U</Kbd> to upload
                 </span>
               </div>
               <div>Drivya · v3.4 · Encrypted</div>
