@@ -1,17 +1,26 @@
 import { MouseGlow } from "@/components/drivya/MouseGlow";
-import { Dashboard } from "./components/dashboard/DashBoard";
-// import { Dashboard2 } from "./components/dashboard/Dashboard2";
+import { DashboardLayout } from "./components/dashboard/Dashboard";
 import LandingPage from "./pages/LandingPage";
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import Home from "./pages/Home";
+import MyDrive from "./pages/MyDrive";
+import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
 
 export default function App() {
- const router = createBrowserRouter([{
-    path: '/',
-    element: <LandingPage/>
-  },{
-    path: '/dashboard/home',
-    element: <Dashboard/>
-  }])
+  const router = createBrowserRouter([
+    {
+      path: '/',
+      element: <LandingPage />
+    },
+    {
+      path: '/dashboard',
+      element: <DashboardLayout />,
+      children: [
+        { index: true, element: <Navigate to="home" replace /> },
+        { path: 'home', element: <Home /> },
+        { path: 'drive', element: <MyDrive /> },
+      ],
+    },
+  ]);
   return (
     <main className="relative  overflow-hidden">
       <MouseGlow />

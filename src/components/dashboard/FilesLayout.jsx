@@ -67,20 +67,6 @@ export const RECENT_FILES = [
     owner: "Amelia M.",
   },
   {
-    id: "5",
-    name: "client-archives.zip",
-    size: "640 MB",
-    modifiedAt: "May 12, 2026",
-    owner: "Amelia M.",
-  },
-  {
-    id: "5",
-    name: "client-archives.zip",
-    size: "640 MB",
-    modifiedAt: "May 12, 2026",
-    owner: "Amelia M.",
-  },
-  {
     id: "6",
     name: "Design System",
     size: "248 items",
@@ -127,7 +113,10 @@ const FILTER_OPTIONS = [
   { id: "shared", label: "Shared" },
 ];
 
-export function RecentFiles({ files = RECENT_FILES, className }) {
+export function FilesLayout({ files = RECENT_FILES, className, layoutHeader }) {
+  console.log(className);
+  console.log(layoutHeader);
+  console.log();
   const [selectedId, setSelectedId] = useState(null);
   const [activeId, setActiveId] = useState(null);
   const [starred, setStarred] = useState(() =>
@@ -140,7 +129,8 @@ export function RecentFiles({ files = RECENT_FILES, className }) {
 
   const visibleFiles = useMemo(() => {
     let list = [...files];
-    if (filter === "starred") list = list.filter((f) => starred[f.id] || f.starred);
+    if (filter === "starred")
+      list = list.filter((f) => starred[f.id] || f.starred);
     if (filter === "shared") list = list.filter((f) => f.shared);
     list.sort((a, b) => {
       if (sortBy === "name") return a.name.localeCompare(b.name);
@@ -177,7 +167,7 @@ export function RecentFiles({ files = RECENT_FILES, className }) {
               id="recent-files-heading"
               className="mt-3 font-display text-lg font-semibold tracking-tight text-foreground sm:text-xl"
             >
-              Recent files
+              {layoutHeader}
             </h3>
             <p className="mt-1 text-sm text-muted-foreground">
               {visibleFiles.length} item{visibleFiles.length === 1 ? "" : "s"}
@@ -218,7 +208,10 @@ export function RecentFiles({ files = RECENT_FILES, className }) {
                 <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
                 {SORT_OPTIONS.find((s) => s.id === sortBy)?.label}
                 <ChevronDown
-                  className={cn("h-3.5 w-3.5 transition-transform", sortOpen && "rotate-180")}
+                  className={cn(
+                    "h-3.5 w-3.5 transition-transform",
+                    sortOpen && "rotate-180",
+                  )}
                 />
               </button>
               {sortOpen && (
@@ -308,7 +301,10 @@ export function RecentFiles({ files = RECENT_FILES, className }) {
             <FileRow
               key={file.id}
               viewType={view}
-              file={{ ...file, starred: Boolean(starred[file.id] ?? file.starred) }}
+              file={{
+                ...file,
+                starred: Boolean(starred[file.id] ?? file.starred),
+              }}
               index={i}
               selected={selectedId === file.id}
               active={activeId === file.id}
@@ -335,7 +331,9 @@ function EmptyState() {
       <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-border bg-secondary/60 text-primary">
         <FolderOpen className="h-5 w-5" />
       </span>
-      <h4 className="mt-4 font-display text-base font-semibold text-foreground">No files here yet</h4>
+      <h4 className="mt-4 font-display text-base font-semibold text-foreground">
+        No files here yet
+      </h4>
       <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
         Upload documents, images, or folders to see them in your recent list.
       </p>
