@@ -3,6 +3,7 @@ import { DashboardLayout } from "./components/dashboard/Dashboard";
 import LandingPage from "./pages/LandingPage";
 import Home from "./pages/Home";
 import MyDrive from "./pages/MyDrive";
+import Auth from "./pages/Auth";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
 
 export default function App() {
@@ -10,6 +11,10 @@ export default function App() {
     {
       path: '/',
       element: <LandingPage />
+    },
+    {
+      path: '/auth',
+      element: <Auth />
     },
     {
       path: '/dashboard',

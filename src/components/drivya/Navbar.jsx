@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Cloud, Menu, X } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { easeSmooth, tweenEnter } from "@/lib/motion-presets";
@@ -55,11 +56,11 @@ export function Navbar() {
         <div className="flex items-center justify-end gap-2 sm:gap-3">
           <ThemeToggle />
           <div className="hidden md:flex items-center gap-2">
-            <Button variant="ghost" size="sm" className="text-foreground/80">
-              Login
+            <Button variant="ghost" size="sm" className="text-foreground/80" asChild>
+              <Link to="/auth?tab=login">Login</Link>
             </Button>
-            <Button size="sm" className="bg-gradient-primary text-primary-foreground hover:opacity-90 shadow-glow">
-              Get Started
+            <Button size="sm" className="bg-gradient-primary text-primary-foreground hover:opacity-90 shadow-glow" asChild>
+              <Link to="/auth?tab=register">Get Started</Link>
             </Button>
           </div>
           <button
@@ -97,10 +98,12 @@ export function Navbar() {
                 </a>
               ))}
               <div className="flex gap-2 pt-2">
-                <Button variant="outline" className="flex-1">
-                  Login
+                <Button variant="outline" className="flex-1" asChild>
+                  <Link to="/auth?tab=login" onClick={() => setOpen(false)}>Login</Link>
                 </Button>
-                <Button className="flex-1 bg-gradient-primary text-primary-foreground">Get Started</Button>
+                <Button className="flex-1 bg-gradient-primary text-primary-foreground" asChild>
+                  <Link to="/auth?tab=register" onClick={() => setOpen(false)}>Get Started</Link>
+                </Button>
               </div>
             </div>
           </motion.div>

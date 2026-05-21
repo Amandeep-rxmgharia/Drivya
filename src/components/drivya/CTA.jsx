@@ -1,5 +1,6 @@
 import { motion } from "motion/react";
 import { ArrowRight } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Section } from "./Section";
 import { easeSmooth } from "@/lib/motion-presets";
@@ -24,9 +25,11 @@ export function CTA() {
         <p className="mt-4 text-muted-foreground text-lg max-w-xl mx-auto leading-relaxed">
           Join hundreds of thousands of creators and teams already moving faster.
         </p>
-        <Button size="lg" className="mt-8 bg-gradient-primary text-primary-foreground hover:opacity-90 shadow-glow group">
-          Create Free Account
-          <ArrowRight className="ml-1 h-4 w-4 transition-transform duration-300 ease-out group-hover:translate-x-0.5" />
+        <Button size="lg" className="mt-8 bg-gradient-primary text-primary-foreground hover:opacity-90 shadow-glow group" asChild>
+          <Link to="/auth?tab=register">
+            Create Free Account
+            <ArrowRight className="ml-1 h-4 w-4 transition-transform duration-300 ease-out group-hover:translate-x-0.5" />
+          </Link>
         </Button>
       </motion.div>
     </Section>
