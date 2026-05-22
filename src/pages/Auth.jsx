@@ -158,14 +158,8 @@ export default function Auth() {
     }, 800);
   };
 
-  const userTypes = [
-    { id: "driver", label: "Driver", icon: Car },
-    { id: "customer", label: "Customer", icon: User },
-    { id: "fleet", label: "Fleet Owner", icon: Building },
-  ];
-
   return (
-    <div className="relative min-h-screen w-full flex flex-col md:flex-row bg-background text-foreground overflow-hidden font-sans select-none">
+    <div className="relative min-h-screen md:items-start items-center w-full flex flex-col md:flex-row bg-background text-foreground overflow-hidden font-sans select-none">
       {/* Top Left Floating Home Link & Theme Toggle (Mobile Accessible too) */}
       <div className="absolute top-4 inset-x-6 flex items-center justify-between z-40 pointer-events-none">
         <Link
@@ -181,7 +175,7 @@ export default function Auth() {
       </div>
 
       {/* LEFT COLUMN: Branding, Taglines, SVG grids, Glowing Paths, Floating metric cards */}
-      <div className="relative hidden md:flex w-1/2 flex-col justify-between p-12 lg:p-20 overflow-hidden bg-background border-r border-border/10">
+      <div className="relative hidden mt-17 lg:mt-0 md:flex w-1/2 flex-col justify-between p-12 lg:p-20 overflow-hidden bg-background border-r border-border/10">
         {/* Animated Gradient Background Glow Blobs */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
           <motion.div
@@ -305,7 +299,7 @@ export default function Auth() {
         </div>
 
         {/* Value Tagline Center Block */}
-        <div className="relative z-10 my-auto py-12 flex flex-col gap-6">
+        <div className="relative z-10 my-auto py-12 flex flex-col items-start gap-6">
           <div className="space-y-4">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold tracking-wide uppercase bg-primary/10 border border-primary/20 text-primary">
               <Sparkles className="h-3 w-3" />
@@ -429,7 +423,7 @@ export default function Auth() {
       </div>
 
       {/* RIGHT COLUMN: Authentication Card with tabs, glass, glows */}
-      <div className="flex-1 flex items-center justify-center p-6 sm:p-12 md:p-16 lg:p-20 relative bg-background/50 backdrop-blur-3xl">
+      <div className="flex-1 flex items-center justify-center p-6 sm:p-12 md:p-16 md:px-10 lg:p-20 lg:px-15 relative bg-background/50 backdrop-blur-3xl">
         {/* Soft Background glow for mobile card background, similar theme */}
         <div className="absolute inset-0 md:hidden pointer-events-none overflow-hidden z-0">
           <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full bg-[radial-gradient(closest-side,var(--ambient-blob-a),transparent)] opacity-20 blur-3xl" />
@@ -503,7 +497,7 @@ export default function Auth() {
           </AnimatePresence>
 
           {/* Glass Card Container */}
-          <div className="glass backdrop-blur-xl bg-card/45 shadow-elegant rounded-3xl border border-border/25 overflow-hidden">
+          <div className="glass mt-10 lg:mt-0 backdrop-blur-xl bg-card/45 shadow-elegant rounded-3xl border border-border/25 overflow-hidden">
             <div className="p-8 sm:p-10 space-y-6">
               {/* Header Text & Toggle Tabs */}
               <div className="space-y-4 text-center">
@@ -749,50 +743,6 @@ export default function Auth() {
                             onChange={(e) => setRegisterPhone(e.target.value)}
                             className="w-full bg-muted/15 border border-border/30 rounded-xl py-3 pl-10 pr-4 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/45 focus:bg-muted/10 transition-all font-medium text-foreground placeholder:text-muted-foreground/60"
                           />
-                        </div>
-                      </div>
-
-                      {/* User Type Selector (Segmented Picker) */}
-                      <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                          User Type
-                        </label>
-                        <div className="relative grid grid-cols-3 gap-1 p-1 bg-muted/30 rounded-xl border border-border/20">
-                          {userTypes.map((type) => {
-                            const active = userType === type.id;
-                            return (
-                              <button
-                                key={type.id}
-                                type="button"
-                                onClick={() => setUserType(type.id)}
-                                className="relative py-2 flex flex-col items-center gap-1 text-[10px] font-bold rounded-lg transition-colors focus-visible:outline-none cursor-pointer"
-                              >
-                                {active && (
-                                  <motion.div
-                                    layoutId="activeUserType"
-                                    className="absolute inset-0 bg-background shadow-sm rounded-lg border border-border/20 -z-10"
-                                    transition={{
-                                      type: "spring",
-                                      stiffness: 420,
-                                      damping: 30,
-                                    }}
-                                  />
-                                )}
-                                <type.icon
-                                  className={`h-3.5 w-3.5 transition-colors duration-300 ${active ? "text-primary" : "text-muted-foreground"}`}
-                                />
-                                <span
-                                  className={
-                                    active
-                                      ? "text-foreground"
-                                      : "text-muted-foreground"
-                                  }
-                                >
-                                  {type.label}
-                                </span>
-                              </button>
-                            );
-                          })}
                         </div>
                       </div>
 

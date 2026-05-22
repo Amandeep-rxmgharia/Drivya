@@ -29,7 +29,6 @@ export default function App() {
   return (
     <main className="relative  overflow-hidden">
       <MouseGlow />
-      {/* <LandingPage/> */}
     <RouterProvider router={router}></RouterProvider>
     </main>
   );
