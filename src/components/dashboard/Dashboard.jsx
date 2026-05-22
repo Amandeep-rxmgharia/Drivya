@@ -228,9 +228,9 @@ function Topbar({ onToggleSidebar, onMobileMenu, sidebarCollapsed }) {
           className={`${iconBtn} hidden lg:inline-flex`}
         >
           {sidebarCollapsed ? (
-            <PanelLeftOpen className="h-4 w-4" />
+            <PanelLeftOpen className="h-4 w-4 hidden lg:block" />
           ) : (
-            <PanelLeftClose className="h-4 w-4" />
+            <PanelLeftClose className="h-4 w-4 hidden lg:block" />
           )}
         </button>
 

@@ -1,28 +1,30 @@
+import { lazy, Suspense } from "react";
 import { MouseGlow } from "@/components/drivya/MouseGlow";
-import { DashboardLayout } from "./components/dashboard/Dashboard";
-import LandingPage from "./pages/LandingPage";
-import Home from "./pages/Home";
-import MyDrive from "./pages/MyDrive";
-import Auth from "./pages/Auth";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
+
+const DashboardLayout = lazy(() => import("./components/dashboard/Dashboard").then(m => ({ default: m.DashboardLayout })));
+const LandingPage = lazy(() => import("./pages/LandingPage"));
+const Home = lazy(() => import("./pages/Home"));
+const MyDrive = lazy(() => import("./pages/MyDrive"));
+const Auth = lazy(() => import("./pages/Auth"));
 
 export default function App() {
   const router = createBrowserRouter([
     {
       path: '/',
-      element: <LandingPage />
+      element: <Suspense fallback={null}><LandingPage /></Suspense>
     },
     {
       path: '/auth',
-      element: <Auth />
+      element: <Suspense fallback={null}><Auth /></Suspense>
     },
     {
       path: '/dashboard',
-      element: <DashboardLayout />,
+      element: <Suspense fallback={null}><DashboardLayout /></Suspense>,
       children: [
         { index: true, element: <Navigate to="home" replace /> },
-        { path: 'home', element: <Home /> },
-        { path: 'drive', element: <MyDrive /> },
+        { path: 'home', element: <Suspense fallback={null}><Home /></Suspense> },
+        { path: 'drive', element: <Suspense fallback={null}><MyDrive /></Suspense> },
       ],
     },
   ]);
