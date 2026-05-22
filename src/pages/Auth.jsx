@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -57,17 +57,9 @@ export default function Auth() {
   const [searchParams] = useSearchParams();
 
   // Set tab based on URL param (?tab=register) or default to login
-  const defaultTab =
-    searchParams.get("tab") === "register" ? "register" : "login";
-  const [activeTab, setActiveTab] = useState(defaultTab);
-
-  // Update state when URL search param changes
-  useEffect(() => {
-    const tabParam = searchParams.get("tab");
-    if (tabParam === "register" || tabParam === "login") {
-      setActiveTab(tabParam);
-    }
-  }, [searchParams]);
+  const [activeTab, setActiveTab] = useState(() => {
+    return searchParams.get("tab") === "register" ? "register" : "login";
+  });
 
   // Form states
   const [loginEmail, setLoginEmail] = useState("");
@@ -159,7 +151,7 @@ export default function Auth() {
   };
 
   return (
-    <div className="relative min-h-screen md:items-start items-center w-full flex flex-col md:flex-row bg-background text-foreground overflow-hidden font-sans select-none">
+    <div className="relative min-h-screen md:items-start items-center w-full flex flex-col md:flex-row text-foreground overflow-hidden font-sans select-none">
       {/* Top Left Floating Home Link & Theme Toggle (Mobile Accessible too) */}
       <div className="absolute top-4 inset-x-6 flex items-center justify-between z-40 pointer-events-none">
         <Link
@@ -175,7 +167,7 @@ export default function Auth() {
       </div>
 
       {/* LEFT COLUMN: Branding, Taglines, SVG grids, Glowing Paths, Floating metric cards */}
-      <div className="relative hidden mt-17 lg:mt-0 md:flex w-1/2 flex-col justify-between p-12 lg:p-20 overflow-hidden bg-background border-r border-border/10">
+      <div className="relative hidden mt-17 lg:mt-0 md:flex w-1/2 flex-col justify-between p-12 lg:p-20 overflow-hidden bg-background/90 border-r border-border/10">
         {/* Animated Gradient Background Glow Blobs */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
           <motion.div
@@ -583,7 +575,7 @@ export default function Auth() {
               </AnimatePresence>
 
               {/* Form Forms Switcher Animation Container */}
-              <div className="relative min-h-[300px]">
+              <div className="relative">
                 <AnimatePresence mode="wait">
                   {activeTab === "login" ? (
                     // LOGIN FORM

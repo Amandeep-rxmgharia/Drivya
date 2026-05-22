@@ -9,7 +9,7 @@ export function MouseGlow() {
   }, []);
   return (
     <div
-      className="pointer-events-none fixed inset-0 z-0 transition-opacity"
+      className="pointer-events-none fixed inset-0 z-[1] transition-opacity"
       style={{
         background: `radial-gradient(600px circle at ${pos.x}px ${pos.y}px, var(--mouse-glow), transparent 60%)`,
       }}
