@@ -193,11 +193,17 @@
     font-synthesis: none;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    background-image: var(--body-gradient-a), var(--body-gradient-b);
-    background-attachment: fixed;
     transition:
       background-color 0.35s cubic-bezier(0.22, 1, 0.36, 1),
       color 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background-image: var(--body-gradient-a), var(--body-gradient-b);
+    pointer-events: none;
   }
   h1,
   h2,
