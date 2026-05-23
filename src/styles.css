@@ -51,8 +51,8 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-ring-offset-background: var(--background);
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Space Grotesk", "Inter", sans-serif;
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk Variable", "Inter Variable", sans-serif;
 }
 
 /* ─── Light (default) — SaaS: crisp, trustworthy, cool neutrals ─── */
@@ -182,8 +182,7 @@
     border-color: var(--color-border);
   }
   html {
-
-    text-rendering: optimizeLegibility;
+    text-rendering: auto;
     -webkit-text-size-adjust: 100%;
   }
   body {
