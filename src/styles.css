@@ -204,6 +204,9 @@
     z-index: -1;
     background-image: var(--body-gradient-a), var(--body-gradient-b);
     pointer-events: none;
+    transform: translateZ(0);
+    will-change: transform;
+    backface-visibility: hidden;
   }
   h1,
   h2,

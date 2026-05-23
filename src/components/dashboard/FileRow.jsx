@@ -195,32 +195,34 @@ function ListLayout({
   onDelete,
 }) {
   return (
-    <div className="flex flex-col gap-3 md:grid md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-4">
-      <div className="flex min-w-0 items-start gap-3 sm:items-center">
-        <FileTypeIcon kind={kind} />
-        <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h4 className="truncate text-sm font-semibold text-foreground sm:text-[15px]">
-              {file.name}
-            </h4>
-            {file.starred && <Badge variant="star">Starred</Badge>}
-            {file.shared && <Badge variant="shared">Shared</Badge>}
+    <div className="flex flex-col gap-3 md:grid md:grid-cols-[1fr_auto] md:items-center md:gap-6">
+      <div className="flex min-w-0 items-start gap-3 sm:items-center md:grid md:grid-cols-[minmax(0,1fr)_6rem_4.5rem] md:gap-8 lg:gap-11">
+        <div className="flex min-w-0 items-center gap-3">
+          <FileTypeIcon kind={kind} />
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h4 className="truncate text-sm font-semibold text-foreground sm:text-[15px]">
+                {file.name}
+              </h4>
+              {file.starred && <Badge variant="star">Starred</Badge>}
+              {file.shared && <Badge variant="shared">Shared</Badge>}
+            </div>
+            <p className="text-[11px] text-muted-foreground md:hidden">
+              {file.modifiedAt} · {file.size}
+            </p>
+            {isUploading && <UploadProgress percent={file.uploadProgress} />}
           </div>
-          <p className="text-[11px] text-muted-foreground md:hidden">
-            {file.modifiedAt} · {file.size}
-          </p>
-          {isUploading && <UploadProgress percent={file.uploadProgress} />}
+        </div>
+
+        <div className="hidden md:flex md:items-center text-left text-sm tabular-nums text-muted-foreground">
+          {file.modifiedAt}
+        </div>
+        <div className="hidden md:flex md:items-center md:justify-start  text-right text-sm font-medium tabular-nums text-foreground/80">
+          {file.size}
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-3 md:justify-end">
-        <dl className="hidden md:flex md:items-center md:gap-6 md:text-right text-sm text-muted-foreground">
-          {/* {file.owner && (
-            <div className="min-w-[5rem] truncate">{file.owner}</div>
-          )} */}
-          <div className="tabular-nums">{file.modifiedAt}</div>
-          <div className="tabular-nums font-medium text-foreground/80">{file.size}</div>
-        </dl>
+      <div className="flex items-center justify-between gap-3 md:justify-end md:w-36 md:pr-1">
         <FileRowActions
           fileId={file.id}
           starred={file.starred}

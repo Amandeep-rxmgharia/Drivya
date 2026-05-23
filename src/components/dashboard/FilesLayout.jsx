@@ -273,11 +273,11 @@ export function FilesLayout({ files = RECENT_FILES, className, layoutHeader }) {
       </header>
 
       {!isGrid && (
-        <div className="hidden md:grid md:grid-cols-[1fr_auto] gap-4 border-b border-border/60 px-5 py-2 sm:px-6">
-          <motion.div className="grid grid-cols-[minmax(0,1fr)_6rem_4.5rem] gap-6 pl-14 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            <span>Name</span>
+        <div className="hidden md:grid md:grid-cols-[1fr_auto] gap-10 border-b border-border/60 px-5 py-2 sm:px-6">
+          <motion.div className="grid grid-cols-[minmax(0,1fr)_6rem_4.5rem]  gap-8 lg:gap-11 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            <span className="pl-5">Name</span>
             <span>Modified</span>
-            <span className="text-right">Size</span>
+            <span className="">Size</span>
           </motion.div>
           <span className="w-36 text-right text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground pr-1">
             Actions
