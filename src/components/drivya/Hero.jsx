@@ -3,6 +3,7 @@ import { ArrowRight, Play, Shield, Zap, HardDrive } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DashboardMockup } from "./DashboardMockup";
 import { easeSmooth } from "@/lib/motion-presets";
+import { Link, useNavigate } from "react-router-dom";
 
 const heroStagger = {
   hidden: {},
@@ -24,8 +25,9 @@ const heroItem = {
 };
 
 export function Hero() {
+  const navigate = useNavigate()
   return (
-    <section className="relative pt-36 pb-24 md:pt-44 md:pb-32 overflow-hidden">
+    <section className="relative pt-27 pb-24 md:pt-29 md:pb-32 overflow-hidden">
       <div className="absolute inset-0 -z-10 [mask-image:radial-gradient(ellipse_at_center,black,transparent_70%)]">
         <div
           className="absolute inset-0 opacity-[0.38] dark:opacity-[0.08]"
@@ -71,7 +73,8 @@ export function Hero() {
           <motion.div variants={heroItem} className="mt-8 flex flex-wrap gap-3">
             <Button
               size="lg"
-              className="bg-gradient-primary text-primary-foreground hover:opacity-90 shadow-glow group"
+              onClick={() => navigate('/auth?tab=register')}
+              className="bg-gradient-primary cursor-pointer text-primary-foreground hover:opacity-90 shadow-glow group"
             >
               Get Started Free
               <ArrowRight className="ml-1 h-4 w-4 transition-transform duration-300 ease-out group-hover:translate-x-0.5" />

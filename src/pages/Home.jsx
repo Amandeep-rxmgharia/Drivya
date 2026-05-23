@@ -38,6 +38,86 @@ function HeroSection() {
       {...fadeInView(0, 20)}
       className={`${card} ${subtleHover} relative overflow-hidden p-6 md:p-10`}
     >
+       <div className="absolute inset-0 z-0 opacity-15 dark:opacity-20 pointer-events-none flex items-center justify-end">
+          <svg
+            className="w-full h-full max-w-lg"
+            viewBox="0 0 500 500"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            {/* Background Grid */}
+            <defs>
+              <pattern
+                id="grid"
+                width="40"
+                height="40"
+                patternUnits="userSpaceOnUse"
+              >
+                <path
+                  d="M 40 0 L 0 0 0 40"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="0.5"
+                />
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#grid)" />
+
+            {/* Logistic Lines Paths */}
+            <path
+              d="M50 100 H250 V280 H450"
+              stroke="var(--primary)"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+            <path
+              d="M100 200 H350 V380 H400"
+              stroke="var(--accent)"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeDasharray="4 4"
+            />
+            <path
+              d="M50 400 H200 V320 H450"
+              stroke="var(--primary)"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+
+            {/* Glowing moving nodes */}
+            <motion.circle
+              r="4"
+              fill="var(--primary)"
+              className="drop-shadow-primary-glow"
+              animate={{
+                offsetDistance: ["0%", "100%"],
+              }}
+              transition={{
+                duration: 8,
+                repeat: Infinity,
+                ease: "linear",
+              }}
+              style={{
+                offsetPath: "path('M50 100 H250 V280 H450')",
+              }}
+            />
+            <motion.circle
+              r="4"
+              fill="var(--accent)"
+              animate={{
+                offsetDistance: ["0%", "100%"],
+              }}
+              transition={{
+                duration: 6,
+                repeat: Infinity,
+                ease: "linear",
+              }}
+              style={{
+                offsetPath: "path('M100 200 H350 V380 H400')",
+              }}
+            />
+          </svg>
+        </div>
       {/* ambient glow — same language as landing page */}
       <div className="absolute -top-32 -right-24 h-72 w-72 rounded-full bg-ambient-primary blur-3xl opacity-80 pointer-events-none" />
       <div className="absolute -bottom-20 -left-16 h-56 w-56 rounded-full bg-ambient-primary blur-3xl opacity-50 pointer-events-none" />

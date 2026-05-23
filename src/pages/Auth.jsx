@@ -647,7 +647,7 @@ export default function Auth() {
                               onChange={(e) => setRememberMe(e.target.checked)}
                               className="sr-only peer"
                             />
-                            <div className="w-4 h-4 rounded border border-border/30 bg-muted/15 peer-checked:bg-primary peer-checked:border-primary transition-all flex items-center justify-center">
+                            <div className="w-4 h-4 rounded border-[1.5px] border-border bg-muted/60 peer-checked:bg-primary peer-checked:border-primary transition-all flex items-center justify-center">
                               {rememberMe && (
                                 <Check className="h-3 w-3 text-primary-foreground stroke-[3]" />
                               )}
@@ -671,7 +671,7 @@ export default function Auth() {
                         whileHover={{ scale: 1.01 }}
                         whileTap={{ scale: 0.99 }}
                         type="submit"
-                        className="w-full mt-2 bg-gradient-primary text-primary-foreground font-semibold py-3 rounded-xl hover:opacity-90 shadow-glow transition-all flex items-center justify-center gap-2"
+                        className="w-full cursor-pointer mt-2 bg-gradient-primary text-primary-foreground font-semibold py-3 rounded-xl hover:opacity-90 shadow-glow transition-all flex items-center justify-center gap-2"
                       >
                         <span>Sign In</span>
                       </motion.button>
@@ -799,7 +799,7 @@ export default function Auth() {
                               onChange={(e) => setAcceptTerms(e.target.checked)}
                               className="sr-only peer"
                             />
-                            <div className="w-4 h-4 rounded border border-border/30 bg-muted/15 peer-checked:bg-primary peer-checked:border-primary transition-all flex items-center justify-center">
+                            <div className="w-4 h-4 rounded  border-[1.5px] border-border bg-muted/80 peer-checked:bg-primary peer-checked:border-primary transition-all flex items-center justify-center">
                               {acceptTerms && (
                                 <Check className="h-3 w-3 text-primary-foreground stroke-[3]" />
                               )}
@@ -830,7 +830,7 @@ export default function Auth() {
                         whileHover={{ scale: 1.01 }}
                         whileTap={{ scale: 0.99 }}
                         type="submit"
-                        className="w-full mt-2 bg-gradient-primary text-primary-foreground font-semibold py-3 rounded-xl hover:opacity-90 shadow-glow transition-all flex items-center justify-center gap-2"
+                        className="w-full mt-2 cursor-pointer bg-gradient-primary text-primary-foreground font-semibold py-3 rounded-xl hover:opacity-90 shadow-glow transition-all flex items-center justify-center gap-2"
                       >
                         <span>Create Account</span>
                       </motion.button>
