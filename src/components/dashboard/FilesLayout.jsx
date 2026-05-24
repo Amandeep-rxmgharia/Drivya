@@ -14,16 +14,7 @@ import { easeSmooth } from "@/lib/motion-presets";
 import { FileRow } from "./FileRow";
 
 const card = "rounded-2xl glass shadow-elegant";
-const viewport = { once: true, margin: "-60px" };
 
-function fadeInView(delay = 0, y = 16) {
-  return {
-    initial: { opacity: 0, y },
-    whileInView: { opacity: 1, y: 0 },
-    viewport,
-    transition: { type: "tween", duration: 0.68, ease: easeSmooth, delay },
-  };
-}
 
 export const RECENT_FILES = [
   {
@@ -147,9 +138,8 @@ export function FilesLayout({ files = RECENT_FILES, className, layoutHeader }) {
   const isGrid = view === "grid";
 
   return (
-    <motion.section
-      {...fadeInView(0.12)}
-      className={cn(card, "overflow-hidden", className)}
+    <section
+      className={cn(card, "overflow-hidden animate-fade-in", className)}
       aria-labelledby="recent-files-heading"
     >
       <header className="border-b border-border px-5 py-5 sm:px-6">
@@ -215,7 +205,7 @@ export function FilesLayout({ files = RECENT_FILES, className, layoutHeader }) {
                 />
               </button>
               {sortOpen && (
-                <motion.div className="absolute right-0 z-20 mt-2 min-w-[140px] rounded-xl border border-border bg-popover p-1 shadow-elegant">
+                <div className="absolute right-0 z-20 mt-2 min-w-[140px] rounded-xl border border-border bg-popover p-1 shadow-elegant animate-fade-in">
                   {SORT_OPTIONS.map((opt) => (
                     <button
                       key={opt.id}
@@ -234,7 +224,7 @@ export function FilesLayout({ files = RECENT_FILES, className, layoutHeader }) {
                       {opt.label}
                     </button>
                   ))}
-                </motion.div>
+                </div>
               )}
             </div>
 
@@ -274,11 +264,11 @@ export function FilesLayout({ files = RECENT_FILES, className, layoutHeader }) {
 
       {!isGrid && (
         <div className="hidden md:grid md:grid-cols-[1fr_auto] gap-10 border-b border-border/60 px-5 py-2 sm:px-6">
-          <motion.div className="grid grid-cols-[minmax(0,1fr)_6rem_4.5rem]  gap-8 lg:gap-11 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+          <div className="grid grid-cols-[minmax(0,1fr)_6rem_4.5rem]  gap-8 lg:gap-11 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             <span className="pl-5">Name</span>
             <span>Modified</span>
             <span className="">Size</span>
-          </motion.div>
+          </div>
           <span className="w-36 text-right text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground pr-1">
             Actions
           </span>
@@ -321,7 +311,7 @@ export function FilesLayout({ files = RECENT_FILES, className, layoutHeader }) {
       <footer className="border-t border-border p-4 sm:p-5">
         <DropZone />
       </footer>
-    </motion.section>
+    </section>
   );
 }
 

@@ -68,21 +68,13 @@ export function FileRow({
     file.uploadProgress < 100;
 
   return (
-    <motion.article
+    <article
       role="row"
       aria-selected={selected}
-      initial={{ opacity: 0, y: 8 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-24px" }}
-      transition={{
-        type: "tween",
-        duration: 0.5,
-        delay: index * 0.04,
-        ease: easeSmooth,
-      }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className={cn("group", isGrid ? "min-w-0" : "px-1 sm:px-2", className)}
+      className={cn("group animate-fade-in", isGrid ? "min-w-0" : "px-1 sm:px-2", className)}
+      style={{ animationFillMode: "both", animationDelay: `${index * 0.04}s` }}
     >
       <button
         type="button"
@@ -133,7 +125,7 @@ export function FileRow({
           />
         )}
       </button>
-    </motion.article>
+    </article>
   );
 }
 

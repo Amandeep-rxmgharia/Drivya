@@ -22,6 +22,7 @@ import { easeSmooth, tweenEnter } from "@/lib/motion-presets";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { chip, iconBtn, primaryBtn, Kbd } from "./dashboard-tokens.jsx";
+import { FloatingActionButton } from "./FloatingActionButton.jsx";
 
 
 /* ───────────────────────── Sidebar ───────────────────────── */
@@ -155,16 +156,10 @@ function SidebarGroup({ label, items, active, collapsed }) {
         {items.map((it, i) => {
           const isActive = active === it.to;
           return (
-            <motion.li
+            <li
               key={it.to}
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{
-                type: "tween",
-                duration: 0.55,
-                delay: 0.12 + i * 0.05,
-                ease: easeSmooth,
-              }}
+              className="animate-fade-in"
+              style={{ animationDelay: `${0.12 + i * 0.05}s`, animationFillMode: 'both' }}
             >
               <Link
                 to={`/dashboard/${it.to}`}
@@ -199,7 +194,7 @@ function SidebarGroup({ label, items, active, collapsed }) {
                   </>
                 )}
               </Link>
-            </motion.li>
+            </li>
           );
         })}
       </ul>
@@ -250,25 +245,16 @@ function Topbar({ onToggleSidebar, onMobileMenu, sidebarCollapsed }) {
           </div>
         </div>
 
-        {/* mini storage */}
-        <div className="hidden xl:flex items-center gap-3 rounded-xl border border-border bg-secondary/30 px-3 h-10">
-          <Cloud className="h-4 w-4 text-primary" />
-          <div className="w-24 h-1.5 rounded-full bg-secondary/80 overflow-hidden">
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: "62%" }}
-              transition={{ type: "tween", duration: 1.1, delay: 0.25, ease: easeSmooth }}
-              className="h-full rounded-full bg-gradient-primary"
-            />
-          </div>
-          <span className="text-xs font-medium text-muted-foreground">
-            156 / 250 GB
+        {/* premium ai assistant */}
+        <button className="group relative hidden xl:flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-4 h-10 hover:bg-primary/10 transition-all hover:shadow-[0_0_24px_-8px_var(--color-primary)] overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/20 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]" />
+          <Sparkles className="h-4 w-4 text-primary" />
+          <span className="text-sm font-semibold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+            Ask Drivya AI
           </span>
-        </div>
-
-        <button className={`${primaryBtn} hidden md:inline-flex`}>
-          <Upload className="h-4 w-4" />
-          Upload
+          <div className="ml-2 flex items-center gap-0.5 rounded-md bg-background/50 px-1.5 py-0.5 text-[9px] font-bold tracking-widest text-primary uppercase ring-1 ring-primary/20 shadow-sm backdrop-blur-sm">
+            BETA
+          </div>
         </button>
 
         <ThemeToggle className="hidden sm:inline-flex" />
@@ -364,6 +350,7 @@ export function DashboardLayout() {
           </main>
         </motion.div>
       </div>
+      <FloatingActionButton />
     </div>
   );
 }
