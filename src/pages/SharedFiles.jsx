@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, memo } from "react";
+import { useScrollReveal } from "@/hooks/useScrollReveal";
 import { AnimatePresence, motion } from "motion/react";
 import {
   ArrowUpDown,
@@ -135,20 +136,6 @@ const SHARED_FILES = [
     downloads: 0,
   },
   {
-    id: "s8",
-    name: "client-archives.zip",
-    size: "640 MB",
-    sharedAt: "May 5, 2026",
-    expiresAt: "May 20, 2026",
-    views: 3,
-    linkActive: false,
-    password: false,
-    starred: false,
-    linkUrl: "drivya.link/z8r4wp",
-    downloads: 1,
-    expired: true,
-  },
-  {
     id: "s9",
     name: "onboarding-flow.fig",
     size: "34 MB",
@@ -187,7 +174,7 @@ function SharedHero() {
   const protectedCount = SHARED_FILES.filter((f) => f.password).length;
 
   return (
-    <section className={`${card} relative overflow-hidden p-6 md:p-10`}>
+    <section className={`${card} ${subtleHover} relative overflow-hidden p-6 md:p-10 animate-fade-in`}>
       {/* ambient glows */}
       <div className="absolute -top-32 -right-24 h-72 w-72 rounded-full bg-ambient-primary blur-3xl opacity-80 pointer-events-none" />
       <div className="absolute -bottom-20 -left-16 h-56 w-56 rounded-full bg-ambient-primary blur-3xl opacity-50 pointer-events-none" />
@@ -255,11 +242,12 @@ function SharingTips() {
   ];
 
   return (
-    <section className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+    <section className="grid grid-cols-1 sm:grid-cols-3 gap-3 animate-fade-in">
       {tips.map((tip, i) => (
         <div
           key={tip.title}
-          className={`${card} p-5 cursor-default`}
+          className={`${card} ${subtleHover} p-5 cursor-default animate-fade-in`}
+          style={{ animationDelay: `${0.05 + i * 0.05}s`, animationFillMode: "both" }}
         >
           <div
             className={cn(
@@ -325,6 +313,10 @@ function SharedFilesSection() {
 
   const toggleStar = useCallback((id) => {
     setStarred((prev) => ({ ...prev, [id]: !prev[id] }));
+  }, []);
+
+  const handleOpenModal = useCallback((file) => {
+    setModalFile(file);
   }, []);
 
   const isGrid = view === "grid";
@@ -495,7 +487,7 @@ function SharedFilesSection() {
                 onCopyLink={handleCopyLink}
                 onToggleLink={handleToggleLink}
                 onStar={toggleStar}
-                onOpenModal={() => setModalFile(file)}
+                onOpenModal={handleOpenModal}
               />
             ))
           )}
@@ -523,7 +515,7 @@ function SharedFilesSection() {
 
 /* ───────────────────────── Shared File Card (grid + list) ───────────────────────── */
 
-function SharedFileCard({
+const SharedFileCard = memo(function SharedFileCard({
   file,
   index,
   isGrid,
@@ -536,17 +528,24 @@ function SharedFileCard({
   onOpenModal,
 }) {
   const [hovered, setHovered] = useState(false);
+  const { ref: revealRef, isVisible } = useScrollReveal();
   const kind = detectFileKind(file.name, file.kind);
   const isExpired = file.expired;
   const isCopied = copiedId === file.id;
 
   return (
     <article
+      ref={revealRef}
       role="listitem"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className={cn("group animate-fade-in", isGrid ? "min-w-0" : "px-1 sm:px-2")}
-      style={{ animationFillMode: "both", animationDelay: `${index * 0.04}s` }}
+      className={cn("group", isGrid ? "min-w-0" : "px-1 sm:px-2")}
+      style={{
+        opacity: isVisible ? 1 : 0,
+        transform: isVisible ? "translateY(0)" : "translateY(8px)",
+        transition: "opacity 0.35s ease-out, transform 0.35s ease-out",
+        willChange: isVisible ? "auto" : "opacity, transform",
+      }}
     >
       <div
         className={cn(
@@ -575,7 +574,7 @@ function SharedFileCard({
                 visible={hovered}
                 compact
                 onStar={onStar}
-                onOpenModal={onOpenModal}
+                onOpenModal={() => onOpenModal(file)}
               />
             </div>
 
@@ -647,7 +646,7 @@ function SharedFileCard({
 
               <button
                 type="button"
-                onClick={onOpenModal}
+                onClick={() => onOpenModal(file)}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-secondary/30 text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors shrink-0"
                 title="Link details"
               >
@@ -706,7 +705,7 @@ function SharedFileCard({
                 starred={isStarred}
                 visible={hovered}
                 onStar={onStar}
-                onOpenModal={onOpenModal}
+                onOpenModal={() => onOpenModal(file)}
               />
             </div>
           </div>
@@ -714,7 +713,7 @@ function SharedFileCard({
       </div>
     </article>
   );
-}
+});
 
 /* ───────────────────────── File Actions Toolbar ───────────────────────── */
 
@@ -790,44 +789,52 @@ function LinkDetailModal({
   }, []);
 
   return (
-    <motion.div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.25 }}
-    >
+    <>
       {/* Backdrop */}
       <motion.div
-        className="absolute inset-0 bg-background/60 backdrop-blur-sm"
-        onClick={onClose}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
+        className="fixed inset-0 z-50 bg-background/60 backdrop-blur-sm"
+        onClick={onClose}
       />
 
-      {/* Modal */}
+      {/* Panel — full-screen sheet on mobile, side slider on tablet+ */}
       <motion.div
-        className="relative w-full max-w-md max-h-[90vh] overflow-y-auto scrollbar-thin rounded-2xl glass shadow-elegant"
-        initial={{ opacity: 0, scale: 0.92, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.92, y: 20 }}
-        transition={{ type: "tween", duration: 0.35, ease: easeSmooth }}
+        initial={{ x: "100%" }}
+        animate={{ x: 0 }}
+        exit={{ x: "100%" }}
+        transition={{ type: "tween", duration: 0.3, ease: easeSmooth }}
+        className={cn(
+          "fixed z-50 overflow-y-auto bg-background shadow-elegant",
+          /* Mobile: full width & height */
+          "inset-0",
+          /* Tablet (md): right-side slider */
+          "md:inset-y-0 md:inset-x-auto md:right-0 md:w-[420px] md:max-w-[85vw] md:border-l md:border-border",
+          /* Desktop (lg): wider slider */
+          "lg:w-[460px]",
+          /* Mobile: round top corners for sheet feel */
+          "rounded-t-2xl md:rounded-t-none",
+        )}
+        style={{ scrollbarGutter: "stable", WebkitOverflowScrolling: "touch" }}
       >
-        {/* Ambient glow */}
-        <div className="absolute -top-20 -right-20 h-40 w-40 rounded-full bg-ambient-primary blur-3xl opacity-60 pointer-events-none" />
+        {/* Mobile drag handle indicator */}
+        <div className="flex justify-center pt-3 pb-1 md:hidden">
+          <div className="h-1 w-10 rounded-full bg-border" />
+        </div>
 
-        <div className="relative p-6 space-y-6">
+        <div className="px-4 pb-6 pt-2 space-y-5 sm:px-5 md:p-6 md:space-y-6">
           {/* Header */}
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
               <FileTypeIcon kind={kind} size="lg" />
               <div className="min-w-0">
-                <h2 className="font-display text-lg font-semibold text-foreground truncate">{file.name}</h2>
+                <h2 className="font-display text-base sm:text-lg font-semibold text-foreground truncate">{file.name}</h2>
                 <p className="text-[11px] text-muted-foreground mt-0.5">{file.size} · Shared {file.sharedAt}</p>
               </div>
             </div>
-            <button type="button" onClick={onClose} className={iconBtn}>
+            <button type="button" onClick={onClose} className={cn(iconBtn, "h-9 w-9 shrink-0")}>
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -844,17 +851,17 @@ function LinkDetailModal({
           </div>
 
           {/* Share Link URL */}
-          <div className="rounded-xl border border-border bg-secondary/30 p-4 space-y-3">
+          <div className="rounded-xl border border-border bg-secondary/30 p-3 sm:p-4 space-y-2.5 sm:space-y-3">
             <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">Share Link</div>
-            <div className="flex items-center gap-2">
-              <div className="flex-1 rounded-lg border border-border bg-background/60 px-3 py-2.5 text-sm text-foreground font-mono truncate select-all">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="flex-1 rounded-lg border border-border bg-background/60 px-3 py-2.5 text-xs sm:text-sm text-foreground font-mono truncate select-all overflow-x-auto">
                 https://{file.linkUrl}
               </div>
               <button
                 type="button"
                 onClick={() => onCopyLink(file.id, file.linkUrl)}
                 className={cn(
-                  "inline-flex h-10 items-center gap-1.5 rounded-lg border px-4 text-xs font-medium transition-all shrink-0",
+                  "inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border px-4 text-xs font-medium transition-all shrink-0 w-full sm:w-auto",
                   isCopied
                     ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
                     : "border-primary/20 bg-primary/5 text-primary hover:bg-primary/10"
@@ -866,25 +873,25 @@ function LinkDetailModal({
           </div>
 
           {/* Analytics */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl border border-border bg-secondary/30 p-4">
-              <div className="flex items-center gap-2 text-muted-foreground mb-2">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+            <div className="rounded-xl border border-border bg-secondary/30 p-3 sm:p-4">
+              <div className="flex items-center gap-2 text-muted-foreground mb-1.5 sm:mb-2">
                 <Eye className="h-4 w-4" />
                 <span className="text-[10px] font-semibold uppercase tracking-[0.12em]">Views</span>
               </div>
-              <div className="font-display text-2xl font-semibold text-foreground tabular-nums">{file.views}</div>
+              <div className="font-display text-xl sm:text-2xl font-semibold text-foreground tabular-nums">{file.views}</div>
             </div>
-            <div className="rounded-xl border border-border bg-secondary/30 p-4">
-              <div className="flex items-center gap-2 text-muted-foreground mb-2">
+            <div className="rounded-xl border border-border bg-secondary/30 p-3 sm:p-4">
+              <div className="flex items-center gap-2 text-muted-foreground mb-1.5 sm:mb-2">
                 <ArrowUpRight className="h-4 w-4" />
                 <span className="text-[10px] font-semibold uppercase tracking-[0.12em]">Downloads</span>
               </div>
-              <div className="font-display text-2xl font-semibold text-foreground tabular-nums">{file.downloads}</div>
+              <div className="font-display text-xl sm:text-2xl font-semibold text-foreground tabular-nums">{file.downloads}</div>
             </div>
           </div>
 
           {/* Link Settings */}
-          <div className="rounded-xl border border-border bg-secondary/30 p-4 space-y-3">
+          <div className="rounded-xl border border-border bg-secondary/30 p-3 sm:p-4 space-y-2.5 sm:space-y-3">
             <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">Link Settings</div>
 
             <div className="flex items-center justify-between py-1.5">
@@ -924,7 +931,7 @@ function LinkDetailModal({
                 type="button"
                 onClick={() => onToggleLink(file.id)}
                 className={cn(
-                  "inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border transition-colors cursor-pointer",
+                  "inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 sm:py-1 rounded-lg border transition-colors cursor-pointer",
                   linkActive
                     ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/15"
                     : "border-border bg-secondary/40 text-muted-foreground hover:bg-secondary/60"
@@ -937,13 +944,13 @@ function LinkDetailModal({
 
           {/* File Actions */}
           <div className="space-y-2">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 mb-3">File Actions</div>
+            <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 mb-2 sm:mb-3">File Actions</div>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => onStar(file.id)}
                 className={cn(
-                  "inline-flex h-10 items-center justify-center gap-2 rounded-xl border text-sm font-medium transition-colors",
+                  "inline-flex h-11 sm:h-10 items-center justify-center gap-2 rounded-xl border text-sm font-medium transition-colors",
                   isStarred
                     ? "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-400"
                     : "border-border bg-secondary/40 text-foreground/80 hover:bg-secondary/70"
@@ -954,7 +961,7 @@ function LinkDetailModal({
               </button>
               <button
                 type="button"
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border bg-secondary/40 text-sm font-medium text-foreground/80 hover:bg-secondary/70 transition-colors"
+                className="inline-flex h-11 sm:h-10 items-center justify-center gap-2 rounded-xl border border-border bg-secondary/40 text-sm font-medium text-foreground/80 hover:bg-secondary/70 transition-colors"
               >
                 <Download className="h-4 w-4" /> Download
               </button>
@@ -963,7 +970,7 @@ function LinkDetailModal({
               type="button"
               onClick={() => onToggleLink(file.id)}
               className={cn(
-                "w-full inline-flex h-10 items-center justify-center gap-2 rounded-xl border text-sm font-medium transition-all",
+                "w-full inline-flex h-11 sm:h-10 items-center justify-center gap-2 rounded-xl border text-sm font-medium transition-all",
                 linkActive
                   ? "border-destructive/20 bg-destructive/5 text-destructive hover:bg-destructive/10"
                   : "border-primary/20 bg-primary/5 text-primary hover:bg-primary/10"
@@ -973,14 +980,17 @@ function LinkDetailModal({
             </button>
             <button
               type="button"
-              className="w-full inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-destructive/20 bg-destructive/5 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+              className="w-full inline-flex h-11 sm:h-10 items-center justify-center gap-2 rounded-xl border border-destructive/20 bg-destructive/5 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
             >
               <Trash2 className="h-4 w-4" /> Delete Shared Link
             </button>
           </div>
+
+          {/* Bottom safe area spacer for mobile */}
+          <div className="h-4 md:h-0" />
         </div>
       </motion.div>
-    </motion.div>
+    </>
   );
 }
 

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useScrollReveal } from "@/hooks/useScrollReveal";
 import { motion } from "motion/react";
 import {
   Download,
@@ -60,6 +61,7 @@ export function FileRow({
   className,
 }) {
   const [hovered, setHovered] = useState(false);
+  const { ref: revealRef, isVisible } = useScrollReveal();
   const kind = detectFileKind(file.name, file.kind);
   const isGrid = viewType === "grid";
   const isUploading =
@@ -69,12 +71,18 @@ export function FileRow({
 
   return (
     <article
+      ref={revealRef}
       role="row"
       aria-selected={selected}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className={cn("group animate-fade-in", isGrid ? "min-w-0" : "px-1 sm:px-2", className)}
-      style={{ animationFillMode: "both", animationDelay: `${index * 0.04}s` }}
+      className={cn("group", isGrid ? "min-w-0" : "px-1 sm:px-2", className)}
+      style={{
+        opacity: isVisible ? 1 : 0,
+        transform: isVisible ? "translateY(0)" : "translateY(8px)",
+        transition: "opacity 0.35s ease-out, transform 0.35s ease-out",
+        willChange: isVisible ? "auto" : "opacity, transform",
+      }}
     >
       <button
         type="button"
