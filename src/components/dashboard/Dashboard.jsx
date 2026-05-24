@@ -246,8 +246,8 @@ function Topbar({ onToggleSidebar, onMobileMenu, sidebarCollapsed }) {
         </div>
 
         {/* premium ai assistant */}
-        <button className="group relative hidden xl:flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-4 h-10 hover:bg-primary/10 transition-all hover:shadow-[0_0_24px_-8px_var(--color-primary)] overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/20 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]" />
+        <button className="group relative hidden xl:flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-4 h-10 transition-all cursor-pointer overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/20 to-transparent -translate-x-full" />
           <Sparkles className="h-4 w-4 text-primary" />
           <span className="text-sm font-semibold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
             Ask Drivya AI

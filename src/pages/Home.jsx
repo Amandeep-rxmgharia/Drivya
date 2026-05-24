@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { motion } from "motion/react";
 import {
+  Box,
+  Cloud,
   Command,
   FolderPlus,
   KeyRound,
@@ -107,18 +109,32 @@ function HeroSection() {
             week — 12% more than last week. Your vault is fully encrypted and
             synced across 3 devices.
           </p>
-          <div className="mt-6 flex flex-wrap gap-2.5">
-            <button className={primaryBtn}>
-              <UploadCloud className="h-4 w-4" /> Upload File
+          <div className="mt-8 flex flex-wrap items-center gap-3">
+            {/* Google Drive Button */}
+            <button className="group relative inline-flex h-11 items-center gap-3 overflow-hidden rounded-xl border border-primary/20 bg-primary/5 px-4 text-sm font-semibold text-foreground shadow-sm backdrop-blur-md transition-all duration-300 hover:border-primary/40 hover:bg-primary/10 hover:shadow-[0_0_24px_-8px_var(--color-primary)] active:scale-[0.98]">
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/20 to-transparent -translate-x-full " />
+              <div className="flex h-6 w-6 items-center justify-center rounded-[7px] bg-background shadow-sm ring-1 ring-border/50 transition-all duration-300 group-hover:ring-primary/40 group-hover:shadow-[0_0_12px_-3px_var(--color-primary)]">
+                <svg className="h-3.5 w-3.5 text-primary" viewBox="0 0 24 24" fill="currentColor">
+                   <path d="M7.71 3.5L1.15 15l3.43 6 6.55-11.5M9.73 3.5h13.12l-3.43 6H6.28M15.66 15H2.55l3.43 6h13.11"/>
+                </svg>
+              </div>
+              <span className="relative z-10 bg-gradient-to-br from-foreground to-foreground/80 bg-clip-text text-transparent">Import from Google</span>
             </button>
-            <button className={ghostBtn}>
-              <FolderPlus className="h-4 w-4" /> Upload Folder
+
+            {/* Dropbox Button */}
+            <button className="group relative inline-flex h-11 items-center gap-3 overflow-hidden rounded-xl border border-border/60 bg-secondary/30 px-4 text-sm font-medium text-foreground/90 shadow-sm backdrop-blur-md transition-all duration-300 hover:border-[#0061FF]/30 hover:bg-[#0061FF]/5 hover:shadow-[0_0_24px_-10px_#0061FF] active:scale-[0.98]">
+              <div className="flex h-6 w-6 items-center justify-center rounded-[7px] bg-background shadow-sm ring-1 ring-border/50 transition-all duration-300 group-hover:ring-[#0061FF]/40 group-hover:shadow-[0_0_12px_-3px_#0061FF]">
+                <Box className="h-3.5 w-3.5 text-muted-foreground group-hover:text-[#0061FF] transition-colors" />
+              </div>
+              <span className="relative z-10">Connect Dropbox</span>
             </button>
-            <button className={ghostBtn}>
-              <Plus className="h-4 w-4" /> Create Folder
-            </button>
-            <button className={ghostBtn}>
-              <Share2 className="h-4 w-4" /> Share File
+
+            {/* OneDrive Button */}
+            <button className="group relative inline-flex h-11 items-center gap-3 overflow-hidden rounded-xl border border-border/60 bg-secondary/30 px-4 text-sm font-medium text-foreground/90 shadow-sm backdrop-blur-md transition-all duration-300 hover:border-[#0078D4]/30 hover:bg-[#0078D4]/5 hover:shadow-[0_0_24px_-10px_#0078D4] active:scale-[0.98]">
+              <div className="flex h-6 w-6 items-center justify-center rounded-[7px] bg-background shadow-sm ring-1 ring-border/50 transition-all duration-300 group-hover:ring-[#0078D4]/40 group-hover:shadow-[0_0_12px_-3px_#0078D4]">
+                <Cloud className="h-3.5 w-3.5 text-muted-foreground group-hover:text-[#0078D4] transition-colors" />
+              </div>
+              <span className="relative z-10">Connect OneDrive</span>
             </button>
           </div>
         </div>
