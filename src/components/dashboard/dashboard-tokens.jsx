@@ -2,7 +2,7 @@ import { easeSmooth } from "@/lib/motion-presets";
 
 /* ───────────────────────── CSS class tokens ───────────────────────── */
 
-export const card = "rounded-2xl glass mt-6 shadow-elegant";
+export const card = "rounded-2xl glass mb-6 shadow-elegant";
 export const subtleHover =
   "transition-[box-shadow,transform,border-color] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] hover:shadow-glow";
 export const chip =

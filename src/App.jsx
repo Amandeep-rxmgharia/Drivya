@@ -8,6 +8,7 @@ const LandingPage = lazy(() => import("./pages/LandingPage"));
 const Home = lazy(() => import("./pages/Home"));
 const MyDrive = lazy(() => import("./pages/MyDrive"));
 const Auth = lazy(() => import("./pages/Auth"));
+const SharedFiles = lazy(() => import("./pages/SharedFiles"));
 
 export default function App() {
   const router = createBrowserRouter([
@@ -34,6 +35,7 @@ export default function App() {
             { index: true, element: <Navigate to="home" replace /> },
             { path: 'home', element: <Suspense fallback={null}><Home /></Suspense> },
             { path: 'drive', element: <Suspense fallback={null}><MyDrive /></Suspense> },
+            { path: 'shared', element: <Suspense fallback={null}><SharedFiles /></Suspense> },
           ],
         },
       ],
