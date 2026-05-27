@@ -1040,8 +1040,8 @@ export default function SharedFiles() {
   return (
     <>
       <SharedHero />
-      <SharingTips />
       <SharedFilesSection />
+      <SharingTips />
     </>
   );
 }

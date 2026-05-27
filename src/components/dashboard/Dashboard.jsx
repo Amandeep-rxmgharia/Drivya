@@ -51,14 +51,18 @@ function Sidebar({ collapsed, onClose, mobileOpen }) {
         />
       )}
       <motion.aside
-        initial={{ x: -20, opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
-        transition={tweenEnter(0.78, 0.04)}
+        initial={{ x: -20, opacity: 0, width: collapsed ? 76 : 260 }}
+        animate={{ x: 0, opacity: 1, width: collapsed ? 76 : 260 }}
+        transition={{
+          x: { type: "tween", duration: 0.78, delay: 0.04, ease: easeSmooth },
+          opacity: { type: "tween", duration: 0.78, delay: 0.04, ease: easeSmooth },
+          width: { type: "tween", duration: 0.3, ease: easeSmooth },
+        }}
+        style={{ willChange: "width" }}
         className={[
           "fixed inset-y-0 left-0 z-40 h-full lg:relative lg:inset-auto shrink-0",
           "bg-background/60 backdrop-blur-xl border-r border-border/70",
-          "flex flex-col transition-[width,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]",
-          collapsed ? "w-[76px]" : "w-[260px]",
+          "flex flex-col overflow-hidden transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
         ].join(" ")}
       >
