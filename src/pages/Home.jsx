@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Box,
@@ -273,6 +273,21 @@ const DAY_NAMES = [
 function AnalyticsCard() {
   const [metric, setMetric] = useState("uploads");
   const [hoveredIdx, setHoveredIdx] = useState(null);
+  const chartRef = useRef(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (chartRef.current && !chartRef.current.contains(e.target)) {
+        setHoveredIdx(null);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("touchstart", handleOutsideClick, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("touchstart", handleOutsideClick);
+    };
+  }, []);
 
   const activeData = WEEKLY_DATA[metric];
   const maxVal = Math.max(...activeData.rawValues);
@@ -281,133 +296,247 @@ function AnalyticsCard() {
   const totalValue = activeData.rawValues.reduce((sum, val) => sum + val, 0);
   const totalText = `${totalValue} ${activeData.suffix}`;
 
+  // SVG Chart layout mapping
+  const chartHeight = 110;
+  const chartWidth = 500;
+  const paddingX = 25;
+  const paddingY = 20;
+
+  // Map 7 values to coordinate points
+  const points = activeData.rawValues.map((v, i) => {
+    const x = paddingX + (i / 6) * (chartWidth - paddingX * 2);
+    // Avoid division by zero if maxVal is 0
+    const ratio = maxVal > 0 ? v / maxVal : 0;
+    const y = chartHeight - paddingY - ratio * (chartHeight - paddingY * 2);
+    return { x, y, value: v, label: labels[i], dayName: DAY_NAMES[i] };
+  });
+
+  // Construct SVG Path for the curved line
+  const linePath = points.reduce((path, p, i) => {
+    if (i === 0) return `M ${p.x} ${p.y}`;
+    // Simple straight segment line looks clean and highly technical
+    return `${path} L ${p.x} ${p.y}`;
+  }, "");
+
+  // Construct closed path for the filled gradient area under the line
+  const areaPath = points.length > 0
+    ? `${linePath} L ${points[points.length - 1].x} ${chartHeight} L ${points[0].x} ${chartHeight} Z`
+    : "";
+
+  // Helper values for Y-axis coordinates
+  const yAxisTicks = [maxVal, Math.round(maxVal / 2), 0];
+
   return (
-    <div className={`${card} p-6 animate-fade-in`}>
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className={`${card} p-6 animate-fade-in relative overflow-hidden group/card`}>
+      {/* Ambient background glow using theme primary color */}
+      <div className="absolute -top-24 -left-24 h-48 w-48 rounded-full blur-3xl opacity-15 bg-primary pointer-events-none transition-all duration-500" />
+
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between relative z-10">
         <div>
-          <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
+          <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground/60 flex items-center gap-1.5">
+            <span className="h-1.5 w-1.5 rounded-full bg-primary shadow-glow" />
             {activeData.title}
           </div>
-          <div className="mt-1.5 font-display text-2xl font-semibold tracking-tight text-foreground h-8 flex items-center">
+          <div className="mt-2 font-display text-2xl font-semibold tracking-tight text-foreground h-8 flex items-center">
             {hoveredIdx !== null ? (
-              <span className="animate-fade-in text-lg font-medium text-foreground/90">
+              <span className="animate-fade-in text-base sm:text-lg font-medium text-foreground/90">
                 {activeData.rawValues[hoveredIdx]} {metric} on {DAY_NAMES[hoveredIdx]}
               </span>
             ) : (
-              <>
+              <span className="flex items-center gap-2">
                 {totalText}
-                <span className={cn(
-                  "ml-2 text-[11px] font-semibold px-2 py-0.5 rounded-md align-middle",
-                  activeData.change.startsWith("↑")
-                    ? "text-primary bg-primary/10"
-                    : "text-destructive bg-destructive/10"
-                )}>
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md align-middle text-primary bg-primary/10 transition-colors duration-300">
                   {activeData.change}
                 </span>
-              </>
+              </span>
             )}
           </div>
         </div>
 
-        {/* Metric Selector Tabs */}
-        <div className="flex rounded-xl border border-border bg-secondary/40 p-0.5 self-start sm:self-center">
-          {Object.keys(WEEKLY_DATA).map((key) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => {
-                setMetric(key);
-                setHoveredIdx(null);
-              }}
-              className={cn(
-                "rounded-lg px-2.5 py-1 text-xs font-medium transition-all duration-200 cursor-pointer",
-                metric === key
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {WEEKLY_DATA[key].label}
-            </button>
-          ))}
+        {/* Metric Selector Tabs (Uses theme primary button state) */}
+        <div className="flex rounded-xl border border-border/80 bg-secondary/30 p-0.5 self-start sm:self-center">
+          {Object.keys(WEEKLY_DATA).map((key) => {
+            const isSelected = metric === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => {
+                  setMetric(key);
+                  setHoveredIdx(null);
+                }}
+                className={cn(
+                  "rounded-lg px-3 py-1 text-xs font-semibold transition-all duration-300 cursor-pointer flex items-center gap-1.5",
+                  isSelected
+                    ? "bg-background text-foreground shadow-sm ring-1 ring-border/50"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <span className={cn("h-1.5 w-1.5 rounded-full transition-all duration-300", isSelected ? "bg-primary shadow-glow" : "bg-muted-foreground/40")} />
+                {WEEKLY_DATA[key].label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Chart */}
-      <div className="relative mt-8 h-36 flex items-end gap-3 px-1">
-        {/* Background coordinate grid lines */}
-        <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-10">
-          <div className="border-b border-dashed border-foreground w-full" />
-          <div className="border-b border-dashed border-foreground w-full" />
-          <div className="border-b border-dashed border-foreground w-full" />
-          <div className="border-b border-dashed border-foreground w-full" />
+      {/* Chart Canvas */}
+      <div ref={chartRef} className="relative mt-8 h-40 grid grid-cols-[2.5rem_1fr] items-end z-10">
+        
+        {/* Y-Axis Value Labels */}
+        <div className="h-[110px] flex flex-col justify-between text-[10px] font-semibold tracking-wider font-mono text-muted-foreground/50 pr-2.5 text-right pointer-events-none select-none">
+          {yAxisTicks.map((tick, i) => (
+            <span key={i} className="leading-none">{tick}</span>
+          ))}
         </div>
 
-        {activeData.rawValues.map((v, i) => {
-          const heightPercent = (v / maxVal) * 100;
-          const isHighest = v === maxVal;
-          const isHovered = hoveredIdx === i;
+        {/* Graph Display Area */}
+        <div className="h-full flex flex-col justify-end relative">
+          
+          {/* Coordinates Gridlines */}
+          <div className="absolute inset-x-0 h-[110px] bottom-[30px] flex flex-col justify-between pointer-events-none py-1">
+            <div className="border-b border-dashed border-border/40 w-full" />
+            <div className="border-b border-dashed border-border/40 w-full" />
+            <div className="border-b border-dashed border-border/40 w-full" />
+          </div>
 
-          return (
-            <div
-              key={i}
-              className="flex-1 flex flex-col items-center gap-2 h-full justify-end group cursor-pointer"
-              onMouseEnter={() => setHoveredIdx(i)}
-              onMouseLeave={() => setHoveredIdx(null)}
+          {/* Interactive Line Graph SVG */}
+          <div className="relative h-[110px] w-full">
+            <svg
+              viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+              width="100%"
+              height="100%"
+              preserveAspectRatio="none"
+              className="overflow-visible"
             >
-              {/* Value tooltip bubble on top of active/hovered bar */}
-              <div className="relative w-full h-8 flex items-center justify-center">
-                <AnimatePresence>
-                  {isHovered && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 4, scale: 0.9 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 4, scale: 0.9 }}
-                      transition={{ duration: 0.15 }}
-                      className="absolute -top-3 z-10 px-2 py-0.5 rounded bg-foreground text-background text-[10px] font-bold shadow-sm whitespace-nowrap"
-                    >
-                      {v}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
+              <defs>
+                {/* Theme-compliant Area gradient */}
+                <linearGradient id="chart-area-grad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--primary)" stopOpacity="0.2" />
+                  <stop offset="100%" stopColor="var(--primary)" stopOpacity="0.0" />
+                </linearGradient>
 
-              {/* Bar */}
-              <div className="relative w-full h-full flex items-end">
-                <motion.div
-                  key={`${metric}-${i}`}
-                  initial={{ scaleY: 0 }}
-                  animate={{ scaleY: 1 }}
-                  transition={{
-                    type: "spring",
-                    damping: 16,
-                    stiffness: 110,
-                    delay: i * 0.03,
-                  }}
-                  style={{
-                    originY: 1,
-                    height: `${heightPercent}%`,
-                    willChange: "transform",
-                  }}
-                  className={cn(
-                    "w-full rounded-md transition-colors duration-200",
-                    isHighest
-                      ? "bg-gradient-primary shadow-glow"
-                      : "bg-secondary/75 hover:bg-secondary/90",
-                    isHovered && "ring-2 ring-primary/40 shadow-glow"
-                  )}
+                {/* Theme-compliant Line stroke gradient */}
+                <linearGradient id="chart-line-grad" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="var(--primary)" />
+                  <stop offset="50%" stopColor="var(--accent)" />
+                  <stop offset="100%" stopColor="var(--primary)" />
+                </linearGradient>
+              </defs>
+
+              {/* Area filled gradient */}
+              <motion.path
+                key={`area-${metric}`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 0.85 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                d={areaPath}
+                fill="url(#chart-area-grad)"
+                style={{ willChange: "opacity" }}
+              />
+
+              {/* Curve Line */}
+              <motion.path
+                key={`line-${metric}`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                d={linePath}
+                fill="none"
+                stroke="url(#chart-line-grad)"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ willChange: "opacity" }}
+              />
+
+              {/* Active Column Vertical Line Tracker */}
+              {hoveredIdx !== null && (
+                <line
+                  x1={points[hoveredIdx].x}
+                  y1="0"
+                  x2={points[hoveredIdx].x}
+                  y2={chartHeight}
+                  stroke="var(--border)"
+                  strokeWidth="1"
+                  strokeDasharray="4 4"
+                  className="pointer-events-none"
                 />
-              </div>
+              )}
 
-              {/* Label */}
-              <span className={cn(
-                "text-[10.5px] font-semibold transition-colors duration-200 mt-1",
-                isHovered ? "text-foreground" : "text-muted-foreground/60"
-              )}>
-                {labels[i]}
-              </span>
+            </svg>
+
+            {/* Glow circle indicator on the hovered data point */}
+            {hoveredIdx !== null && (
+              <div
+                style={{
+                  position: "absolute",
+                  left: `${(points[hoveredIdx].x / chartWidth) * 100}%`,
+                  top: `${(points[hoveredIdx].y / chartHeight) * 100}%`,
+                  transform: "translate(-50%, -50%)",
+                }}
+                className="pointer-events-none z-10 flex items-center justify-center"
+              >
+                <div className="absolute w-4 h-4 rounded-full bg-primary opacity-30 animate-fade-in" />
+                <div className="absolute w-2.5 h-2.5 rounded-full bg-primary border-2 border-card shadow-sm animate-fade-in" />
+              </div>
+            )}
+
+            {/* Float Tooltip over nearest point using relative absolute mapping */}
+            {hoveredIdx !== null && (
+              <div
+                style={{
+                  position: "absolute",
+                  left: `${(points[hoveredIdx].x / chartWidth) * 100}%`,
+                  top: `${(points[hoveredIdx].y / chartHeight) * 100}%`,
+                  transform: "translate(-50%, -130%)",
+                }}
+                className="z-10 px-2.5 py-1 rounded-lg border border-border/80 bg-background/95 text-foreground text-[10px] font-bold shadow-elegant backdrop-blur-sm pointer-events-none select-none whitespace-nowrap animate-fade-in"
+              >
+                {points[hoveredIdx].value}
+              </div>
+            )}
+
+            {/* Invisible interactive hover grid hitboxes */}
+            <div className="absolute inset-0 flex">
+              {points.map((p, i) => (
+                <div
+                  key={i}
+                  className="flex-1 h-full cursor-pointer relative"
+                  onPointerEnter={(e) => {
+                    if (e.nativeEvent.pointerType === "touch") return;
+                    setHoveredIdx(i);
+                  }}
+                  onPointerLeave={(e) => {
+                    if (e.nativeEvent.pointerType === "touch") return;
+                    setHoveredIdx(null);
+                  }}
+                  onClick={(e) => {
+                    if (e.nativeEvent.pointerType === "touch") {
+                      setHoveredIdx((prev) => (prev === i ? null : i));
+                    }
+                  }}
+                />
+              ))}
             </div>
-          );
-        })}
+          </div>
+
+          {/* Day Label Axis aligned perfectly under columns */}
+          <div className="h-6 flex justify-between px-[14px] mt-2 border-t border-border/30 pt-1 pointer-events-none select-none">
+            {labels.map((lbl, idx) => (
+              <span
+                key={idx}
+                className={cn(
+                  "text-[10px] font-bold tracking-wider transition-colors duration-200 w-6 text-center leading-none",
+                  hoveredIdx === idx ? "text-foreground" : "text-muted-foreground/40"
+                )}
+              >
+                {lbl}
+              </span>
+            ))}
+          </div>
+
+        </div>
       </div>
     </div>
   );
