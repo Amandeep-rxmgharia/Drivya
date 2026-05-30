@@ -23,7 +23,7 @@ import { FilePreviewModal } from "@/components/recent/FilePreviewModal";
 
 /* ───────────────────────── Mock data ───────────────────────── */
 
-const RECENT_FILES = [
+export const RECENT_FILES = [
   // Today – opened
   {
     id: "r1",

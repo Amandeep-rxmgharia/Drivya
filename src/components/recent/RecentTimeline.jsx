@@ -130,11 +130,11 @@ function FileActions({ file, visible, compact, onPreview, onStar }) {
       <button type="button" className={cn(btn, "hover:text-destructive")} title="Delete">
         <Trash2 className="h-3.5 w-3.5" />
       </button>
-      {!compact && (
+      {/* {!compact && (
         <button type="button" className={btn} title="Details" onClick={() => onPreview?.(file)}>
           <MoreHorizontal className="h-3.5 w-3.5" />
         </button>
-      )}
+      )} */}
     </div>
   );
 }
