@@ -3,10 +3,10 @@ import { motion, AnimatePresence } from "motion/react";
 import {
   Bell,
   ChevronDown,
+  Clock,
   Cloud,
   Folder,
   Home,
-  Loader2,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
@@ -31,7 +31,7 @@ const navMain = [
   { icon: Home, label: "Home", to: "home" },
   { icon: Folder, label: "My Drive", to: "drive", count: 248 },
   { icon: Share2, label: "Shared Files", to: "shared", count: 14 },
-  { icon: Loader2, label: "Recent", to: "recent" },
+  { icon: Clock, label: "Recent", to: "recent" },
   { icon: Star, label: "Starred", to: "starred" },
   { icon: Trash2, label: "Trash", to: "trash" },
 ];
