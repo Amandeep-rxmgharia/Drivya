@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { motion } from "motion/react";
 import {
   Calendar,
@@ -64,7 +65,7 @@ export function FilePreviewModal({ file, onClose, formatTime, onStar }) {
 
   const isUploading = file.uploadStatus === "uploading";
 
-  return (
+  return createPortal(
     <>
           {/* Backdrop */}
           <motion.div
@@ -292,6 +293,7 @@ export function FilePreviewModal({ file, onClose, formatTime, onStar }) {
               <div className="h-4 md:h-0" />
             </div>
           </motion.div>
-    </>
+    </>,
+    document.body
   );
 }

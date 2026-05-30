@@ -384,7 +384,7 @@ export function RecentTimeline({
 
       {/* List column headings (only in list view) */}
       {!collapsed && !isGrid && (
-        <div className="hidden md:grid md:grid-cols-[1fr_auto] gap-10 border-b border-border/60 px-5 py-2 sm:px-6 mx-4 sm:mx-5">
+        <div className="hidden md:grid md:grid-cols-[1fr_auto] gap-10 border-b border-border/60 px-5 py-2 sm:px-6">
           <div className="grid grid-cols-[minmax(0,1fr)_6rem_4.5rem] gap-8 lg:gap-11 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             <span className="pl-5">Name</span>
             <span>Accessed</span>

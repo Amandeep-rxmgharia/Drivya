@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, memo } from "react";
+import { createPortal } from "react-dom";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 import { AnimatePresence, motion } from "motion/react";
 import {
@@ -788,7 +789,7 @@ function LinkDetailModal({
     return () => { document.body.style.overflow = ""; };
   }, []);
 
-  return (
+  return createPortal(
     <>
       {/* Backdrop */}
       <motion.div
@@ -990,7 +991,8 @@ function LinkDetailModal({
           <div className="h-4 md:h-0" />
         </div>
       </motion.div>
-    </>
+    </>,
+    document.body
   );
 }
 
