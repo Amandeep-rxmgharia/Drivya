@@ -41,7 +41,7 @@ function PreviewPlaceholder({ kind }) {
 
 /* ───────────────────────── Modal (right-side slider like SharedFiles) ───────────────────────── */
 
-export function FilePreviewModal({ file, onClose, formatTime }) {
+export function FilePreviewModal({ file, onClose, formatTime, onStar }) {
   // Escape key handler
   useEffect(() => {
     if (!file) return;
@@ -254,23 +254,38 @@ export function FilePreviewModal({ file, onClose, formatTime }) {
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
+                    onClick={() => onStar?.(file.id)}
+                    className={cn(
+                      "inline-flex h-11 sm:h-10 items-center justify-center gap-2 rounded-xl border text-sm font-medium transition-colors",
+                      file.starred
+                        ? "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                        : "border-border bg-secondary/40 text-foreground/80 hover:bg-secondary/70"
+                    )}
+                  >
+                    <Star className={cn("h-4 w-4", file.starred && "fill-current")} />
+                    {file.starred ? "Unstar" : "Star"}
+                  </button>
+                  <button
+                    type="button"
                     className="inline-flex h-11 sm:h-10 items-center justify-center gap-2 rounded-xl border border-border bg-secondary/40 text-sm font-medium text-foreground/80 hover:bg-secondary/70 transition-colors"
                   >
                     <Share2 className="h-4 w-4" /> Share
                   </button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     className="inline-flex h-11 sm:h-10 items-center justify-center gap-2 rounded-xl border border-border bg-secondary/40 text-sm font-medium text-foreground/80 hover:bg-secondary/70 transition-colors"
                   >
                     <Pencil className="h-4 w-4" /> Rename
                   </button>
+                  <button
+                    type="button"
+                    className="inline-flex h-11 sm:h-10 items-center justify-center gap-2 rounded-xl border border-destructive/20 bg-destructive/5 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+                  >
+                    <Trash2 className="h-4 w-4" /> Delete
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  className="w-full inline-flex h-11 sm:h-10 items-center justify-center gap-2 rounded-xl border border-destructive/20 bg-destructive/5 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
-                >
-                  <Trash2 className="h-4 w-4" /> Delete File
-                </button>
               </div>
 
               {/* Bottom safe area spacer for mobile */}

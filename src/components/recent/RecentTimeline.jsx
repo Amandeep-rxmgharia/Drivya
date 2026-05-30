@@ -87,7 +87,7 @@ function ActivityBadge({ type }) {
 /* ───────────────────────── File Actions Toolbar ───────────────────────── */
 /* Matches the SharedFiles FileActions pattern exactly */
 
-function FileActions({ file, visible, compact, onPreview }) {
+function FileActions({ file, visible, compact, onPreview, onStar }) {
   const stop = (e) => e.stopPropagation();
   const btn =
     "inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30";
@@ -107,15 +107,24 @@ function FileActions({ file, visible, compact, onPreview }) {
       onClick={stop}
       onKeyDown={stop}
     >
+      <button
+        type="button"
+        className={cn(btn, file.starred && "text-amber-600 dark:text-amber-400")}
+        title={file.starred ? "Unstar" : "Star"}
+        aria-pressed={file.starred}
+        onClick={() => onStar?.(file.id)}
+      >
+        <Star className={cn("h-3.5 w-3.5", file.starred && "fill-current")} />
+      </button>
       <button type="button" className={cn(btn, "hover:text-primary")} title="Quick preview" onClick={() => onPreview?.(file)}>
         <Eye className="h-3.5 w-3.5" />
       </button>
       <button type="button" className={btn} title="Share">
         <Share2 className="h-3.5 w-3.5" />
       </button>
-      <button type="button" className={btn} title="Download">
+      {/* <button type="button" className={btn} title="Download">
         <Download className="h-3.5 w-3.5" />
-      </button>
+      </button> */}
       <button type="button" className={cn(btn, "hover:text-destructive")} title="Delete">
         <Trash2 className="h-3.5 w-3.5" />
       </button>
@@ -132,10 +141,10 @@ function FileActions({ file, visible, compact, onPreview }) {
 
 function UploadProgressBar({ progress }) {
   return (
-    <div className="mt-1.5 w-full max-w-[120px]">
-      <div className="h-1 overflow-hidden rounded-full bg-border">
+    <div className="mt-2 w-full">
+      <div className="h-1.5 overflow-hidden rounded-full bg-border">
         <motion.div
-          className="h-full rounded-full bg-gradient-primary"
+          className="h-full rounded-full bg-gradient-primary shadow-glow"
           initial={{ width: 0 }}
           animate={{ width: `${progress}%` }}
           transition={{ duration: 0.6, ease: easeSmooth }}
@@ -148,7 +157,7 @@ function UploadProgressBar({ progress }) {
 /* ───────────────────────── File Row (Recent variant) ───────────────────────── */
 /* Uses useScrollReveal for consistent scroll animation with other tabs */
 
-function RecentFileRow({ file, view, formatTime, onPreview }) {
+function RecentFileRow({ file, view, formatTime, onPreview, onStar }) {
   const [hovered, setHovered] = useState(false);
   const { ref: revealRef, isVisible } = useScrollReveal();
   const kind = detectFileKind(file.name, file.kind);
@@ -190,6 +199,7 @@ function RecentFileRow({ file, view, formatTime, onPreview }) {
               visible={hovered}
               compact
               onPreview={onPreview}
+              onStar={onStar}
             />
           </div>
 
@@ -312,6 +322,7 @@ function RecentFileRow({ file, view, formatTime, onPreview }) {
               file={file}
               visible={hovered}
               onPreview={onPreview}
+              onStar={onStar}
             />
           </div>
         </div>
@@ -336,6 +347,7 @@ export function RecentTimeline({
   index,
   formatTime,
   onPreview,
+  onStar,
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const GroupIcon = GROUP_ICONS[label] || CalendarDays;
@@ -400,6 +412,7 @@ export function RecentTimeline({
               view={view}
               formatTime={formatTime}
               onPreview={onPreview}
+              onStar={onStar}
             />
           ))}
         </div>

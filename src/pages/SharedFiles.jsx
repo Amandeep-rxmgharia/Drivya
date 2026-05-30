@@ -1022,8 +1022,8 @@ function SecurityBadge() {
 
 function EmptyState() {
   return (
-    <div className="col-span-full mx-auto flex max-w-sm flex-col items-center justify-center rounded-xl border border-dashed border-border bg-secondary/30 px-6 py-14 text-center">
-      <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-border bg-secondary/60 text-primary">
+    <div className="col-span-full mx-auto flex max-w-sm flex-col items-center justify-center rounded-xl  px-6 py-14 text-center">
+      <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-border text-primary">
         <Share2 className="h-5 w-5" />
       </span>
       <h4 className="mt-4 font-display text-base font-semibold text-foreground">No shared links found</h4>

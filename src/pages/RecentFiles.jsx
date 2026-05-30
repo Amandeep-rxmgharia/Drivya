@@ -239,13 +239,26 @@ function StatsRow() {
 /* ───────────────────────── Main Page ───────────────────────── */
 
 export default function RecentFiles() {
+  const [files, setFiles] = useState(RECENT_FILES);
   const [activeFilter, setActiveFilter] = useState("all");
   const [view, setView] = useState("grid");
   const [searchQuery, setSearchQuery] = useState("");
-  const [previewFile, setPreviewFile] = useState(null);
+  const [previewFileId, setPreviewFileId] = useState(null);
+
+  const previewFile = useMemo(() => {
+    return files.find((f) => f.id === previewFileId) || null;
+  }, [files, previewFileId]);
+
+  const handleToggleStar = (id) => {
+    setFiles((prevFiles) =>
+      prevFiles.map((f) =>
+        f.id === id ? { ...f, starred: !f.starred } : f
+      )
+    );
+  };
 
   const filteredFiles = useMemo(() => {
-    let list = [...RECENT_FILES];
+    let list = [...files];
 
     // filter by type
     if (activeFilter !== "all") {
@@ -263,7 +276,7 @@ export default function RecentFiles() {
     }
 
     return list;
-  }, [activeFilter, searchQuery]);
+  }, [files, activeFilter, searchQuery]);
 
   // Group by time period
   const grouped = useMemo(() => {
@@ -286,7 +299,7 @@ export default function RecentFiles() {
       .map((g) => ({ label: g, files: groups[g] }));
   }, [filteredFiles]);
 
-  const uploadingCount = RECENT_FILES.filter(
+  const uploadingCount = files.filter(
     (f) => f.uploadStatus === "uploading",
   ).length;
 
@@ -444,7 +457,8 @@ export default function RecentFiles() {
                 view={view}
                 index={gi}
                 formatTime={formatRelativeTime}
-                onPreview={setPreviewFile}
+                onPreview={(file) => setPreviewFileId(file.id)}
+                onStar={handleToggleStar}
               />
             ))
           )}
@@ -456,8 +470,9 @@ export default function RecentFiles() {
         {previewFile && (
           <FilePreviewModal
             file={previewFile}
-            onClose={() => setPreviewFile(null)}
+            onClose={() => setPreviewFileId(null)}
             formatTime={formatRelativeTime}
+            onStar={handleToggleStar}
           />
         )}
       </AnimatePresence>
