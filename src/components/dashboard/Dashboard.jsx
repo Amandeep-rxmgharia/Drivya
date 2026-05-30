@@ -24,7 +24,6 @@ import { Link, Outlet, useLocation } from "react-router-dom";
 import { chip, iconBtn, primaryBtn, Kbd } from "./dashboard-tokens.jsx";
 import { FloatingActionButton } from "./FloatingActionButton.jsx";
 
-
 /* ───────────────────────── Sidebar ───────────────────────── */
 
 const navMain = [
@@ -39,7 +38,8 @@ const navMain = [
 function Sidebar({ collapsed, onClose, mobileOpen }) {
   const location = useLocation();
   // Extract the active segment from URL: /dashboard/home → "home"
-  const activeSegment = location.pathname.split("/").filter(Boolean).pop() || "home";
+  const activeSegment =
+    location.pathname.split("/").filter(Boolean).pop() || "home";
 
   return (
     <>
@@ -55,7 +55,12 @@ function Sidebar({ collapsed, onClose, mobileOpen }) {
         animate={{ x: 0, opacity: 1, width: collapsed ? 76 : 260 }}
         transition={{
           x: { type: "tween", duration: 0.78, delay: 0.04, ease: easeSmooth },
-          opacity: { type: "tween", duration: 0.78, delay: 0.04, ease: easeSmooth },
+          opacity: {
+            type: "tween",
+            duration: 0.78,
+            delay: 0.04,
+            ease: easeSmooth,
+          },
           width: { type: "tween", duration: 0.3, ease: easeSmooth },
         }}
         style={{ willChange: "width" }}
@@ -68,7 +73,10 @@ function Sidebar({ collapsed, onClose, mobileOpen }) {
       >
         {/* brand */}
         <div className="h-16 flex items-center px-5 border-b border-border/60">
-          <Link to="/dashboard/home" className="flex items-center gap-2.5 group">
+          <Link
+            to="/dashboard/home"
+            className="flex items-center gap-2.5 group"
+          >
             <span className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-primary shadow-glow">
               <Cloud className="h-4 w-4 text-primary-foreground" />
             </span>
@@ -88,6 +96,7 @@ function Sidebar({ collapsed, onClose, mobileOpen }) {
         {/* nav */}
         <nav className="flex-1 overflow-y-auto px-3 py-5 space-y-7">
           <SidebarGroup
+            onClose={onClose}
             label="Library"
             items={navMain}
             active={activeSegment}
@@ -108,14 +117,20 @@ function Sidebar({ collapsed, onClose, mobileOpen }) {
                 Storage
               </span>
               <span className={chip}>
-                <Sparkles className="h-3 w-3 text-primary" />Pro
+                <Sparkles className="h-3 w-3 text-primary" />
+                Pro
               </span>
             </div>
             <div className="mt-3 h-1.5 w-full rounded-full bg-secondary/60 overflow-hidden">
               <motion.div
                 initial={{ width: 0 }}
                 animate={{ width: "62%" }}
-                transition={{ type: "tween", duration: 1.1, delay: 0.35, ease: easeSmooth }}
+                transition={{
+                  type: "tween",
+                  duration: 1.1,
+                  delay: 0.35,
+                  ease: easeSmooth,
+                }}
                 className="h-full rounded-full bg-gradient-primary"
               />
             </div>
@@ -148,7 +163,7 @@ function Sidebar({ collapsed, onClose, mobileOpen }) {
   );
 }
 
-function SidebarGroup({ label, items, active, collapsed }) {
+function SidebarGroup({ label, items, active, collapsed, onClose }) {
   return (
     <div>
       {!collapsed && (
@@ -163,9 +178,13 @@ function SidebarGroup({ label, items, active, collapsed }) {
             <li
               key={it.to}
               className="animate-fade-in"
-              style={{ animationDelay: `${0.12 + i * 0.05}s`, animationFillMode: 'both' }}
+              style={{
+                animationDelay: `${0.12 + i * 0.05}s`,
+                animationFillMode: "both",
+              }}
             >
               <Link
+                onClick={onClose}
                 to={`/dashboard/${it.to}`}
                 className={[
                   "group relative flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors",

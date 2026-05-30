@@ -68,20 +68,22 @@ function UploadStatusBadge({ status, progress }) {
 /* ───────────────────────── Activity type indicator ───────────────────────── */
 
 function ActivityBadge({ type }) {
-  if (type === "uploaded") {
+  // if (type === "uploaded") {
+  //   return (
+  //     <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/20 bg-emerald-500/8 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+  //       <Upload className="h-3 w-3" />
+  //       Uploaded
+  //     </span>
+  //   );
+  // }
+  if(type === 'opened') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/20 bg-emerald-500/8 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
-        <Upload className="h-3 w-3" />
-        Uploaded
-      </span>
-    );
-  }
-  return (
     <span className="inline-flex items-center gap-1 rounded-md border border-sky-500/20 bg-sky-500/8 px-1.5 py-0.5 text-[10px] font-medium text-sky-600 dark:text-sky-400">
       <Eye className="h-3 w-3" />
       Opened
     </span>
   );
+  }
 }
 
 /* ───────────────────────── File Actions Toolbar ───────────────────────── */
