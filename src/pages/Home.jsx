@@ -236,43 +236,178 @@ function StorageDonut() {
 
 /* ───────────────────────── Analytics ───────────────────────── */
 
+const WEEKLY_DATA = {
+  uploads: {
+    label: "Uploads",
+    title: "Weekly Uploads",
+    change: "↑ 12%",
+    rawValues: [5, 8, 4, 9, 6, 7, 3],
+    suffix: "uploads",
+  },
+  opened: {
+    label: "Opened",
+    title: "Weekly Opens",
+    change: "↑ 8%",
+    rawValues: [15, 22, 12, 28, 18, 20, 13],
+    suffix: "files",
+  },
+  downloads: {
+    label: "Downloads",
+    title: "Weekly Downloads",
+    change: "↓ 4%",
+    rawValues: [2, 4, 1, 5, 3, 3, 0],
+    suffix: "files",
+  },
+};
+
+const DAY_NAMES = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+];
+
 function AnalyticsCard() {
-  const days = [42, 58, 35, 70, 52, 88, 64];
+  const [metric, setMetric] = useState("uploads");
+  const [hoveredIdx, setHoveredIdx] = useState(null);
+
+  const activeData = WEEKLY_DATA[metric];
+  const maxVal = Math.max(...activeData.rawValues);
   const labels = ["M", "T", "W", "T", "F", "S", "S"];
+
+  const totalValue = activeData.rawValues.reduce((sum, val) => sum + val, 0);
+  const totalText = `${totalValue} ${activeData.suffix}`;
+
   return (
-    <div className={`${card} ${subtleHover} p-6 animate-fade-in`}>
-      <div className="flex items-center justify-between">
+    <div className={`${card} p-6 animate-fade-in`}>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
-            Weekly activity
+            {activeData.title}
           </div>
-          <div className="mt-1.5 font-display text-2xl font-semibold tracking-tight text-foreground">
-            42 uploads
-            <span className="ml-2 text-[11px] font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-md align-middle">
-              ↑ 12%
-            </span>
+          <div className="mt-1.5 font-display text-2xl font-semibold tracking-tight text-foreground h-8 flex items-center">
+            {hoveredIdx !== null ? (
+              <span className="animate-fade-in text-lg font-medium text-foreground/90">
+                {activeData.rawValues[hoveredIdx]} {metric} on {DAY_NAMES[hoveredIdx]}
+              </span>
+            ) : (
+              <>
+                {totalText}
+                <span className={cn(
+                  "ml-2 text-[11px] font-semibold px-2 py-0.5 rounded-md align-middle",
+                  activeData.change.startsWith("↑")
+                    ? "text-primary bg-primary/10"
+                    : "text-destructive bg-destructive/10"
+                )}>
+                  {activeData.change}
+                </span>
+              </>
+            )}
           </div>
         </div>
-        <button className={iconBtn}>
-          <MoreHorizontal className="h-4 w-4" />
-        </button>
+
+        {/* Metric Selector Tabs */}
+        <div className="flex rounded-xl border border-border bg-secondary/40 p-0.5 self-start sm:self-center">
+          {Object.keys(WEEKLY_DATA).map((key) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => {
+                setMetric(key);
+                setHoveredIdx(null);
+              }}
+              className={cn(
+                "rounded-lg px-2.5 py-1 text-xs font-medium transition-all duration-200 cursor-pointer",
+                metric === key
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {WEEKLY_DATA[key].label}
+            </button>
+          ))}
+        </div>
       </div>
-      <div className="mt-6 flex items-end gap-3 h-32">
-        {days.map((v, i) => (
-          <div key={i} className="flex-1 flex flex-col items-center gap-2">
+
+      {/* Chart */}
+      <div className="relative mt-8 h-36 flex items-end gap-3 px-1">
+        {/* Background coordinate grid lines */}
+        <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-10">
+          <div className="border-b border-dashed border-foreground w-full" />
+          <div className="border-b border-dashed border-foreground w-full" />
+          <div className="border-b border-dashed border-foreground w-full" />
+          <div className="border-b border-dashed border-foreground w-full" />
+        </div>
+
+        {activeData.rawValues.map((v, i) => {
+          const heightPercent = (v / maxVal) * 100;
+          const isHighest = v === maxVal;
+          const isHovered = hoveredIdx === i;
+
+          return (
             <div
-              style={{ height: `${v}%` }}
-              className={`w-full rounded-md transition-colors ${
-                i === 5
-                  ? "bg-gradient-primary shadow-glow"
-                  : "bg-secondary/80 hover:bg-secondary"
-              }`}
-            />
-            <span className="text-[10.5px] font-medium text-muted-foreground/80">
-              {labels[i]}
-            </span>
-          </div>
-        ))}
+              key={i}
+              className="flex-1 flex flex-col items-center gap-2 h-full justify-end group cursor-pointer"
+              onMouseEnter={() => setHoveredIdx(i)}
+              onMouseLeave={() => setHoveredIdx(null)}
+            >
+              {/* Value tooltip bubble on top of active/hovered bar */}
+              <div className="relative w-full h-8 flex items-center justify-center">
+                <AnimatePresence>
+                  {isHovered && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 4, scale: 0.9 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 4, scale: 0.9 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute -top-3 z-10 px-2 py-0.5 rounded bg-foreground text-background text-[10px] font-bold shadow-sm whitespace-nowrap"
+                    >
+                      {v}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* Bar */}
+              <div className="relative w-full h-full flex items-end">
+                <motion.div
+                  key={`${metric}-${i}`}
+                  initial={{ scaleY: 0 }}
+                  animate={{ scaleY: 1 }}
+                  transition={{
+                    type: "spring",
+                    damping: 16,
+                    stiffness: 110,
+                    delay: i * 0.03,
+                  }}
+                  style={{
+                    originY: 1,
+                    height: `${heightPercent}%`,
+                    willChange: "transform",
+                  }}
+                  className={cn(
+                    "w-full rounded-md transition-colors duration-200",
+                    isHighest
+                      ? "bg-gradient-primary shadow-glow"
+                      : "bg-secondary/75 hover:bg-secondary/90",
+                    isHovered && "ring-2 ring-primary/40 shadow-glow"
+                  )}
+                />
+              </div>
+
+              {/* Label */}
+              <span className={cn(
+                "text-[10.5px] font-semibold transition-colors duration-200 mt-1",
+                isHovered ? "text-foreground" : "text-muted-foreground/60"
+              )}>
+                {labels[i]}
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
