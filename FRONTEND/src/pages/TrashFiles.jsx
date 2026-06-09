@@ -1,0 +1,1193 @@
+import { useState, useMemo, useCallback, useEffect, memo } from "react";
+import { createPortal } from "react-dom";
+import { AnimatePresence, motion } from "motion/react";
+import {
+  AlertTriangle,
+  ArrowUpDown,
+  ChevronDown,
+  Clock,
+  Code2,
+  FileStack,
+  FileText,
+  Film,
+  Folder,
+  Image,
+  LayoutGrid,
+  List,
+  RotateCcw,
+  Search,
+  Trash2,
+  Undo2,
+  X,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { detectFileKind } from "@/lib/file-types";
+import { FileTypeIcon } from "@/components/dashboard/FileTypeIcon";
+import {
+  card,
+  subtleHover,
+  chip,
+} from "@/components/dashboard/dashboard-tokens";
+import { useScrollReveal } from "@/hooks/useScrollReveal";
+
+/* ───────────────────────── Mock Data ───────────────────────── */
+
+const INITIAL_TRASH = [
+  {
+    id: "tr1",
+    name: "old-proposal-draft.docx",
+    size: "2.4 MB",
+    deletedAt: new Date(Date.now() - 1 * 60 * 60 * 1000),
+    kind: "document",
+    originalPath: "My Drive / Projects",
+  },
+  {
+    id: "tr2",
+    name: "unused-banner.png",
+    size: "6.8 MB",
+    deletedAt: new Date(Date.now() - 3 * 60 * 60 * 1000),
+    kind: "image",
+    originalPath: "My Drive / Marketing",
+  },
+  {
+    id: "tr3",
+    name: "temp-archive.zip",
+    size: "340 MB",
+    deletedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+    kind: "archive",
+    originalPath: "My Drive / Backups",
+  },
+  {
+    id: "tr4",
+    name: "outdated-deck.pptx",
+    size: "18.6 MB",
+    deletedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+    kind: "document",
+    originalPath: "My Drive / Presentations",
+  },
+  {
+    id: "tr5",
+    name: "Screenshot-2025-12.png",
+    size: "1.2 MB",
+    deletedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+    kind: "image",
+    originalPath: "My Drive / Screenshots",
+  },
+  {
+    id: "tr6",
+    name: "test-video-raw.mp4",
+    size: "512 MB",
+    deletedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+    kind: "video",
+    originalPath: "My Drive / Videos",
+  },
+  {
+    id: "tr7",
+    name: "deprecated-api.ts",
+    size: "8 KB",
+    deletedAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000),
+    kind: "code",
+    originalPath: "My Drive / Dev",
+  },
+  {
+    id: "tr8",
+    name: "draft-notes.md",
+    size: "4 KB",
+    deletedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+    kind: "document",
+    originalPath: "My Drive / Notes",
+  },
+  {
+    id: "tr9",
+    name: "legacy-icons",
+    size: "86 items",
+    deletedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+    kind: "folder",
+    originalPath: "My Drive / Design",
+  },
+  {
+    id: "tr10",
+    name: "recording-jan.mp3",
+    size: "24 MB",
+    deletedAt: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000),
+    kind: "audio",
+    originalPath: "My Drive / Audio",
+  },
+  {
+    id: "tr11",
+    name: "old-photo-batch.jpg",
+    size: "14 MB",
+    deletedAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000),
+    kind: "image",
+    originalPath: "My Drive / Photos",
+  },
+  {
+    id: "tr12",
+    name: "rejected-wireframe.fig",
+    size: "42 MB",
+    deletedAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000),
+    kind: "image",
+    originalPath: "My Drive / Design",
+  },
+  {
+    id: "tr13",
+    name: "backup-config.yml",
+    size: "2 KB",
+    deletedAt: new Date(Date.now() - 22 * 24 * 60 * 60 * 1000),
+    kind: "code",
+    originalPath: "My Drive / Dev",
+  },
+  {
+    id: "tr14",
+    name: "unused-exports.zip",
+    size: "128 MB",
+    deletedAt: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000),
+    kind: "archive",
+    originalPath: "My Drive / Exports",
+  },
+];
+
+/* ───────────────────────── Helpers ───────────────────────── */
+
+const AUTO_DELETE_DAYS = 30;
+
+function formatRelativeTime(date) {
+  const now = Date.now();
+  const diff = now - date.getTime();
+  const mins = Math.floor(diff / 60000);
+  const hrs = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  if (hrs < 24) return `${hrs}h ago`;
+  if (days < 7) return `${days}d ago`;
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function daysUntilAutoDelete(deletedAt) {
+  const elapsed = Math.floor(
+    (Date.now() - deletedAt.getTime()) / (1000 * 60 * 60 * 24),
+  );
+  return Math.max(0, AUTO_DELETE_DAYS - elapsed);
+}
+
+function parseSizeToMB(sizeStr) {
+  const num = parseFloat(sizeStr);
+  if (sizeStr.includes("GB")) return num * 1024;
+  if (sizeStr.includes("MB")) return num;
+  if (sizeStr.includes("KB")) return num / 1024;
+  return 0;
+}
+
+function formatSize(mb) {
+  if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
+  if (mb >= 1) return `${mb.toFixed(1)} MB`;
+  return `${(mb * 1024).toFixed(0)} KB`;
+}
+
+const CATEGORY_MAP = {
+  Documents: ["pdf", "document"],
+  Images: ["image"],
+  Media: ["audio", "video"],
+  Code: ["code"],
+  Folders: ["folder"],
+  Other: ["archive", "file"],
+};
+
+const CATEGORY_ICONS = {
+  Documents: FileText,
+  Images: Image,
+  Media: Film,
+  Code: Code2,
+  Folders: Folder,
+  Other: FileStack,
+};
+
+function getCategoryForKind(kind) {
+  for (const [cat, kinds] of Object.entries(CATEGORY_MAP)) {
+    if (kinds.includes(kind)) return cat;
+  }
+  return "Other";
+}
+
+const FILTER_TABS = [
+  { id: "all", label: "All", icon: Trash2 },
+  { id: "Documents", label: "Documents", icon: FileText },
+  { id: "Images", label: "Images", icon: Image },
+  { id: "Media", label: "Media", icon: Film },
+  { id: "Code", label: "Code", icon: Code2 },
+  { id: "Folders", label: "Folders", icon: Folder },
+];
+
+const SORT_OPTIONS = [
+  { id: "deleted", label: "Date Deleted" },
+  { id: "name", label: "Name" },
+  { id: "size", label: "Size" },
+  { id: "expiry", label: "Days Left" },
+];
+
+const rowEase = "duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]";
+
+/* ───────────────────────── Stats ───────────────────────── */
+
+const StatMini = memo(function StatMini({
+  icon: Icon,
+  label,
+  value,
+  accent,
+  destructive,
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-secondary/30 px-4 py-3">
+      <div
+        className={cn(
+          "flex h-9 w-9 items-center justify-center rounded-lg border shrink-0",
+          destructive
+            ? "border-destructive/20 bg-destructive/10 text-destructive"
+            : accent
+              ? "border-accent/20 bg-accent/10 text-accent"
+              : "border-primary/20 bg-primary/10 text-primary",
+        )}
+      >
+        <Icon className="h-4 w-4" />
+      </div>
+      <div className="min-w-0">
+        <div className="font-display text-lg font-semibold tracking-tight text-foreground tabular-nums leading-none">
+          {value}
+        </div>
+        <div className="text-[10px] font-medium text-muted-foreground mt-0.5">
+          {label}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+/* ───────────────────────── Hero ───────────────────────── */
+
+function TrashHero({ files }) {
+  const totalItems = files.length;
+  const totalSizeMB = files.reduce((sum, f) => sum + parseSizeToMB(f.size), 0);
+  const expiringCount = files.filter(
+    (f) => daysUntilAutoDelete(f.deletedAt) <= 7,
+  ).length;
+
+  return (
+    <section
+      className={`${card} ${subtleHover} relative overflow-hidden p-5 sm:p-6 md:p-10 animate-fade-in`}
+    >
+      {/* ambient glows — red-tinted for trash */}
+      <div className="absolute -top-32 -right-24 h-72 w-72 rounded-full bg-destructive/10 blur-3xl opacity-80 pointer-events-none" />
+      <div className="absolute -bottom-20 -left-16 h-56 w-56 rounded-full bg-ambient-primary blur-3xl opacity-50 pointer-events-none" />
+
+      <div className="relative flex flex-col gap-6 sm:gap-8">
+        <div className="max-w-xl">
+          <div className={chip}>
+            <Trash2 className="h-3 w-3 text-destructive" />
+            Auto-deletes after {AUTO_DELETE_DAYS} days
+          </div>
+          <h1 className="mt-4 sm:mt-5 font-display text-2xl sm:text-3xl md:text-4xl font-semibold tracking-tight leading-[1.1] text-foreground">
+            <span className="text-gradient">Trash</span>
+          </h1>
+          <p className="mt-2 sm:mt-3 text-sm sm:text-base text-muted-foreground leading-relaxed max-w-lg">
+            {totalItems === 0 ? (
+              "Your trash is empty — nice and clean!"
+            ) : (
+              <>
+                You have{" "}
+                <span className="font-semibold text-foreground">
+                  {totalItems} item{totalItems !== 1 ? "s" : ""}
+                </span>{" "}
+                using{" "}
+                <span className="font-semibold text-foreground">
+                  {formatSize(totalSizeMB)}
+                </span>
+                . Restore or permanently delete files here.
+              </>
+            )}
+          </p>
+        </div>
+
+        {/* stat row */}
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          <StatMini
+            icon={Trash2}
+            label="Items in Trash"
+            value={totalItems}
+            destructive
+          />
+          <StatMini
+            icon={Clock}
+            label="Expiring soon"
+            value={expiringCount}
+            accent
+          />
+          <StatMini
+            icon={FileStack}
+            label="Space used"
+            value={formatSize(totalSizeMB)}
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ───────────────────────── Confirm Modal ───────────────────────── */
+
+function ConfirmModal({
+  title,
+  description,
+  confirmLabel,
+  onConfirm,
+  onCancel,
+}) {
+  // Close on Escape
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key === "Escape") onCancel();
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onCancel]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+    >
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-background/60 backdrop-blur-sm"
+        onClick={onCancel}
+      />
+
+      {/* Modal */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 10 }}
+        transition={{ type: "spring", stiffness: 400, damping: 30 }}
+        className="relative z-10 w-full max-w-md rounded-2xl border border-border bg-card shadow-elegant p-6"
+      >
+        <div className="flex items-start gap-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-destructive/20 bg-destructive/10">
+            <AlertTriangle className="h-5 w-5 text-destructive" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="font-display text-lg font-semibold text-foreground">
+              {title}
+            </h3>
+            <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">
+              {description}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-6 flex items-center justify-end gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="inline-flex items-center gap-2 rounded-xl border border-border bg-secondary/40 px-4 h-10 text-sm font-medium text-foreground/80 hover:text-foreground hover:bg-secondary/70 transition-colors cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="inline-flex items-center gap-2 rounded-xl bg-destructive px-4 h-10 text-sm font-medium text-destructive-foreground shadow-sm hover:opacity-90 active:translate-y-px transition-all cursor-pointer"
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+/* ───────────────────────── Undo Toast ───────────────────────── */
+
+function UndoToast({ message, onUndo, onClose }) {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 5000);
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  return createPortal(
+    <motion.div
+      initial={{ opacity: 0, y: 20, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 20, scale: 0.95 }}
+      transition={{ type: "spring", stiffness: 350, damping: 25 }}
+      className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-elegant border border-border/60 bg-background/90 dark:bg-card/90 backdrop-blur-xl text-sm font-medium text-foreground pointer-events-auto"
+    >
+      <RotateCcw className="h-4 w-4 text-primary" />
+      <span>{message}</span>
+      {onUndo && (
+        <button
+          type="button"
+          onClick={onUndo}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 border border-primary/20 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/15 transition-colors cursor-pointer"
+        >
+          <Undo2 className="h-3 w-3" />
+          Undo
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={onClose}
+        className="inline-flex h-6 w-6 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors cursor-pointer"
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </motion.div>,
+    document.body,
+  );
+}
+
+/* ───────────────────────── Expiry Badge ───────────────────────── */
+
+function ExpiryBadge({ daysLeft }) {
+  const isUrgent = daysLeft <= 3;
+  const isWarning = daysLeft <= 7;
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium",
+        isUrgent
+          ? "border-destructive/30 bg-destructive/10 text-destructive"
+          : isWarning
+            ? "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+            : "border-border bg-secondary/50 text-muted-foreground",
+      )}
+    >
+      <Clock className="h-2.5 w-2.5" />
+      {daysLeft}d left
+    </span>
+  );
+}
+
+/* ───────────────────────── File Actions Toolbar ───────────────────────── */
+
+function TrashFileActions({
+  file,
+  visible,
+  compact,
+  onRestore,
+  onDeletePermanently,
+}) {
+  const stop = (e) => e.stopPropagation();
+  const btn =
+    "inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 cursor-pointer";
+
+  return (
+    <div
+      role="toolbar"
+      aria-label="Trash file actions"
+      className={cn(
+        "flex items-center gap-0.5 rounded-lg border border-border bg-background/80 p-0.5 backdrop-blur-sm",
+        "transition-all duration-200",
+        visible
+          ? "opacity-100"
+          : "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto",
+        compact ? "" : "max-md:opacity-100 max-md:pointer-events-auto",
+      )}
+      onClick={stop}
+      onKeyDown={stop}
+    >
+      <button
+        type="button"
+        className={cn(btn, "hover:text-primary")}
+        title="Restore"
+        onClick={() => onRestore?.(file.id)}
+      >
+        <RotateCcw className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
+        className={cn(btn, "hover:text-destructive")}
+        title="Delete permanently"
+        onClick={() => onDeletePermanently?.(file)}
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
+/* ───────────────────────── Trash File Row ───────────────────────── */
+
+function TrashFileRow({ file, view, onRestore, onDeletePermanently }) {
+  const [hovered, setHovered] = useState(false);
+  const { ref: revealRef, isVisible } = useScrollReveal();
+  const kind = detectFileKind(file.name, file.kind);
+  const isGrid = view === "grid";
+  const daysLeft = daysUntilAutoDelete(file.deletedAt);
+
+  if (isGrid) {
+    return (
+      <article
+        ref={revealRef}
+        role="listitem"
+        className={cn("group", "min-w-0")}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          opacity: isVisible ? 1 : 0,
+          transform: isVisible ? "translateY(0)" : "translateY(8px)",
+          transition: "opacity 0.35s ease-out, transform 0.35s ease-out",
+          willChange: isVisible ? "auto" : "opacity, transform",
+        }}
+      >
+        <div
+          className={cn(
+            "relative w-full text-left rounded-xl border outline-none",
+            "bg-card border-border shadow-sm dark:bg-card/50 dark:backdrop-blur-sm dark:shadow-none",
+            rowEase,
+            "transition-[transform,box-shadow,border-color,background-color]",
+            hovered && [
+              "-translate-y-px border-primary/25 bg-secondary/60",
+              "shadow-sm dark:shadow-[0_8px_24px_-12px_rgba(59,130,246,0.2)]",
+            ],
+            "flex h-full flex-col p-4",
+          )}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <FileTypeIcon kind={kind} />
+            <TrashFileActions
+              file={file}
+              visible={hovered}
+              compact
+              onRestore={onRestore}
+              onDeletePermanently={onDeletePermanently}
+            />
+          </div>
+
+          <div className="mt-3 min-w-0 flex-1 space-y-1.5">
+            <h4 className="line-clamp-2 text-sm font-semibold leading-snug tracking-tight text-foreground">
+              {file.name}
+            </h4>
+            <p className="text-[11px] text-muted-foreground tabular-nums">
+              {file.size}
+            </p>
+          </div>
+
+          {/* Bottom badges & time */}
+          <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-border/50">
+            <ExpiryBadge daysLeft={daysLeft} />
+          </div>
+
+          <div className="mt-2 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+            <Trash2 className="h-3 w-3 text-destructive/60" />
+            <span className="truncate">
+              {formatRelativeTime(file.deletedAt)}
+            </span>
+          </div>
+
+          {/* Original path */}
+          <div className="mt-1 text-[9px] text-muted-foreground/60 truncate">
+            {file.originalPath}
+          </div>
+        </div>
+      </article>
+    );
+  }
+
+  // List view
+  return (
+    <article
+      ref={revealRef}
+      role="listitem"
+      className={cn("group", "px-1 sm:px-2")}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        opacity: isVisible ? 1 : 0,
+        transform: isVisible ? "translateY(0)" : "translateY(8px)",
+        transition: "opacity 0.35s ease-out, transform 0.35s ease-out",
+        willChange: isVisible ? "auto" : "opacity, transform",
+      }}
+    >
+      <div
+        className={cn(
+          "relative w-full text-left rounded-xl border outline-none",
+          "bg-card border-border shadow-sm dark:bg-card/50 dark:backdrop-blur-sm dark:shadow-none",
+          rowEase,
+          "transition-[transform,box-shadow,border-color,background-color]",
+          hovered && [
+            "-translate-y-px border-primary/25 bg-secondary/60",
+            "shadow-sm dark:shadow-[0_8px_24px_-12px_rgba(59,130,246,0.2)]",
+          ],
+          "p-3.5 sm:p-4",
+        )}
+      >
+        <div className="flex flex-col gap-3 md:grid md:grid-cols-[1fr_auto] md:items-center md:gap-6">
+          <div className="flex min-w-0 items-start gap-3 sm:items-center md:grid md:grid-cols-[minmax(0,1fr)_6rem_4.5rem_4.5rem] md:gap-8 lg:gap-11">
+            {/* Name + icon */}
+            <div className="flex min-w-0 items-center gap-3">
+              <FileTypeIcon kind={kind} />
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h4 className="truncate text-sm font-semibold text-foreground sm:text-[15px]">
+                    {file.name}
+                  </h4>
+                  <ExpiryBadge daysLeft={daysLeft} />
+                </div>
+                <p className="text-[11px] text-muted-foreground md:hidden">
+                  {formatRelativeTime(file.deletedAt)} · {file.size}
+                </p>
+                <p className="text-[10px] text-muted-foreground/60 truncate md:hidden">
+                  {file.originalPath}
+                </p>
+              </div>
+            </div>
+
+            {/* Deleted date */}
+            <div className="hidden md:flex md:items-center text-left text-sm tabular-nums text-muted-foreground">
+              {formatRelativeTime(file.deletedAt)}
+            </div>
+
+            {/* Size */}
+            <div className="hidden md:flex md:items-center md:justify-start text-right text-sm font-medium tabular-nums text-foreground/80">
+              {file.size}
+            </div>
+
+            {/* Days left */}
+            <div className="hidden md:flex md:items-center md:justify-start text-right text-sm tabular-nums text-muted-foreground">
+              {daysLeft}d
+            </div>
+          </div>
+
+          {/* Actions column */}
+          <div className="flex items-center justify-between gap-3 md:justify-end md:w-28 md:pr-1">
+            <TrashFileActions
+              file={file}
+              visible={hovered}
+              onRestore={onRestore}
+              onDeletePermanently={onDeletePermanently}
+            />
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+/* ───────────────────────── Category Group ───────────────────────── */
+
+function CategoryGroup({
+  category,
+  files,
+  view,
+  index,
+  onRestore,
+  onDeletePermanently,
+}) {
+  const [collapsed, setCollapsed] = useState(false);
+  const CatIcon = CATEGORY_ICONS[category] || FileStack;
+  const isGrid = view === "grid";
+
+  return (
+    <div
+      className="animate-fade-in"
+      style={{
+        animationDelay: `${0.05 + index * 0.05}s`,
+        animationFillMode: "both",
+      }}
+    >
+      {/* Group header */}
+      <button
+        type="button"
+        onClick={() => setCollapsed((c) => !c)}
+        className="flex w-full items-center gap-3 px-5 sm:px-6 py-3.5 hover:bg-secondary/30 transition-colors cursor-pointer"
+      >
+        <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-secondary/50">
+          <CatIcon className="h-3.5 w-3.5 text-primary" />
+        </div>
+        <span className="text-sm font-semibold text-foreground">
+          {category}
+        </span>
+        <span className="rounded-md bg-secondary/60 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+          {files.length}
+        </span>
+        <div className="flex-1" />
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 text-muted-foreground transition-transform duration-200",
+            collapsed && "-rotate-90",
+          )}
+        />
+      </button>
+
+      {/* List column headings (only in list view) */}
+      {!collapsed && !isGrid && (
+        <div className="hidden md:grid md:grid-cols-[1fr_auto] gap-10 border-b border-border/60 px-5 py-2 sm:px-6">
+          <div className="grid grid-cols-[minmax(0,1fr)_6rem_4.5rem_4.5rem] gap-8 lg:gap-11 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            <span className="pl-5">Name</span>
+            <span>Deleted</span>
+            <span>Size</span>
+            <span>Expires</span>
+          </div>
+          <span className="w-28 text-right text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground pr-1">
+            Actions
+          </span>
+        </div>
+      )}
+
+      {/* Files */}
+      {!collapsed && (
+        <div
+          className={cn(
+            "px-4 sm:px-4 pb-4",
+            isGrid
+              ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
+              : "flex flex-col gap-2",
+          )}
+          role="list"
+        >
+          {files.map((file) => (
+            <TrashFileRow
+              key={file.id}
+              file={file}
+              view={view}
+              onRestore={onRestore}
+              onDeletePermanently={onDeletePermanently}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ───────────────────────── Empty State ───────────────────────── */
+
+function EmptyState({ hasFilters }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 text-center px-4">
+      <div className="relative">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-border bg-secondary/50">
+          <Trash2 className="h-7 w-7 text-muted-foreground" />
+        </div>
+        <motion.div
+          className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-emerald-500/20 flex items-center justify-center"
+          animate={{ scale: [1, 1.2, 1] }}
+          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+        >
+          <span className="text-[10px]">✓</span>
+        </motion.div>
+      </div>
+      <h3 className="mt-5 font-display text-lg font-semibold text-foreground">
+        {hasFilters ? "No matching trashed files" : "Trash is empty"}
+      </h3>
+      <p className="mt-2 text-sm text-muted-foreground max-w-sm leading-relaxed">
+        {hasFilters
+          ? "Try adjusting your filters or search to find what you're looking for."
+          : "Files you delete will appear here for 30 days before being permanently removed. Your drive is clean!"}
+      </p>
+    </div>
+  );
+}
+
+/* ───────────────────────── Main Page ───────────────────────── */
+
+export default function TrashFiles() {
+  const [files, setFiles] = useState(INITIAL_TRASH);
+  const [activeFilter, setActiveFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState("deleted");
+  const [sortOpen, setSortOpen] = useState(false);
+  const [view, setView] = useState("grid");
+
+  // Toast state
+  const [toast, setToast] = useState(null); // { message, undoData }
+
+  // Confirm modal state
+  const [confirmAction, setConfirmAction] = useState(null); // { title, description, confirmLabel, onConfirm }
+
+  /* ── Actions ── */
+
+  const handleRestore = useCallback(
+    (id) => {
+      const file = files.find((f) => f.id === id);
+      if (!file) return;
+      setFiles((prev) => prev.filter((f) => f.id !== id));
+      setToast({
+        message: (
+          <>
+            Restored <span className="font-semibold">{file.name}</span> to{" "}
+            {file.originalPath}
+          </>
+        ),
+        undoData: file,
+      });
+    },
+    [files],
+  );
+
+  const handleUndoRestore = useCallback(() => {
+    if (!toast?.undoData) return;
+    setFiles((prev) => {
+      const newList = [...prev, toast.undoData];
+      newList.sort((a, b) => b.deletedAt - a.deletedAt);
+      return newList;
+    });
+    setToast(null);
+  }, [toast]);
+
+  const handleDeletePermanently = useCallback((file) => {
+    setConfirmAction({
+      title: "Delete permanently?",
+      description: `"${file.name}" will be permanently removed. This action cannot be undone.`,
+      confirmLabel: "Delete forever",
+      onConfirm: () => {
+        setFiles((prev) => prev.filter((f) => f.id !== file.id));
+        setConfirmAction(null);
+        setToast({
+          message: (
+            <>
+              Permanently deleted{" "}
+              <span className="font-semibold">{file.name}</span>
+            </>
+          ),
+          undoData: null,
+        });
+      },
+    });
+  }, []);
+
+  const handleEmptyTrash = useCallback(() => {
+    if (files.length === 0) return;
+    setConfirmAction({
+      title: "Empty trash?",
+      description: `All ${files.length} item${files.length !== 1 ? "s" : ""} will be permanently deleted. This action cannot be undone.`,
+      confirmLabel: "Empty trash",
+      onConfirm: () => {
+        setFiles([]);
+        setConfirmAction(null);
+        setToast({
+          message: "Trash emptied permanently",
+          undoData: null,
+        });
+      },
+    });
+  }, [files.length]);
+
+  const handleRestoreAll = useCallback(() => {
+    if (files.length === 0) return;
+    const backup = [...files];
+    setFiles([]);
+    setToast({
+      message: (
+        <>
+          Restored <span className="font-semibold">{backup.length} items</span>{" "}
+          to their original locations
+        </>
+      ),
+      undoData: backup,
+    });
+  }, [files]);
+
+  const handleUndoRestoreAll = useCallback(() => {
+    if (!toast?.undoData || !Array.isArray(toast.undoData)) return;
+    setFiles(toast.undoData);
+    setToast(null);
+  }, [toast]);
+
+  /* ── Filtered & sorted files ── */
+
+  const filteredFiles = useMemo(() => {
+    let list = [...files];
+
+    // Filter by category
+    if (activeFilter !== "all") {
+      list = list.filter((f) => {
+        const kind = detectFileKind(f.name, f.kind);
+        return getCategoryForKind(kind) === activeFilter;
+      });
+    }
+
+    // Filter by search
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter((f) => f.name.toLowerCase().includes(q));
+    }
+
+    // Sort
+    list.sort((a, b) => {
+      if (sortBy === "name") return a.name.localeCompare(b.name);
+      if (sortBy === "size") {
+        return parseSizeToMB(b.size) - parseSizeToMB(a.size);
+      }
+      if (sortBy === "expiry") {
+        return (
+          daysUntilAutoDelete(a.deletedAt) - daysUntilAutoDelete(b.deletedAt)
+        );
+      }
+      // Default: date deleted (newest first)
+      return b.deletedAt - a.deletedAt;
+    });
+
+    return list;
+  }, [files, activeFilter, searchQuery, sortBy]);
+
+  // Group by category
+  const grouped = useMemo(() => {
+    const order = ["Documents", "Images", "Media", "Code", "Folders", "Other"];
+    const groups = {};
+
+    filteredFiles.forEach((file) => {
+      const kind = detectFileKind(file.name, file.kind);
+      const cat = getCategoryForKind(kind);
+      if (!groups[cat]) groups[cat] = [];
+      groups[cat].push(file);
+    });
+
+    return order
+      .filter((cat) => groups[cat])
+      .map((cat) => ({ category: cat, files: groups[cat] }));
+  }, [filteredFiles]);
+
+  const hasFilters = activeFilter !== "all" || searchQuery.trim() !== "";
+
+  return (
+    <>
+      {/* Hero */}
+      <TrashHero files={files} />
+
+      {/* Main content card */}
+      <section
+        className={cn(card, "overflow-hidden animate-fade-in")}
+        aria-labelledby="trash-heading"
+        style={{ animationDelay: "0.1s", animationFillMode: "both" }}
+      >
+        {/* Toolbar */}
+        <header className="border-b border-border px-4 py-3 sm:px-5 sm:py-4">
+          <div className="flex flex-col gap-3 sm:gap-4">
+            {/* Top row: filter tabs */}
+            <div className="-mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto scrollbar-hide">
+              <div
+                className="flex rounded-xl border border-border bg-secondary/40 p-0.5 w-max sm:w-auto"
+                role="tablist"
+              >
+                {FILTER_TABS.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={activeFilter === tab.id}
+                    onClick={() => setActiveFilter(tab.id)}
+                    className={cn(
+                      "inline-flex items-center gap-1 sm:gap-1.5 rounded-lg px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs font-medium transition-all duration-200 whitespace-nowrap cursor-pointer",
+                      activeFilter === tab.id
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                    )}
+                  >
+                    <tab.icon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                    <span className="hidden xs:inline sm:inline">
+                      {tab.label}
+                    </span>
+                    <span className="xs:hidden sm:hidden">
+                      {tab.id === "all" ? "All" : tab.label.slice(0, 3)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Bottom row: search, sort, view, bulk actions */}
+            <div className="flex items-center gap-2">
+              {/* Search */}
+              <div className="relative flex-1 min-w-0 sm:flex-none">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Search trash..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-9 w-full sm:w-44 rounded-xl border border-border bg-secondary/30 pl-9 pr-3 text-xs text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10 transition-all"
+                />
+              </div>
+
+              {/* Sort */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setSortOpen((o) => !o)}
+                  className="inline-flex h-9 items-center gap-1.5 sm:gap-2 rounded-xl border border-border bg-secondary/40 px-2.5 sm:px-3 text-xs font-medium text-foreground hover:bg-secondary transition-colors cursor-pointer"
+                  aria-expanded={sortOpen}
+                >
+                  <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="hidden sm:inline">
+                    {SORT_OPTIONS.find((s) => s.id === sortBy)?.label}
+                  </span>
+                  <ChevronDown
+                    className={cn(
+                      "h-3.5 w-3.5 transition-transform",
+                      sortOpen && "rotate-180",
+                    )}
+                  />
+                </button>
+                {sortOpen && (
+                  <div className="absolute right-0 z-20 mt-2 min-w-[140px] rounded-xl border border-border bg-popover p-1 shadow-elegant animate-fade-in">
+                    {SORT_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => {
+                          setSortBy(opt.id);
+                          setSortOpen(false);
+                        }}
+                        className={cn(
+                          "w-full rounded-lg px-3 py-2 text-left text-sm transition-colors cursor-pointer",
+                          sortBy === opt.id
+                            ? "bg-secondary text-foreground"
+                            : "text-muted-foreground hover:bg-secondary/80 hover:text-foreground",
+                        )}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* View toggle */}
+              <div className="flex rounded-xl border border-border bg-secondary/40 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setView("list")}
+                  className={cn(
+                    "inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors cursor-pointer",
+                    view === "list"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                  aria-label="List view"
+                  aria-pressed={view === "list"}
+                >
+                  <List className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setView("grid")}
+                  className={cn(
+                    "inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors cursor-pointer",
+                    view === "grid"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                  aria-label="Grid view"
+                  aria-pressed={view === "grid"}
+                >
+                  <LayoutGrid className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Spacer */}
+              <div className="flex-1 hidden sm:block" />
+
+              {/* Bulk actions */}
+              {files.length > 0 && (
+                <div className="hidden sm:flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleRestoreAll}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-secondary/40 px-3 h-9 text-xs font-medium text-foreground hover:bg-secondary/70 transition-colors cursor-pointer"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5 text-primary" />
+                    Restore all
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleEmptyTrash}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-destructive/20 bg-destructive/5 px-3 h-9 text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Empty trash
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Mobile bulk actions */}
+            {files.length > 0 && (
+              <div className="flex sm:hidden items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleRestoreAll}
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-secondary/40 px-3 h-9 text-xs font-medium text-foreground hover:bg-secondary/70 transition-colors cursor-pointer"
+                >
+                  <RotateCcw className="h-3.5 w-3.5 text-primary" />
+                  Restore all
+                </button>
+                <button
+                  type="button"
+                  onClick={handleEmptyTrash}
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-destructive/20 bg-destructive/5 px-3 h-9 text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Empty trash
+                </button>
+              </div>
+            )}
+          </div>
+        </header>
+
+        {/* Category groups */}
+        <div className="divide-y divide-border/60">
+          {grouped.length === 0 ? (
+            <EmptyState hasFilters={hasFilters} />
+          ) : (
+            grouped.map((group, gi) => (
+              <CategoryGroup
+                key={group.category}
+                category={group.category}
+                files={group.files}
+                view={view}
+                index={gi}
+                onRestore={handleRestore}
+                onDeletePermanently={handleDeletePermanently}
+              />
+            ))
+          )}
+        </div>
+      </section>
+
+      {/* Confirm modal */}
+      <AnimatePresence>
+        {confirmAction && (
+          <ConfirmModal
+            title={confirmAction.title}
+            description={confirmAction.description}
+            confirmLabel={confirmAction.confirmLabel}
+            onConfirm={confirmAction.onConfirm}
+            onCancel={() => setConfirmAction(null)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Undo toast */}
+      <AnimatePresence>
+        {toast && (
+          <UndoToast
+            message={toast.message}
+            onUndo={
+              toast.undoData
+                ? Array.isArray(toast.undoData)
+                  ? handleUndoRestoreAll
+                  : handleUndoRestore
+                : undefined
+            }
+            onClose={() => setToast(null)}
+          />
+        )}
+      </AnimatePresence>
+    </>
+  );
+}

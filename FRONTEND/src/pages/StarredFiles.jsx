@@ -1,0 +1,1007 @@
+import { useState, useMemo, useCallback, useEffect, memo } from "react";
+import { createPortal } from "react-dom";
+import { AnimatePresence, motion } from "motion/react";
+import {
+  ArrowUpDown,
+  ChevronDown,
+  Code2,
+  Download,
+  Eye,
+  FileStack,
+  FileText,
+  Film,
+  Folder,
+  Image,
+  LayoutGrid,
+  List,
+  Search,
+  Share2,
+  Sparkles,
+  Star,
+  Trash2,
+  Undo2,
+  X,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { easeSmooth } from "@/lib/motion-presets";
+import { detectFileKind } from "@/lib/file-types";
+import { FileTypeIcon } from "@/components/dashboard/FileTypeIcon";
+import {
+  card,
+  subtleHover,
+  chip,
+} from "@/components/dashboard/dashboard-tokens";
+import { FilePreviewModal } from "@/components/recent/FilePreviewModal";
+import { ShareModal } from "@/components/dashboard/ShareModal";
+import { useScrollReveal } from "@/hooks/useScrollReveal";
+
+/* ───────────────────────── Mock Data ───────────────────────── */
+
+const STARRED_FILES = [
+  // Documents
+  {
+    id: "st1",
+    name: "Brand Guidelines v3.pdf",
+    size: "4.2 MB",
+    starredAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+    lastOpened: new Date(Date.now() - 2 * 60 * 60 * 1000),
+    kind: "pdf",
+    starred: true,
+    shared: true,
+  },
+  {
+    id: "st2",
+    name: "Q4-keynote-final.pptx",
+    size: "18.6 MB",
+    starredAt: new Date(Date.now() - 6 * 60 * 60 * 1000),
+    lastOpened: new Date(Date.now() - 6 * 60 * 60 * 1000),
+    kind: "document",
+    starred: true,
+    shared: true,
+  },
+  {
+    id: "st3",
+    name: "financial-report-Q3.xlsx",
+    size: "2.8 MB",
+    starredAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+    lastOpened: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+    kind: "document",
+    starred: true,
+  },
+  {
+    id: "st4",
+    name: "investor-deck.key",
+    size: "12.4 MB",
+    starredAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+    lastOpened: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+    kind: "document",
+    starred: true,
+    shared: true,
+  },
+  // Images
+  {
+    id: "st5",
+    name: "Hero-shot-005.png",
+    size: "8.1 MB",
+    starredAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+    lastOpened: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+    kind: "image",
+    starred: true,
+    shared: true,
+  },
+  {
+    id: "st6",
+    name: "app-mockup-v2.fig",
+    size: "34 MB",
+    starredAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+    lastOpened: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+    kind: "image",
+    starred: true,
+    shared: true,
+  },
+  {
+    id: "st7",
+    name: "team-photo-2026.jpg",
+    size: "5.6 MB",
+    starredAt: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000),
+    lastOpened: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000),
+    kind: "image",
+    starred: true,
+  },
+  // Media
+  {
+    id: "st8",
+    name: "podcast-ep12.mp3",
+    size: "48 MB",
+    starredAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
+    lastOpened: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
+    kind: "audio",
+    starred: true,
+  },
+  {
+    id: "st9",
+    name: "onboarding-video.mp4",
+    size: "256 MB",
+    starredAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
+    lastOpened: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
+    kind: "video",
+    starred: true,
+    shared: true,
+  },
+  // Code
+  {
+    id: "st10",
+    name: "api-routes.ts",
+    size: "24 KB",
+    starredAt: new Date(Date.now() - 3 * 60 * 60 * 1000),
+    lastOpened: new Date(Date.now() - 3 * 60 * 60 * 1000),
+    kind: "code",
+    starred: true,
+  },
+  {
+    id: "st11",
+    name: "auth-middleware.js",
+    size: "8 KB",
+    starredAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+    lastOpened: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+    kind: "code",
+    starred: true,
+  },
+  // Folders
+  {
+    id: "st12",
+    name: "Design System",
+    size: "248 items",
+    starredAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+    lastOpened: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+    kind: "folder",
+    starred: true,
+    shared: true,
+  },
+  {
+    id: "st13",
+    name: "launch-assets",
+    size: "1.2 GB",
+    starredAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000),
+    lastOpened: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000),
+    kind: "folder",
+    starred: true,
+  },
+  // Archives / Other
+  {
+    id: "st14",
+    name: "client-archives.zip",
+    size: "640 MB",
+    starredAt: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000),
+    lastOpened: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000),
+    kind: "archive",
+    starred: true,
+  },
+  {
+    id: "st15",
+    name: "meeting-notes-may.md",
+    size: "12 KB",
+    starredAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
+    lastOpened: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
+    kind: "document",
+    starred: true,
+  },
+];
+
+/* ───────────────────────── Helpers ───────────────────────── */
+
+function formatRelativeTime(date) {
+  const now = Date.now();
+  const diff = now - date.getTime();
+  const mins = Math.floor(diff / 60000);
+  const hrs = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  if (hrs < 24) return `${hrs}h ago`;
+  if (days < 7) return `${days}d ago`;
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+const CATEGORY_MAP = {
+  Documents: ["pdf", "document"],
+  Images: ["image"],
+  Media: ["audio", "video"],
+  Code: ["code"],
+  Folders: ["folder"],
+  Other: ["archive", "file"],
+};
+
+const CATEGORY_ICONS = {
+  Documents: FileText,
+  Images: Image,
+  Media: Film,
+  Code: Code2,
+  Folders: Folder,
+  Other: FileStack,
+};
+
+function getCategoryForKind(kind) {
+  for (const [cat, kinds] of Object.entries(CATEGORY_MAP)) {
+    if (kinds.includes(kind)) return cat;
+  }
+  return "Other";
+}
+
+const FILTER_TABS = [
+  { id: "all", label: "All", icon: Star },
+  { id: "Documents", label: "Documents", icon: FileText },
+  { id: "Images", label: "Images", icon: Image },
+  { id: "Media", label: "Media", icon: Film },
+  { id: "Code", label: "Code", icon: Code2 },
+  { id: "Folders", label: "Folders", icon: Folder },
+];
+
+const SORT_OPTIONS = [
+  { id: "starred", label: "Date Starred" },
+  { id: "name", label: "Name" },
+  { id: "size", label: "Size" },
+  { id: "type", label: "Type" },
+];
+
+const rowEase = "duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]";
+
+/* ───────────────────────── Stats ───────────────────────── */
+
+const StatMini = memo(function StatMini({ icon: Icon, label, value, accent }) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-secondary/30 px-4 py-3">
+      <div
+        className={cn(
+          "flex h-9 w-9 items-center justify-center rounded-lg border shrink-0",
+          accent
+            ? "border-accent/20 bg-accent/10 text-accent"
+            : "border-primary/20 bg-primary/10 text-primary",
+        )}
+      >
+        <Icon className="h-4 w-4" />
+      </div>
+      <div className="min-w-0">
+        <div className="font-display text-lg font-semibold tracking-tight text-foreground tabular-nums leading-none">
+          {value}
+        </div>
+        <div className="text-[10px] font-medium text-muted-foreground mt-0.5">
+          {label}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+/* ───────────────────────── Hero ───────────────────────── */
+
+function StarredHero({ files }) {
+  const totalStarred = files.length;
+  const sharedCount = files.filter((f) => f.shared).length;
+  const recentCount = files.filter(
+    (f) => Date.now() - f.starredAt.getTime() < 7 * 24 * 60 * 60 * 1000,
+  ).length;
+
+  return (
+    <section
+      className={`${card} ${subtleHover} relative overflow-hidden p-5 sm:p-6 md:p-10 animate-fade-in`}
+    >
+      {/* ambient glows */}
+      <div className="absolute -top-32 -right-24 h-72 w-72 rounded-full bg-ambient-primary blur-3xl opacity-80 pointer-events-none" />
+      <div className="absolute -bottom-20 -left-16 h-56 w-56 rounded-full bg-ambient-primary blur-3xl opacity-50 pointer-events-none" />
+
+      <div className="relative flex flex-col gap-6 sm:gap-8">
+        <div className="max-w-xl">
+          <div className={chip}>
+            <Star className="h-3 w-3 text-amber-500 fill-amber-500" />
+            Your favorites
+          </div>
+          <h1 className="mt-4 sm:mt-5 font-display text-2xl sm:text-3xl md:text-4xl font-semibold tracking-tight leading-[1.1] text-foreground">
+            Starred <span className="text-gradient">Files</span>
+          </h1>
+          <p className="mt-2 sm:mt-3 text-sm sm:text-base text-muted-foreground leading-relaxed max-w-lg">
+            Quick access to your most important files. You have{" "}
+            <span className="font-semibold text-foreground">
+              {totalStarred} starred items
+            </span>
+            .
+          </p>
+        </div>
+
+        {/* stat row */}
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          <StatMini icon={Star} label="Total Starred" value={totalStarred} />
+          <StatMini icon={Share2} label="Shared" value={sharedCount} />
+          <StatMini
+            icon={Sparkles}
+            label="Added this week"
+            value={recentCount}
+            accent
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* PinnedCollections removed — single-user, no collections */
+
+/* ───────────────────────── Undo Toast ───────────────────────── */
+
+function UndoToast({ file, onUndo, onClose }) {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 5000);
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  return createPortal(
+    <motion.div
+      initial={{ opacity: 0, y: 20, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 20, scale: 0.95 }}
+      transition={{ type: "spring", stiffness: 350, damping: 25 }}
+      className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-elegant border border-border/60 bg-background/90 dark:bg-card/90 backdrop-blur-xl text-sm font-medium text-foreground pointer-events-auto"
+    >
+      <Star className="h-4 w-4 text-muted-foreground" />
+      <span>
+        Removed <span className="font-semibold">{file.name}</span> from starred
+      </span>
+      <button
+        type="button"
+        onClick={onUndo}
+        className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 border border-primary/20 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/15 transition-colors"
+      >
+        <Undo2 className="h-3 w-3" />
+        Undo
+      </button>
+      <button
+        type="button"
+        onClick={onClose}
+        className="inline-flex h-6 w-6 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </motion.div>,
+    document.body,
+  );
+}
+
+/* ───────────────────────── File Actions Toolbar ───────────────────────── */
+
+function FileActions({ file, visible, compact, onStar, onPreview, onShare }) {
+  const stop = (e) => e.stopPropagation();
+  const btn =
+    "inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30";
+
+  return (
+    <div
+      role="toolbar"
+      aria-label="File actions"
+      className={cn(
+        "flex items-center gap-0.5 rounded-lg border border-border bg-background/80 p-0.5 backdrop-blur-sm",
+        "transition-all duration-200",
+        visible
+          ? "opacity-100"
+          : "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto",
+        compact ? "" : "max-md:opacity-100 max-md:pointer-events-auto",
+      )}
+      onClick={stop}
+      onKeyDown={stop}
+    >
+      <button
+        type="button"
+        className={cn(btn, "text-amber-600 dark:text-amber-400")}
+        title="Unstar"
+        onClick={() => onStar?.(file.id)}
+      >
+        <Star className="h-3.5 w-3.5 fill-current" />
+      </button>
+      <button
+        type="button"
+        className={cn(btn, "hover:text-primary")}
+        title="Quick preview"
+        onClick={() => onPreview?.(file)}
+      >
+        <Eye className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
+        className={btn}
+        title="Share"
+        onClick={() => onShare?.(file)}
+      >
+        <Share2 className="h-3.5 w-3.5" />
+      </button>
+      <button type="button" className={btn} title="Download">
+        <Download className="h-3.5 w-3.5" />
+      </button>
+      {!compact && (
+        <button
+          type="button"
+          className={cn(btn, "hover:text-destructive")}
+          title="Delete"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ───────────────────────── Starred File Row ───────────────────────── */
+
+function StarredFileRow({ file, view, onStar, onPreview, onShare }) {
+  const [hovered, setHovered] = useState(false);
+  const { ref: revealRef, isVisible } = useScrollReveal();
+  const kind = detectFileKind(file.name, file.kind);
+  const isGrid = view === "grid";
+
+  if (isGrid) {
+    return (
+      <article
+        ref={revealRef}
+        role="listitem"
+        className={cn("group", "min-w-0")}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          opacity: isVisible ? 1 : 0,
+          transform: isVisible ? "translateY(0)" : "translateY(8px)",
+          transition: "opacity 0.35s ease-out, transform 0.35s ease-out",
+          willChange: isVisible ? "auto" : "opacity, transform",
+        }}
+      >
+        <div
+          className={cn(
+            "relative w-full text-left rounded-xl border outline-none",
+            "bg-card border-border shadow-sm dark:bg-card/50 dark:backdrop-blur-sm dark:shadow-none",
+            rowEase,
+            "transition-[transform,box-shadow,border-color,background-color]",
+            hovered && [
+              "-translate-y-px border-primary/25 bg-secondary/60",
+              "shadow-sm dark:shadow-[0_8px_24px_-12px_rgba(59,130,246,0.2)]",
+            ],
+            "flex h-full flex-col p-4",
+          )}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <FileTypeIcon kind={kind} />
+            <FileActions
+              file={file}
+              visible={hovered}
+              compact
+              onStar={onStar}
+              onPreview={onPreview}
+              onShare={onShare}
+            />
+          </div>
+
+          <div className="mt-3 min-w-0 flex-1 space-y-1.5">
+            <h4 className="line-clamp-2 text-sm font-semibold leading-snug tracking-tight text-foreground">
+              {file.name}
+            </h4>
+            <p className="text-[11px] text-muted-foreground tabular-nums">
+              {file.size}
+            </p>
+          </div>
+
+          {/* Bottom badges & time */}
+          <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-border/50">
+            <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
+              <Star className="h-2.5 w-2.5 fill-current" /> Starred
+            </span>
+            {file.shared && (
+              <span className="inline-flex items-center gap-1 rounded-md border border-violet-500/25 bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:text-violet-300">
+                <Share2 className="h-2.5 w-2.5" /> Shared
+              </span>
+            )}
+          </div>
+
+          <div className="mt-2 flex items-center text-[10px] text-muted-foreground">
+            <Star className="h-3 w-3 mr-1 text-amber-500/60" />
+            {formatRelativeTime(file.starredAt)}
+          </div>
+        </div>
+      </article>
+    );
+  }
+
+  // List view
+  return (
+    <article
+      ref={revealRef}
+      role="listitem"
+      className={cn("group", "px-1 sm:px-2")}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        opacity: isVisible ? 1 : 0,
+        transform: isVisible ? "translateY(0)" : "translateY(8px)",
+        transition: "opacity 0.35s ease-out, transform 0.35s ease-out",
+        willChange: isVisible ? "auto" : "opacity, transform",
+      }}
+    >
+      <div
+        className={cn(
+          "relative w-full text-left rounded-xl border outline-none",
+          "bg-card border-border shadow-sm dark:bg-card/50 dark:backdrop-blur-sm dark:shadow-none",
+          rowEase,
+          "transition-[transform,box-shadow,border-color,background-color]",
+          hovered && [
+            "-translate-y-px border-primary/25 bg-secondary/60",
+            "shadow-sm dark:shadow-[0_8px_24px_-12px_rgba(59,130,246,0.2)]",
+          ],
+          "p-3.5 sm:p-4",
+        )}
+      >
+        <div className="flex flex-col gap-3 md:grid md:grid-cols-[1fr_auto] md:items-center md:gap-6">
+          <div className="flex min-w-0 items-start gap-3 sm:items-center md:grid md:grid-cols-[minmax(0,1fr)_6rem_4.5rem] md:gap-8 lg:gap-11">
+            {/* Name + icon */}
+            <div className="flex min-w-0 items-center gap-3">
+              <FileTypeIcon kind={kind} />
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h4 className="truncate text-sm font-semibold text-foreground sm:text-[15px]">
+                    {file.name}
+                  </h4>
+                  <span className="inline-flex items-center gap-0.5 rounded-md border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
+                    <Star className="h-2.5 w-2.5 fill-current" /> Starred
+                  </span>
+                  {file.shared && (
+                    <span className="inline-flex items-center gap-0.5 rounded-md border border-violet-500/25 bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:text-violet-300">
+                      <Share2 className="h-2.5 w-2.5" /> Shared
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-muted-foreground md:hidden">
+                  {formatRelativeTime(file.starredAt)} · {file.size}
+                </p>
+              </div>
+            </div>
+
+            {/* Starred date */}
+            <div className="hidden md:flex md:items-center text-left text-sm tabular-nums text-muted-foreground">
+              {formatRelativeTime(file.starredAt)}
+            </div>
+
+            {/* Size */}
+            <div className="hidden md:flex md:items-center md:justify-start text-right text-sm font-medium tabular-nums text-foreground/80">
+              {file.size}
+            </div>
+          </div>
+
+          {/* Actions column */}
+          <div className="flex items-center justify-between gap-3 md:justify-end md:w-36 md:pr-1">
+            <FileActions
+              file={file}
+              visible={hovered}
+              onStar={onStar}
+              onPreview={onPreview}
+              onShare={onShare}
+            />
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+/* ───────────────────────── Category Group ───────────────────────── */
+
+function CategoryGroup({
+  category,
+  files,
+  view,
+  index,
+  onStar,
+  onPreview,
+  onShare,
+}) {
+  const [collapsed, setCollapsed] = useState(false);
+  const CatIcon = CATEGORY_ICONS[category] || FileStack;
+  const isGrid = view === "grid";
+
+  return (
+    <div
+      className="animate-fade-in"
+      style={{
+        animationDelay: `${0.05 + index * 0.05}s`,
+        animationFillMode: "both",
+      }}
+    >
+      {/* Group header */}
+      <button
+        type="button"
+        onClick={() => setCollapsed((c) => !c)}
+        className="flex w-full items-center gap-3 px-5 sm:px-6 py-3.5 hover:bg-secondary/30 transition-colors"
+      >
+        <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-secondary/50">
+          <CatIcon className="h-3.5 w-3.5 text-primary" />
+        </div>
+        <span className="text-sm font-semibold text-foreground">
+          {category}
+        </span>
+        <span className="rounded-md bg-secondary/60 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+          {files.length}
+        </span>
+        <div className="flex-1" />
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 text-muted-foreground transition-transform duration-200",
+            collapsed && "-rotate-90",
+          )}
+        />
+      </button>
+
+      {/* List column headings (only in list view) */}
+      {!collapsed && !isGrid && (
+        <div className="hidden md:grid md:grid-cols-[1fr_auto] gap-10 border-b border-border/60 px-5 py-2 sm:px-6">
+          <div className="grid grid-cols-[minmax(0,1fr)_6rem_4.5rem] gap-8 lg:gap-11 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            <span className="pl-5">Name</span>
+            <span>Starred</span>
+            <span>Size</span>
+          </div>
+          <span className="w-36 text-right text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground pr-1">
+            Actions
+          </span>
+        </div>
+      )}
+
+      {/* Files */}
+      {!collapsed && (
+        <div
+          className={cn(
+            "px-4 sm:px-4 pb-4",
+            isGrid
+              ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
+              : "flex flex-col gap-2",
+          )}
+          role="list"
+        >
+          {files.map((file) => (
+            <StarredFileRow
+              key={file.id}
+              file={file}
+              view={view}
+              onStar={onStar}
+              onPreview={onPreview}
+              onShare={onShare}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ───────────────────────── Empty State ───────────────────────── */
+
+function EmptyState({ hasFilters }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 text-center px-4">
+      <div className="relative">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-amber-500/20 bg-amber-500/10">
+          <Star className="h-7 w-7 text-amber-500" />
+        </div>
+        <motion.div
+          className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-amber-500/20 flex items-center justify-center"
+          animate={{ scale: [1, 1.2, 1] }}
+          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+        >
+          <Sparkles className="h-3 w-3 text-amber-500" />
+        </motion.div>
+      </div>
+      <h3 className="mt-5 font-display text-lg font-semibold text-foreground">
+        {hasFilters ? "No matching starred files" : "No starred files yet"}
+      </h3>
+      <p className="mt-2 text-sm text-muted-foreground max-w-sm leading-relaxed">
+        {hasFilters
+          ? "Try adjusting your filters or search to find what you're looking for."
+          : "Star files from any view to quickly access them here. Your most important files, always one click away."}
+      </p>
+    </div>
+  );
+}
+
+/* ───────────────────────── Main Page ───────────────────────── */
+
+export default function StarredFiles() {
+  const [files, setFiles] = useState(STARRED_FILES);
+  const [activeFilter, setActiveFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState("starred");
+  const [sortOpen, setSortOpen] = useState(false);
+  const [view, setView] = useState("grid");
+  const [previewFile, setPreviewFile] = useState(null);
+  const [sharingFile, setSharingFile] = useState(null);
+  const [undoFile, setUndoFile] = useState(null);
+
+  const handleUnstar = useCallback(
+    (id) => {
+      const file = files.find((f) => f.id === id);
+      if (!file) return;
+      setUndoFile(file);
+      setFiles((prev) => prev.filter((f) => f.id !== id));
+    },
+    [files],
+  );
+
+  const handleUndo = useCallback(() => {
+    if (!undoFile) return;
+    setFiles((prev) => {
+      // Re-insert in the original position based on starredAt
+      const newList = [...prev, undoFile];
+      newList.sort((a, b) => b.starredAt - a.starredAt);
+      return newList;
+    });
+    setUndoFile(null);
+  }, [undoFile]);
+
+  const handleDismissUndo = useCallback(() => {
+    setUndoFile(null);
+  }, []);
+
+  const handleShare = useCallback((file) => {
+    setSharingFile(file);
+  }, []);
+
+  const handleShareUpdated = useCallback((id, isShared) => {
+    setFiles((prev) =>
+      prev.map((f) => (f.id === id ? { ...f, shared: isShared } : f)),
+    );
+  }, []);
+
+  const handlePreview = useCallback((file) => {
+    setPreviewFile(file);
+  }, []);
+
+  // Filtered & sorted files
+  const filteredFiles = useMemo(() => {
+    let list = [...files];
+
+    // Filter by category
+    if (activeFilter !== "all") {
+      list = list.filter((f) => {
+        const kind = detectFileKind(f.name, f.kind);
+        return getCategoryForKind(kind) === activeFilter;
+      });
+    }
+
+    // Filter by search
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter((f) => f.name.toLowerCase().includes(q));
+    }
+
+    // Sort
+    list.sort((a, b) => {
+      if (sortBy === "name") return a.name.localeCompare(b.name);
+      if (sortBy === "size") return a.size.localeCompare(b.size);
+      if (sortBy === "type") {
+        const ka = detectFileKind(a.name, a.kind);
+        const kb = detectFileKind(b.name, b.kind);
+        return ka.localeCompare(kb);
+      }
+      // Default: date starred (newest first)
+      return b.starredAt - a.starredAt;
+    });
+
+    return list;
+  }, [files, activeFilter, searchQuery, sortBy]);
+
+  // Group by category
+  const grouped = useMemo(() => {
+    const order = ["Documents", "Images", "Media", "Code", "Folders", "Other"];
+    const groups = {};
+
+    filteredFiles.forEach((file) => {
+      const kind = detectFileKind(file.name, file.kind);
+      const cat = getCategoryForKind(kind);
+      if (!groups[cat]) groups[cat] = [];
+      groups[cat].push(file);
+    });
+
+    return order
+      .filter((cat) => groups[cat])
+      .map((cat) => ({ category: cat, files: groups[cat] }));
+  }, [filteredFiles]);
+
+  const hasFilters = activeFilter !== "all" || searchQuery.trim() !== "";
+
+  return (
+    <>
+      {/* Hero */}
+      <StarredHero files={files} />
+
+      {/* Main content card */}
+      <section
+        className={cn(card, "overflow-hidden animate-fade-in")}
+        aria-labelledby="starred-heading"
+        style={{ animationDelay: "0.1s", animationFillMode: "both" }}
+      >
+        {/* Toolbar */}
+        <header className="border-b border-border px-4 py-3 sm:px-5 sm:py-4">
+          <div className="flex flex-col gap-3 sm:gap-4">
+            {/* Top row: filter tabs (horizontally scrollable on mobile) */}
+            <div className="-mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto scrollbar-hide">
+              <div
+                className="flex rounded-xl border border-border bg-secondary/40 p-0.5 w-max sm:w-auto"
+                role="tablist"
+              >
+                {FILTER_TABS.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={activeFilter === tab.id}
+                    onClick={() => setActiveFilter(tab.id)}
+                    className={cn(
+                      "inline-flex items-center gap-1 sm:gap-1.5 rounded-lg px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs font-medium transition-all duration-200 whitespace-nowrap",
+                      activeFilter === tab.id
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                    )}
+                  >
+                    <tab.icon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                    <span className="hidden xs:inline sm:inline">
+                      {tab.label}
+                    </span>
+                    <span className="xs:hidden sm:hidden">
+                      {tab.id === "all" ? "All" : tab.label.slice(0, 3)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Bottom row: search, sort, view */}
+            <div className="flex items-center gap-2">
+              {/* Search */}
+              <div className="relative flex-1 min-w-0 sm:flex-none">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Search starred..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-9 w-full sm:w-44 rounded-xl border border-border bg-secondary/30 pl-9 pr-3 text-xs text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10 transition-all"
+                />
+              </div>
+
+              {/* Sort */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setSortOpen((o) => !o)}
+                  className="inline-flex h-9 items-center gap-1.5 sm:gap-2 rounded-xl border border-border bg-secondary/40 px-2.5 sm:px-3 text-xs font-medium text-foreground hover:bg-secondary transition-colors"
+                  aria-expanded={sortOpen}
+                >
+                  <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="hidden sm:inline">
+                    {SORT_OPTIONS.find((s) => s.id === sortBy)?.label}
+                  </span>
+                  <ChevronDown
+                    className={cn(
+                      "h-3.5 w-3.5 transition-transform",
+                      sortOpen && "rotate-180",
+                    )}
+                  />
+                </button>
+                {sortOpen && (
+                  <div className="absolute right-0 z-20 mt-2 min-w-[140px] rounded-xl border border-border bg-popover p-1 shadow-elegant animate-fade-in">
+                    {SORT_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => {
+                          setSortBy(opt.id);
+                          setSortOpen(false);
+                        }}
+                        className={cn(
+                          "w-full rounded-lg px-3 py-2 text-left text-sm transition-colors",
+                          sortBy === opt.id
+                            ? "bg-secondary text-foreground"
+                            : "text-muted-foreground hover:bg-secondary/80 hover:text-foreground",
+                        )}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* View toggle */}
+              <div className="flex rounded-xl border border-border bg-secondary/40 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setView("list")}
+                  className={cn(
+                    "inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors",
+                    view === "list"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                  aria-label="List view"
+                  aria-pressed={view === "list"}
+                >
+                  <List className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setView("grid")}
+                  className={cn(
+                    "inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors",
+                    view === "grid"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                  aria-label="Grid view"
+                  aria-pressed={view === "grid"}
+                >
+                  <LayoutGrid className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Category groups */}
+        <div className="divide-y divide-border/60">
+          {grouped.length === 0 ? (
+            <EmptyState hasFilters={hasFilters} />
+          ) : (
+            grouped.map((group, gi) => (
+              <CategoryGroup
+                key={group.category}
+                category={group.category}
+                files={group.files}
+                view={view}
+                index={gi}
+                onStar={handleUnstar}
+                onPreview={handlePreview}
+                onShare={handleShare}
+              />
+            ))
+          )}
+        </div>
+      </section>
+
+      {/* Preview modal */}
+      <AnimatePresence>
+        {previewFile && (
+          <FilePreviewModal
+            file={previewFile}
+            onClose={() => setPreviewFile(null)}
+            formatTime={formatRelativeTime}
+            onStar={handleUnstar}
+            onShare={handleShare}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Share modal */}
+      <AnimatePresence>
+        {sharingFile && (
+          <ShareModal
+            file={files.find((f) => f.id === sharingFile.id) || sharingFile}
+            onClose={() => setSharingFile(null)}
+            onShareUpdated={handleShareUpdated}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Undo toast */}
+      <AnimatePresence>
+        {undoFile && (
+          <UndoToast
+            file={undoFile}
+            onUndo={handleUndo}
+            onClose={handleDismissUndo}
+          />
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
