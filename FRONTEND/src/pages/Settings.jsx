@@ -126,7 +126,7 @@ function SettingsHero({ activeSection, userProfile }) {
         </div>
 
         {/* Quick stats */}
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-10 flex-wrap">
           {[
             { label: "Plan", value: currentTier },
             { label: "Storage", value: storageStat },

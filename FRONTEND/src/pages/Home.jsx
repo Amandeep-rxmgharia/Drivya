@@ -398,12 +398,6 @@ function AnalyticsCard() {
 
         {/* Graph Display Area */}
         <div className="h-full flex flex-col relative">
-          {/* Coordinates Gridlines */}
-          <div className="absolute inset-x-0 h-[110px] top-0 flex flex-col justify-between pointer-events-none">
-            <div className="border-b border-dashed border-border/40 w-full h-0" />
-            <div className="border-b border-dashed border-border/40 w-full h-0" />
-            <div className="border-b border-dashed border-border/40 w-full h-0" />
-          </div>
 
           {/* Interactive Line Graph SVG */}
           <div className="relative h-[110px] w-full">
