@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { loginUser, registerUser } from "../../api/auth";
 
 // Google Logo SVG
 const GoogleIcon = () => (
@@ -67,12 +68,12 @@ export default function Auth() {
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
 
-  const [registerName, setRegisterName] = useState("");
-  const [registerEmail, setRegisterEmail] = useState("");
-  const [registerPhone, setRegisterPhone] = useState("");
-  const [registerPassword, setRegisterPassword] = useState("");
-  const [registerConfirmPassword, setRegisterConfirmPassword] = useState("");
-  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [registerName, setRegisterName] = useState("Aman");
+  const [registerEmail, setRegisterEmail] = useState("aman@gmail.com");
+  const [registerPhone, setRegisterPhone] = useState("7404771908");
+  const [registerPassword, setRegisterPassword] = useState("hello");
+  const [registerConfirmPassword, setRegisterConfirmPassword] = useState("hello");
+  const [acceptTerms, setAcceptTerms] = useState(true);
   const [showRegisterPassword, setShowRegisterPassword] = useState(false);
 
   // Simulated validation & loading states
@@ -81,7 +82,7 @@ export default function Auth() {
   const [isSuccess, setIsSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  const handleLoginSubmit = (e) => {
+  const handleLoginSubmit = async(e) => {
     e.preventDefault();
     setErrorMsg("");
 
@@ -92,8 +93,11 @@ export default function Auth() {
 
     setIsLoading(true);
     setLoadingStep("Verifying credentials...");
-
-    setTimeout(() => {
+    const formData = {email: loginEmail,password: loginPassword}
+    try {
+      const data = await loginUser(formData)
+      console.log(data);
+      setTimeout(() => {
       setLoadingStep("Securing connection...");
       setTimeout(() => {
         setLoadingStep("Loading account data...");
@@ -106,9 +110,13 @@ export default function Auth() {
         }, 600);
       }, 600);
     }, 800);
+    } catch (error) {
+       setIsSuccess(false);
+          setIsLoading(false);
+    }
   };
 
-  const handleRegisterSubmit = (e) => {
+  const handleRegisterSubmit = async(e) => {
     e.preventDefault();
     setErrorMsg("");
 
@@ -133,8 +141,16 @@ export default function Auth() {
 
     setIsLoading(true);
     setLoadingStep("Creating profile...");
-
-    setTimeout(() => {
+    const formData = {
+      name: registerName,
+      email: registerEmail,
+      contact: registerPhone,
+      password: registerPassword
+    }
+       try {
+      const data = await registerUser(formData);
+      console.log(data);
+       setTimeout(() => {
       setLoadingStep("Allocating secure node...");
       setTimeout(() => {
         setLoadingStep("Initializing dashboard...");
@@ -147,6 +163,11 @@ export default function Auth() {
         }, 600);
       }, 600);
     }, 800);
+    } catch (error) {
+      console.log(error);
+      setIsSuccess(false);
+          setIsLoading(false);
+    }
   };
 
   return (
@@ -174,12 +195,11 @@ export default function Auth() {
             animate={{
               x: [0, 40, -20, 0],
               y: [0, -30, 40, 0],
-              scale: [1, 1.1, 0.9, 1],
             }}
             transition={{
-              duration: 15,
+              duration: 20,
               repeat: Infinity,
-              ease: "easeInOut",
+              ease: "linear",
             }}
           />
           <motion.div
@@ -187,12 +207,11 @@ export default function Auth() {
             animate={{
               x: [0, -30, 20, 0],
               y: [0, 40, -30, 0],
-              scale: [1, 0.95, 1.1, 1],
             }}
             transition={{
-              duration: 18,
+              duration: 25,
               repeat: Infinity,
-              ease: "easeInOut",
+              ease: "linear",
             }}
           />
         </div>
@@ -314,7 +333,7 @@ export default function Auth() {
             <motion.div
               className="absolute left-0 top-0 glass backdrop-blur-md bg-card/45 border-white/5 shadow-elegant p-3 px-4 rounded-2xl flex items-center gap-3 cursor-pointer w-56 border border-border/20"
               animate={{ y: [0, -6, 0] }}
-              transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+              transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
               whileHover={{ scale: 1.05 }}
             >
               <div className="h-8 w-8 rounded-lg bg-green-500/10 border border-green-500/30 flex items-center justify-center relative">
@@ -336,7 +355,7 @@ export default function Auth() {
               className="absolute right-4 top-10 glass backdrop-blur-md bg-card/45 border-white/5 shadow-elegant p-3 px-4 rounded-2xl flex items-center gap-3 cursor-pointer w-60 border border-border/20"
               animate={{ y: [0, -8, 0] }}
               transition={{
-                duration: 4.5,
+                duration: 7,
                 repeat: Infinity,
                 ease: "easeInOut",
                 delay: 0.5,
@@ -366,7 +385,7 @@ export default function Auth() {
               className="absolute left-10 bottom-0 glass backdrop-blur-md bg-card/45 border-white/5 shadow-elegant p-3 px-4 rounded-2xl flex flex-col gap-2 cursor-pointer w-64 border border-border/20"
               animate={{ y: [0, -10, 0] }}
               transition={{
-                duration: 5,
+                duration: 8,
                 repeat: Infinity,
                 ease: "easeInOut",
                 delay: 1,
