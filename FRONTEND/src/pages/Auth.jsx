@@ -68,12 +68,12 @@ export default function Auth() {
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
 
-  const [registerName, setRegisterName] = useState("Aman");
-  const [registerEmail, setRegisterEmail] = useState("aman@gmail.com");
-  const [registerPhone, setRegisterPhone] = useState("7404771908");
-  const [registerPassword, setRegisterPassword] = useState("hello");
-  const [registerConfirmPassword, setRegisterConfirmPassword] = useState("hello");
-  const [acceptTerms, setAcceptTerms] = useState(true);
+  const [registerName, setRegisterName] = useState("");
+  const [registerEmail, setRegisterEmail] = useState("");
+  const [registerPhone, setRegisterPhone] = useState("");
+  const [registerPassword, setRegisterPassword] = useState("");
+  const [registerConfirmPassword, setRegisterConfirmPassword] = useState("");
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const [showRegisterPassword, setShowRegisterPassword] = useState(false);
 
   // Simulated validation & loading states
@@ -82,7 +82,7 @@ export default function Auth() {
   const [isSuccess, setIsSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  const handleLoginSubmit = async(e) => {
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg("");
 
@@ -93,30 +93,25 @@ export default function Auth() {
 
     setIsLoading(true);
     setLoadingStep("Verifying credentials...");
-    const formData = {email: loginEmail,password: loginPassword}
+
     try {
-      const data = await loginUser(formData)
-      console.log(data);
-      setTimeout(() => {
-      setLoadingStep("Securing connection...");
-      setTimeout(() => {
-        setLoadingStep("Loading account data...");
-        setTimeout(() => {
-          setIsSuccess(true);
-          setIsLoading(false);
-          setTimeout(() => {
-            navigate("/dashboard");
-          }, 800);
-        }, 600);
-      }, 600);
-    }, 800);
+      await loginUser({ email: loginEmail, password: loginPassword });
+      setLoadingStep("Loading account data...");
+      setIsSuccess(true);
+      setIsLoading(false);
+      setTimeout(() => navigate("/dashboard"), 600);
     } catch (error) {
-       setIsSuccess(false);
-          setIsLoading(false);
+      const msg =
+        error.response?.data?.message ||
+        error.response?.data?.errors?.[0]?.message ||
+        "Login failed. Please try again.";
+      setErrorMsg(msg);
+      setIsSuccess(false);
+      setIsLoading(false);
     }
   };
 
-  const handleRegisterSubmit = async(e) => {
+  const handleRegisterSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg("");
 
@@ -141,32 +136,26 @@ export default function Auth() {
 
     setIsLoading(true);
     setLoadingStep("Creating profile...");
-    const formData = {
-      name: registerName,
-      email: registerEmail,
-      contact: registerPhone,
-      password: registerPassword
-    }
-       try {
-      const data = await registerUser(formData);
-      console.log(data);
-       setTimeout(() => {
-      setLoadingStep("Allocating secure node...");
-      setTimeout(() => {
-        setLoadingStep("Initializing dashboard...");
-        setTimeout(() => {
-          setIsSuccess(true);
-          setIsLoading(false);
-          setTimeout(() => {
-            navigate("/dashboard");
-          }, 800);
-        }, 600);
-      }, 600);
-    }, 800);
+
+    try {
+      await registerUser({
+        name: registerName,
+        email: registerEmail,
+        contact: registerPhone,
+        password: registerPassword,
+      });
+      setLoadingStep("Initializing dashboard...");
+      setIsSuccess(true);
+      setIsLoading(false);
+      setTimeout(() => navigate("/dashboard"), 600);
     } catch (error) {
-      console.log(error);
+      const msg =
+        error.response?.data?.message ||
+        error.response?.data?.errors?.[0]?.message ||
+        "Registration failed. Please try again.";
+      setErrorMsg(msg);
       setIsSuccess(false);
-          setIsLoading(false);
+      setIsLoading(false);
     }
   };
 

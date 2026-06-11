@@ -1,26 +1,95 @@
 import axios from "axios";
 
-export const registerUser = async (userData) => {
-  try {
-    const response = await axios.post(
-      "http://localhost:3000/auth/register",
-      userData,
-    );
+// ─── Axios Instance ──────────────────────────────────────────
+const api = axios.create({
+  baseURL: "http://localhost:3000",
+  withCredentials: true, // send/receive httpOnly cookies
+  timeout: 10000,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
 
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
+// ─── Flag to prevent multiple refresh calls at once ──────────
+let isRefreshing = false;
+let failedQueue = [];
+
+function processQueue(error) {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve();
+    }
+  });
+  failedQueue = [];
+}
+
+// ─── Response Interceptor: auto-refresh on 401 ──────────────
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+
+    // If 401 with TOKEN_EXPIRED and not already retried
+    if (
+      error.response?.status === 401 &&
+      error.response?.data?.code === "TOKEN_EXPIRED" &&
+      !originalRequest._retry
+    ) {
+      if (isRefreshing) {
+        // Queue requests while refresh is in progress
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        }).then(() => api(originalRequest));
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        await api.post("/auth/refresh");
+        processQueue(null);
+        return api(originalRequest);
+      } catch (refreshError) {
+        processQueue(refreshError);
+        // Redirect to login on refresh failure
+        window.location.href = "/auth";
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
+    return Promise.reject(error);
+  },
+);
+
+// ─── Auth API Functions ──────────────────────────────────────
+
+export const registerUser = async (userData) => {
+  const response = await api.post("/auth/register", userData);
+  return response.data;
 };
 
 export const loginUser = async (userData) => {
-  try {
-    const response = await axios.post(
-      "http://localhost:3000/auth/login",
-      userData,
-    );
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
+  const response = await api.post("/auth/login", userData);
+  return response.data;
 };
+
+export const logoutUser = async () => {
+  const response = await api.post("/auth/logout");
+  return response.data;
+};
+
+export const refreshToken = async () => {
+  const response = await api.post("/auth/refresh");
+  return response.data;
+};
+
+export const getCurrentUser = async () => {
+  const response = await api.get("/auth/me");
+  return response.data;
+};
+
+export default api;
