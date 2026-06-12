@@ -37,6 +37,7 @@ import {
   permanentDeleteFile,
   emptyTrash,
   trashFile,
+  restoreAllFiles as restoreAllFilesApi,
 } from "../../api/drive.js";
 
 /* ───────────────────────── Helpers ───────────────────────── */
@@ -862,7 +863,7 @@ export default function TrashFiles() {
     if (files.length === 0) return;
     const backup = [...files];
     try {
-      await Promise.all(backup.map((f) => restoreFile(f.id)));
+      await restoreAllFilesApi();
       setFiles([]);
       window.dispatchEvent(
         new CustomEvent("add-drivya-toast", {
@@ -872,12 +873,13 @@ export default function TrashFiles() {
           }
         })
       );
+      window.dispatchEvent(new CustomEvent("refresh-drive"));
     } catch (err) {
       console.error("Failed to restore all files:", err);
       window.dispatchEvent(
         new CustomEvent("add-drivya-toast", {
           detail: {
-            message: "Failed to restore some files.",
+            message: err.response?.data?.message || "Failed to restore files.",
             type: "error"
           }
         })

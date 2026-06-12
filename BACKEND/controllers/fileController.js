@@ -294,3 +294,22 @@ export const permanentDeleteFile = async (req, res, next) => {
     await session.endSession();
   }
 };
+
+// ─── Restore All Trashed Files ───────────────────────────────────
+export const restoreAllFiles = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    const result = await File.updateMany(
+      { userId, isTrashed: true },
+      { isTrashed: false, trashedAt: null }
+    );
+
+    return res.json({
+      message: `${result.modifiedCount} file(s) restored successfully.`,
+      modifiedCount: result.modifiedCount,
+    });
+  } catch (err) {
+    next(err);
+  }
+};

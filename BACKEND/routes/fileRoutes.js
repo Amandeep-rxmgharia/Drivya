@@ -7,6 +7,7 @@ import {
   listTrash,
   emptyTrash,
   permanentDeleteFile,
+  restoreAllFiles,
 } from "../controllers/fileController.js";
 import { authenticate } from "../middlewares/authMiddleware.js";
 import { uploadFiles as uploadMiddleware } from "../middlewares/uploadMiddleware.js";
@@ -23,6 +24,7 @@ router.get("/:id/download", downloadFile);
 // Trash operations
 router.get("/trash", listTrash);
 router.delete("/trash/empty", emptyTrash);
+router.patch("/trash/restore", restoreAllFiles);
 router.patch("/:id/trash", trashFile);
 router.patch("/:id/restore", restoreFile);
 router.delete("/:id", permanentDeleteFile);

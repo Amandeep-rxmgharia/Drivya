@@ -114,6 +114,14 @@ export const restoreFile = async (fileId) => {
 };
 
 /**
+ * Restore all files from trash.
+ */
+export const restoreAllFiles = async () => {
+  const response = await api.patch("/api/files/trash/restore");
+  return response.data;
+};
+
+/**
  * List all trashed files.
  */
 export const listTrash = async () => {
