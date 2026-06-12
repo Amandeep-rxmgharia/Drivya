@@ -2,6 +2,7 @@ import express from "express";
 import {
   uploadFiles,
   downloadFile,
+  previewFile,
   renameFile,
   trashFile,
   restoreFile,
@@ -22,6 +23,7 @@ router.use(authenticate);
 // ─── File Routes ─────────────────────────────────────────────────
 router.post("/upload", uploadMiddleware, uploadFiles);
 router.get("/:id/download", downloadFile);
+router.get("/:id/preview", previewFile);
 router.patch("/:id/rename", renameFile);
 
 // Trash operations

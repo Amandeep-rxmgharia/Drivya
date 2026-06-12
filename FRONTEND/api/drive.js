@@ -96,6 +96,16 @@ export const downloadFile = async (fileId, fileName) => {
 };
 
 /**
+ * Get the preview URL for a file (for use in img/video/audio/iframe src).
+ * Returns the full URL string — no fetch needed.
+ * @param {string} fileId
+ * @returns {string}
+ */
+export const getFilePreviewUrl = (fileId) => {
+  return `${api.defaults.baseURL}/api/files/${fileId}/preview`;
+};
+
+/**
  * Rename a file.
  * @param {string} fileId
  * @param {string} name

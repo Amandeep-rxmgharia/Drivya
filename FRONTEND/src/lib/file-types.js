@@ -127,11 +127,43 @@ const EXT_MAP = {
 
 /**
  * @param {string} filename
- * @param {FileKind} [override]
+ * @param {FileKind|string} [override]
  * @returns {FileKind}
  */
 export function detectFileKind(filename, override) {
-  if (override) return override;
+  if (override) {
+    const validKinds = new Set(["folder", "image", "video", "pdf", "archive", "document", "audio", "code", "file"]);
+    if (validKinds.has(override)) {
+      return /** @type {FileKind} */ (override);
+    }
+    
+    // Check if it is a MIME type
+    const mime = override.toLowerCase();
+    if (mime.startsWith("image/")) return "image";
+    if (mime.startsWith("video/")) return "video";
+    if (mime.startsWith("audio/")) return "audio";
+    if (mime === "application/pdf") return "pdf";
+    if (
+      mime.startsWith("text/") || 
+      mime === "application/msword" || 
+      mime.includes("officedocument") || 
+      mime.includes("epub")
+    ) {
+      const ext = filename.toLowerCase().split(".").pop() ?? "";
+      if (EXT_MAP.code.includes(ext)) return "code";
+      return "document";
+    }
+    if (
+      mime.includes("zip") || 
+      mime.includes("tar") || 
+      mime.includes("rar") || 
+      mime.includes("7z") ||
+      mime.includes("compressed")
+    ) {
+      return "archive";
+    }
+  }
+
   const lower = filename.toLowerCase();
   if (lower.endsWith("/") || !lower.includes(".")) {
     const base = lower.split("/").pop() ?? lower;

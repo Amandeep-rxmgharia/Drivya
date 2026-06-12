@@ -6,6 +6,7 @@ import {
   Check,
   Copy,
   Download,
+  Eye,
   Loader2,
   MoreHorizontal,
   Pencil,
@@ -63,6 +64,7 @@ export function FileRow({
   onStar,
   onShare,
   onDownload,
+  onPreview,
   onDelete,
   onRename,
   onCopyLink,
@@ -135,6 +137,7 @@ export function FileRow({
       <button
         type="button"
         onClick={() => !isRenaming && onSelect?.(file.id)}
+        onDoubleClick={() => !isRenaming && !file.isDirectory && onPreview?.(file)}
         className={cn(
           "relative w-full text-left rounded-xl border outline-none",
           "bg-card border-border shadow-sm dark:bg-card/50 dark:backdrop-blur-sm dark:shadow-none",
@@ -168,6 +171,7 @@ export function FileRow({
             onStar={onStar}
             onShare={onShare}
             onDownload={onDownload}
+            onPreview={onPreview}
             onDelete={onDelete}
             onRename={onRename}
             onCopyLink={onCopyLink}
@@ -185,6 +189,7 @@ export function FileRow({
             onStar={onStar}
             onShare={onShare}
             onDownload={onDownload}
+            onPreview={onPreview}
             onDelete={onDelete}
             onRename={onRename}
             onCopyLink={onCopyLink}
@@ -201,6 +206,7 @@ export function FileRow({
             file={file}
             onClose={() => setContextMenu(null)}
             onRename={handleStartRename}
+            onPreview={() => { setContextMenu(null); onPreview?.(file); }}
             onDownload={() => { setContextMenu(null); onDownload?.(file.id); }}
             onShare={() => { setContextMenu(null); onShare?.(file.id); }}
             onStar={() => { setContextMenu(null); onStar?.(file.id); }}
@@ -227,6 +233,7 @@ function GridLayout({
   onStar,
   onShare,
   onDownload,
+  onPreview,
   onDelete,
   onRename,
   onCopyLink,
@@ -236,6 +243,7 @@ function GridLayout({
       <div className="flex items-start justify-between gap-2">
         <FileTypeIcon kind={kind} />
         <QuickActions
+          file={file}
           fileId={file.id}
           starred={file.starred}
           isDirectory={file.isDirectory}
@@ -244,6 +252,7 @@ function GridLayout({
           onStar={onStar}
           onShare={onShare}
           onDownload={onDownload}
+          onPreview={onPreview}
           onDelete={onDelete}
           onRename={onStartRename}
           onCopyLink={onCopyLink}
@@ -296,6 +305,7 @@ function ListLayout({
   onStar,
   onShare,
   onDownload,
+  onPreview,
   onDelete,
   onRename,
   onCopyLink,
@@ -343,6 +353,7 @@ function ListLayout({
 
       <div className="flex items-center justify-between gap-3 md:justify-end md:w-36 md:pr-1">
         <QuickActions
+          file={file}
           fileId={file.id}
           starred={file.starred}
           isDirectory={file.isDirectory}
@@ -350,6 +361,7 @@ function ListLayout({
           onStar={onStar}
           onShare={onShare}
           onDownload={onDownload}
+          onPreview={onPreview}
           onDelete={onDelete}
           onRename={onStartRename}
           onCopyLink={onCopyLink}
@@ -501,6 +513,7 @@ function UploadProgress({ percent }) {
 /* ───────────────────────── Quick Actions (Redesigned) ───────────────────────── */
 
 function QuickActions({
+  file,
   fileId,
   starred,
   isDirectory,
@@ -509,6 +522,7 @@ function QuickActions({
   onStar,
   onShare,
   onDownload,
+  onPreview,
   onDelete,
   onRename,
   onCopyLink,
@@ -572,6 +586,19 @@ function QuickActions({
         </button>
       </Tooltip>
 
+      {/* Preview (only for files) */}
+      {!isDirectory && onPreview && (
+        <Tooltip label="Preview">
+          <button
+            type="button"
+            className={iconBtn}
+            onClick={() => onPreview?.(file)}
+          >
+            <Eye className="h-3.5 w-3.5" />
+          </button>
+        </Tooltip>
+      )}
+
       {/* Download (only for files) */}
       {!isDirectory && (
         <Tooltip label="Download">
@@ -580,7 +607,7 @@ function QuickActions({
             className={iconBtn}
             onClick={() => onDownload?.(fileId)}
           >
-            <Download className="h-3.5 w-3.5" />
+            <Download className="h-3.5" />
           </button>
         </Tooltip>
       )}
@@ -602,72 +629,146 @@ function QuickActions({
             <MoreHorizontal className="h-3.5 w-3.5" />
           </button>
         </Tooltip>
-
-        <AnimatePresence>
-          {moreOpen && (
-            <motion.div
-              ref={dropdownRef}
-              initial={{ opacity: 0, scale: 0.92, y: -4 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.92, y: -4 }}
-              transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
-              className={cn(
-                "absolute right-0 z-150 mt-2 w-48 origin-top-right",
-                "rounded-xl border border-border bg-popover p-1.5",
-                "shadow-elegant dark:shadow-[0_16px_48px_-12px_rgba(0,0,0,0.5)]",
-                "backdrop-blur-xl",
-              )}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Rename */}
-              {onRename && (
-                <DropdownItem
-                  icon={<Pencil className="h-3.5 w-3.5" />}
-                  label="Rename"
-                  onClick={() => { setMoreOpen(false); onRename(); }}
-                />
-              )}
-
-              {/* Share */}
-              <DropdownItem
-                icon={<Share2 className="h-3.5 w-3.5" />}
-                label="Share"
-                onClick={() => { setMoreOpen(false); onShare?.(fileId); }}
-              />
-
-              {/* Copy link */}
-              {onCopyLink && (
-                <DropdownItem
-                  icon={<Copy className="h-3.5 w-3.5" />}
-                  label="Copy link"
-                  onClick={() => { setMoreOpen(false); onCopyLink?.(fileId); }}
-                />
-              )}
-
-              {/* Download (in dropdown for grid compact mode where it might be hidden) */}
-              {isDirectory ? null : (
-                <DropdownItem
-                  icon={<Download className="h-3.5 w-3.5" />}
-                  label="Download"
-                  onClick={() => { setMoreOpen(false); onDownload?.(fileId); }}
-                />
-              )}
-
-              {/* Divider */}
-              <div className="my-1.5 h-px bg-border/60" />
-
-              {/* Delete */}
-              <DropdownItem
-                icon={<Trash2 className="h-3.5 w-3.5" />}
-                label={isDirectory ? "Delete folder" : "Move to trash"}
-                variant="destructive"
-                onClick={() => { setMoreOpen(false); onDelete?.(fileId); }}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
+
+      {/* Portaled dropdown — escapes stacking context */}
+      <AnimatePresence>
+        {moreOpen && (
+          <PortaledDropdown
+            anchorRef={moreRef}
+            dropdownRef={dropdownRef}
+            file={file}
+            fileId={fileId}
+            isDirectory={isDirectory}
+            onRename={onRename}
+            onPreview={onPreview}
+            onShare={onShare}
+            onCopyLink={onCopyLink}
+            onDownload={onDownload}
+            onDelete={onDelete}
+            onClose={() => setMoreOpen(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
+  );
+}
+
+/* ───────────────────────── Portaled Dropdown ───────────────────────── */
+
+function PortaledDropdown({
+  anchorRef,
+  dropdownRef,
+  file,
+  fileId,
+  isDirectory,
+  onRename,
+  onPreview,
+  onShare,
+  onCopyLink,
+  onDownload,
+  onDelete,
+  onClose,
+}) {
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+
+  // Calculate position from anchor button
+  useEffect(() => {
+    if (!anchorRef.current) return;
+    const updatePos = () => {
+      const rect = anchorRef.current.getBoundingClientRect();
+      const dropdownWidth = 192; // w-48 = 12rem = 192px
+      let left = rect.right - dropdownWidth;
+      let top = rect.bottom + 6;
+
+      // Clamp to viewport
+      if (left < 8) left = 8;
+      if (left + dropdownWidth > window.innerWidth - 8)
+        left = window.innerWidth - dropdownWidth - 8;
+
+      setPos({ top, left });
+    };
+    updatePos();
+
+    window.addEventListener("scroll", updatePos, true);
+    window.addEventListener("resize", updatePos);
+    return () => {
+      window.removeEventListener("scroll", updatePos, true);
+      window.removeEventListener("resize", updatePos);
+    };
+  }, [anchorRef]);
+
+  return createPortal(
+    <motion.div
+      ref={dropdownRef}
+      initial={{ opacity: 0, scale: 0.92, y: -4 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.92, y: -4 }}
+      transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
+      style={{ position: "fixed", top: pos.top, left: pos.left }}
+      className={cn(
+        "z-[200] w-48 origin-top-right",
+        "rounded-xl border border-border bg-popover p-1.5",
+        "shadow-elegant dark:shadow-[0_16px_48px_-12px_rgba(0,0,0,0.5)]",
+        "backdrop-blur-xl",
+      )}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* Rename */}
+      {onRename && (
+        <DropdownItem
+          icon={<Pencil className="h-3.5 w-3.5" />}
+          label="Rename"
+          onClick={() => { onClose(); onRename(); }}
+        />
+      )}
+
+      {/* Preview */}
+      {!isDirectory && onPreview && (
+        <DropdownItem
+          icon={<Eye className="h-3.5 w-3.5" />}
+          label="Preview"
+          onClick={() => { onClose(); onPreview?.(file); }}
+        />
+      )}
+
+      {/* Share */}
+      <DropdownItem
+        icon={<Share2 className="h-3.5 w-3.5" />}
+        label="Share"
+        onClick={() => { onClose(); onShare?.(fileId); }}
+      />
+
+      {/* Copy link */}
+      {onCopyLink && (
+        <DropdownItem
+          icon={<Copy className="h-3.5 w-3.5" />}
+          label="Copy link"
+          onClick={() => { onClose(); onCopyLink?.(fileId); }}
+        />
+      )}
+
+      {/* Download */}
+      {isDirectory ? null : (
+        <DropdownItem
+          icon={<Download className="h-3.5 w-3.5" />}
+          label="Download"
+          onClick={() => { onClose(); onDownload?.(fileId); }}
+        />
+      )}
+
+      {/* Divider */}
+      <div className="my-1.5 h-px bg-border/60" />
+
+      {/* Delete */}
+      <DropdownItem
+        icon={<Trash2 className="h-3.5 w-3.5" />}
+        label={isDirectory ? "Delete folder" : "Move to trash"}
+        variant="destructive"
+        onClick={() => { onClose(); onDelete?.(fileId); }}
+      />
+    </motion.div>,
+    document.body,
   );
 }
 
@@ -746,6 +847,7 @@ function ContextMenu({
   file,
   onClose,
   onRename,
+  onPreview,
   onDownload,
   onShare,
   onStar,
@@ -804,6 +906,14 @@ function ContextMenu({
       <div className="h-px bg-border/60 mb-1.5" />
 
       {/* Actions */}
+      {!file.isDirectory && onPreview && (
+        <DropdownItem
+          icon={<Eye className="h-3.5 w-3.5" />}
+          label="Preview"
+          onClick={onPreview}
+        />
+      )}
+
       <DropdownItem
         icon={<Pencil className="h-3.5 w-3.5" />}
         label="Rename"

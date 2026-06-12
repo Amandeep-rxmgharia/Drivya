@@ -8,6 +8,7 @@ import {
   ChevronDown,
   Clock,
   Code2,
+  Eye,
   FileStack,
   FileText,
   Film,
@@ -31,6 +32,7 @@ import {
   chip,
 } from "@/components/dashboard/dashboard-tokens";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
+import { FilePreviewModal } from "@/components/dashboard/FilePreviewModal";
 import {
   listTrash,
   restoreFile,
@@ -38,6 +40,7 @@ import {
   emptyTrash,
   trashFile,
   restoreAllFiles as restoreAllFilesApi,
+  downloadFile,
 } from "../../api/drive.js";
 
 /* ───────────────────────── Helpers ───────────────────────── */
@@ -367,6 +370,7 @@ function TrashFileActions({
   compact,
   onRestore,
   onDeletePermanently,
+  onPreview,
 }) {
   const stop = (e) => e.stopPropagation();
   const btn =
@@ -387,6 +391,16 @@ function TrashFileActions({
       onClick={stop}
       onKeyDown={stop}
     >
+      {onPreview && (
+        <button
+          type="button"
+          className={cn(btn, "hover:text-primary")}
+          title="Preview"
+          onClick={() => onPreview?.(file)}
+        >
+          <Eye className="h-3.5 w-3.5" />
+        </button>
+      )}
       <button
         type="button"
         className={cn(btn, "hover:text-primary")}
@@ -409,7 +423,7 @@ function TrashFileActions({
 
 /* ───────────────────────── Trash File Row ───────────────────────── */
 
-function TrashFileRow({ file, view, onRestore, onDeletePermanently }) {
+function TrashFileRow({ file, view, onRestore, onDeletePermanently, onPreview }) {
   const [hovered, setHovered] = useState(false);
   const { ref: revealRef, isVisible } = useScrollReveal();
   const kind = detectFileKind(file.name, file.kind);
@@ -432,6 +446,7 @@ function TrashFileRow({ file, view, onRestore, onDeletePermanently }) {
         }}
       >
         <div
+          onDoubleClick={() => kind !== "folder" && onPreview?.(file)}
           className={cn(
             "relative w-full text-left rounded-xl border outline-none",
             "bg-card border-border shadow-sm dark:bg-card/50 dark:backdrop-blur-sm dark:shadow-none",
@@ -452,6 +467,7 @@ function TrashFileRow({ file, view, onRestore, onDeletePermanently }) {
               compact
               onRestore={onRestore}
               onDeletePermanently={onDeletePermanently}
+              onPreview={onPreview}
             />
           </div>
 
@@ -501,6 +517,7 @@ function TrashFileRow({ file, view, onRestore, onDeletePermanently }) {
       }}
     >
       <div
+        onDoubleClick={() => kind !== "folder" && onPreview?.(file)}
         className={cn(
           "relative w-full text-left rounded-xl border outline-none",
           "bg-card border-border shadow-sm dark:bg-card/50 dark:backdrop-blur-sm dark:shadow-none",
@@ -557,6 +574,7 @@ function TrashFileRow({ file, view, onRestore, onDeletePermanently }) {
               visible={hovered}
               onRestore={onRestore}
               onDeletePermanently={onDeletePermanently}
+              onPreview={onPreview}
             />
           </div>
         </div>
@@ -574,6 +592,7 @@ function CategoryGroup({
   index,
   onRestore,
   onDeletePermanently,
+  onPreview,
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const CatIcon = CATEGORY_ICONS[category] || FileStack;
@@ -644,6 +663,7 @@ function CategoryGroup({
               view={view}
               onRestore={onRestore}
               onDeletePermanently={onDeletePermanently}
+              onPreview={onPreview}
             />
           ))}
         </div>
@@ -693,6 +713,9 @@ export default function TrashFiles() {
   const [sortBy, setSortBy] = useState("deleted");
   const [sortOpen, setSortOpen] = useState(false);
   const [view, setView] = useState("grid");
+
+  // Preview state
+  const [previewFile, setPreviewFile] = useState(null);
 
   // Toast state
   const [toast, setToast] = useState(null); // { message, undoData }
@@ -1170,11 +1193,31 @@ export default function TrashFiles() {
                 index={gi}
                 onRestore={handleRestore}
                 onDeletePermanently={handleDeletePermanently}
+                onPreview={(file) => setPreviewFile(file)}
               />
             ))
           )}
         </div>
       </section>
+
+      {/* File preview modal */}
+      <AnimatePresence>
+        {previewFile && (
+          <FilePreviewModal
+            file={previewFile}
+            files={filteredFiles}
+            onClose={() => setPreviewFile(null)}
+            onDownload={async (fileId, fileName) => {
+              try {
+                await downloadFile(fileId, fileName);
+              } catch (err) {
+                console.error("Download failed:", err);
+              }
+            }}
+            onNavigateFile={(file) => setPreviewFile(file)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Confirm modal */}
       <AnimatePresence>

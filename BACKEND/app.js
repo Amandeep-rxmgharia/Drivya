@@ -24,9 +24,22 @@ const app = express();
 app.use(helmet());
 
 // ─── CORS — explicit origin, credentials allowed ─────────────
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:5174",
+  CORS_ORIGIN
+];
+
 app.use(
   cors({
-    origin: CORS_ORIGIN,
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      const msg = `The CORS policy does not allow access from origin ${origin}.`;
+      return callback(new Error(msg), false);
+    },
     credentials: true,
   }),
 );

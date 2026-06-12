@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { easeSmooth } from "@/lib/motion-presets";
 import { FileRow } from "./FileRow";
 import { ShareModal } from "./ShareModal";
+import { FilePreviewModal } from "./FilePreviewModal";
 
 const card = "rounded-2xl glass shadow-elegant";
 
@@ -122,6 +123,7 @@ export function FilesLayout({
   const [activeId, setActiveId] = useState(null);
   const [starred, setStarred] = useState({});
   const [sharingFile, setSharingFile] = useState(null);
+  const [previewFile, setPreviewFile] = useState(null);
   const [sortBy, setSortBy] = useState("name");
   const [filter, setFilter] = useState("all");
   const [view, setView] = useState("grid");
@@ -248,6 +250,28 @@ export function FilesLayout({
     const file = allItems.find((f) => f.id === id);
     if (file) setSharingFile(file);
   };
+
+  const handlePreview = useCallback(
+    (file) => {
+      if (file && !file.isDirectory) {
+        setPreviewFile(file);
+      }
+    },
+    [],
+  );
+
+  const handlePreviewNavigate = useCallback(
+    (file) => {
+      setPreviewFile(file);
+    },
+    [],
+  );
+
+  // Get only non-directory files for prev/next navigation in preview
+  const previewableFiles = useMemo(
+    () => visibleFiles.filter((f) => !f.isDirectory),
+    [visibleFiles],
+  );
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -531,6 +555,7 @@ export function FilesLayout({
               onStar={toggleStar}
               onShare={handleShare}
               onDownload={handleDownload}
+              onPreview={handlePreview}
               onDelete={handleDelete}
               onRename={handleRename}
               onCopyLink={handleCopyLink}
@@ -546,6 +571,19 @@ export function FilesLayout({
             file={sharingFile}
             onClose={() => setSharingFile(null)}
             onShareUpdated={() => {}}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* File preview modal */}
+      <AnimatePresence>
+        {previewFile && (
+          <FilePreviewModal
+            file={previewFile}
+            files={previewableFiles}
+            onClose={() => setPreviewFile(null)}
+            onDownload={onDownload}
+            onNavigateFile={handlePreviewNavigate}
           />
         )}
       </AnimatePresence>

@@ -152,6 +152,58 @@ export const downloadFile = async (req, res, next) => {
   }
 };
 
+// ─── Preview File (inline streaming with Range support) ──────────
+export const previewFile = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+
+    const file = await File.findOne({ _id: id, userId }).lean();
+    if (!file) {
+      return res.status(404).json({ message: "File not found." });
+    }
+
+    const fileSize = file.size;
+    const range = req.headers.range;
+
+    // Common headers
+    res.set({
+      "Content-Type": file.mimeType,
+      "Content-Disposition": `inline; filename="${encodeURIComponent(file.originalName)}"`,
+      "Accept-Ranges": "bytes",
+      "Cache-Control": "private, max-age=3600",
+    });
+
+    if (range) {
+      // Parse Range header (e.g. "bytes=0-1023")
+      const parts = range.replace(/bytes=/, "").split("-");
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+
+      if (start >= fileSize || end >= fileSize || start > end) {
+        res.status(416).set("Content-Range", `bytes */${fileSize}`);
+        return res.end();
+      }
+
+      const chunkSize = end - start + 1;
+      const stream = getFileStream(file.storagePath, { start, end });
+
+      res.status(206).set({
+        "Content-Range": `bytes ${start}-${end}/${fileSize}`,
+        "Content-Length": chunkSize,
+      });
+
+      stream.pipe(res);
+    } else {
+      res.set("Content-Length", fileSize);
+      const stream = getFileStream(file.storagePath);
+      stream.pipe(res);
+    }
+  } catch (err) {
+    next(err);
+  }
+};
+
 // ─── Rename File ─────────────────────────────────────────────────
 export const renameFile = async (req, res, next) => {
   try {

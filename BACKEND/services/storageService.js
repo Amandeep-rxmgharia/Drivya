@@ -42,16 +42,17 @@ export async function saveFile(userId, storageName, buffer) {
 /**
  * Get a readable stream for a stored file.
  * @param {string} storagePath - relative path "{userId}/{storageName}"
+ * @param {{ start?: number, end?: number }} [options] - optional byte range for streaming
  * @returns {import('node:fs').ReadStream}
  */
-export function getFileStream(storagePath) {
+export function getFileStream(storagePath, options) {
   const absolutePath = path.join(STORAGE_ROOT, storagePath);
   if (!fs.existsSync(absolutePath)) {
     const err = new Error("File not found on disk.");
     err.status = 404;
     throw err;
   }
-  return fs.createReadStream(absolutePath);
+  return fs.createReadStream(absolutePath, options);
 }
 
 /**
