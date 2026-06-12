@@ -7,6 +7,7 @@ import {
   trashFile,
   deleteDirectory as deleteDirApi,
   renameDirectory as renameDirApi,
+  renameFile as renameFileApi,
 } from "../../api/drive.js";
 import { FilesLayout } from "../components/dashboard/FilesLayout.jsx";
 
@@ -125,6 +126,20 @@ export default function MyDrive() {
     [fetchContents],
   );
 
+  // Rename a file
+  const handleRenameFile = useCallback(
+    async (fileId, newName) => {
+      try {
+        await renameFileApi(fileId, newName);
+        await fetchContents();
+      } catch (err) {
+        console.error("Rename file failed:", err);
+        throw err; // re-throw so the UI can show the error
+      }
+    },
+    [fetchContents],
+  );
+
   return (
     <FilesLayout
       layoutHeader={
@@ -146,6 +161,7 @@ export default function MyDrive() {
       onTrashFile={handleTrashFile}
       onDeleteDir={handleDeleteDir}
       onRenameDir={handleRenameDir}
+      onRenameFile={handleRenameFile}
     />
   );
 }

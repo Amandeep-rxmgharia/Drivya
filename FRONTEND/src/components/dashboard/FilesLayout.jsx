@@ -110,6 +110,7 @@ export function FilesLayout({
   onTrashFile,
   onDeleteDir,
   onRenameDir,
+  onRenameFile,
   className,
 }) {
   const allItems = useMemo(
@@ -217,6 +218,28 @@ export function FilesLayout({
     [allItems],
   );
 
+  const handleRename = useCallback(
+    async (id, newName) => {
+      const item = allItems.find((f) => f.id === id);
+      if (!item) return;
+
+      try {
+        if (item.isDirectory) {
+          await onRenameDir?.(id, newName);
+          setToastMessage(`Folder renamed to "${newName}".`);
+        } else {
+          await onRenameFile?.(id, newName);
+          setToastMessage(`File renamed to "${newName}".`);
+        }
+      } catch (err) {
+        const msg = err?.response?.data?.message || "Rename failed.";
+        setToastMessage(msg);
+        throw err;
+      }
+    },
+    [allItems, onRenameDir, onRenameFile],
+  );
+
   const toggleStar = (id) => {
     setStarred((prev) => ({ ...prev, [id]: !prev[id] }));
   };
@@ -268,11 +291,21 @@ export function FilesLayout({
           handleDelete(selectedId);
         }
       }
+
+      if (key === "f2") {
+        if (selectedId) {
+          e.preventDefault();
+          // Dispatch a custom event that FileRow listens to for rename
+          window.dispatchEvent(
+            new CustomEvent("trigger-rename", { detail: { id: selectedId } }),
+          );
+        }
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedId, handleDownload, handleCopyLink, handleDelete]);
+  }, [selectedId, handleDownload, handleCopyLink, handleDelete, handleRename]);
 
   const isGrid = view === "grid";
 
@@ -499,6 +532,8 @@ export function FilesLayout({
               onShare={handleShare}
               onDownload={handleDownload}
               onDelete={handleDelete}
+              onRename={handleRename}
+              onCopyLink={handleCopyLink}
             />
           ))
         )}

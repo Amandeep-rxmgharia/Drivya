@@ -1,14 +1,18 @@
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
-import { motion } from "motion/react";
+import { createPortal } from "react-dom";
+import { motion, AnimatePresence } from "motion/react";
 import {
+  Check,
+  Copy,
   Download,
   Loader2,
   MoreHorizontal,
+  Pencil,
   Share2,
   Star,
   Trash2,
-  Users,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { detectFileKind } from "@/lib/file-types";
@@ -44,6 +48,8 @@ const rowEase = "duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]";
  *   onShare?: (id: string) => void;
  *   onDownload?: (id: string) => void;
  *   onDelete?: (id: string) => void;
+ *   onRename?: (id: string, newName: string) => Promise<void>;
+ *   onCopyLink?: (id: string) => void;
  *   className?: string;
  * }} props
  */
@@ -58,9 +64,13 @@ export function FileRow({
   onShare,
   onDownload,
   onDelete,
+  onRename,
+  onCopyLink,
   className,
 }) {
   const [hovered, setHovered] = useState(false);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [contextMenu, setContextMenu] = useState(null); // { x, y }
   const { ref: revealRef, isVisible } = useScrollReveal();
   const kind = detectFileKind(file.name, file.kind);
   const isGrid = viewType === "grid";
@@ -69,6 +79,43 @@ export function FileRow({
     file.uploadProgress >= 0 &&
     file.uploadProgress < 100;
 
+  // Close context menu on outside click
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    window.addEventListener("click", close);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [contextMenu]);
+
+  const handleContextMenu = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  }, []);
+
+  const handleStartRename = useCallback(() => {
+    setContextMenu(null);
+    setIsRenaming(true);
+  }, []);
+
+  const handleFinishRename = useCallback(
+    async (newName) => {
+      setIsRenaming(false);
+      if (newName && newName !== file.name && onRename) {
+        try {
+          await onRename(file.id, newName);
+        } catch {
+          // error handled upstream
+        }
+      }
+    },
+    [file.id, file.name, onRename],
+  );
+
   return (
     <article
       ref={revealRef}
@@ -76,6 +123,7 @@ export function FileRow({
       aria-selected={selected}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onContextMenu={handleContextMenu}
       className={cn("group", isGrid ? "min-w-0" : "px-1 sm:px-2", className)}
       style={{
         opacity: isVisible ? 1 : 0,
@@ -86,7 +134,7 @@ export function FileRow({
     >
       <button
         type="button"
-        onClick={() => onSelect?.(file.id)}
+        onClick={() => !isRenaming && onSelect?.(file.id)}
         className={cn(
           "relative w-full text-left rounded-xl border outline-none",
           "bg-card border-border shadow-sm dark:bg-card/50 dark:backdrop-blur-sm dark:shadow-none",
@@ -114,10 +162,15 @@ export function FileRow({
             isUploading={isUploading}
             hovered={hovered}
             selected={selected}
+            isRenaming={isRenaming}
+            onStartRename={handleStartRename}
+            onFinishRename={handleFinishRename}
             onStar={onStar}
             onShare={onShare}
             onDownload={onDownload}
             onDelete={onDelete}
+            onRename={onRename}
+            onCopyLink={onCopyLink}
           />
         ) : (
           <ListLayout
@@ -126,16 +179,41 @@ export function FileRow({
             isUploading={isUploading}
             hovered={hovered}
             selected={selected}
+            isRenaming={isRenaming}
+            onStartRename={handleStartRename}
+            onFinishRename={handleFinishRename}
             onStar={onStar}
             onShare={onShare}
             onDownload={onDownload}
             onDelete={onDelete}
+            onRename={onRename}
+            onCopyLink={onCopyLink}
           />
         )}
       </button>
+
+      {/* Context Menu Portal */}
+      <AnimatePresence>
+        {contextMenu && (
+          <ContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            file={file}
+            onClose={() => setContextMenu(null)}
+            onRename={handleStartRename}
+            onDownload={() => { setContextMenu(null); onDownload?.(file.id); }}
+            onShare={() => { setContextMenu(null); onShare?.(file.id); }}
+            onStar={() => { setContextMenu(null); onStar?.(file.id); }}
+            onCopyLink={() => { setContextMenu(null); onCopyLink?.(file.id); }}
+            onDelete={() => { setContextMenu(null); onDelete?.(file.id); }}
+          />
+        )}
+      </AnimatePresence>
     </article>
   );
 }
+
+/* ───────────────────────── Grid Layout ───────────────────────── */
 
 function GridLayout({
   file,
@@ -143,31 +221,52 @@ function GridLayout({
   isUploading,
   hovered,
   selected,
+  isRenaming,
+  onStartRename,
+  onFinishRename,
   onStar,
   onShare,
   onDownload,
   onDelete,
+  onRename,
+  onCopyLink,
 }) {
   return (
     <>
       <div className="flex items-start justify-between gap-2">
         <FileTypeIcon kind={kind} />
-        <FileRowActions
+        <QuickActions
           fileId={file.id}
           starred={file.starred}
+          isDirectory={file.isDirectory}
           visible={hovered || selected}
           compact
           onStar={onStar}
           onShare={onShare}
           onDownload={onDownload}
           onDelete={onDelete}
+          onRename={onStartRename}
+          onCopyLink={onCopyLink}
         />
       </div>
 
       <div className="mt-3 min-w-0 flex-1 space-y-1">
-        <h4 className="line-clamp-2 text-sm font-semibold leading-snug tracking-tight text-foreground">
-          {file.name}
-        </h4>
+        {isRenaming ? (
+          <InlineRenameInput
+            currentName={file.name}
+            onFinish={onFinishRename}
+          />
+        ) : (
+          <h4
+            className="line-clamp-2 text-sm font-semibold leading-snug tracking-tight text-foreground"
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              if (onRename) onStartRename();
+            }}
+          >
+            {file.name}
+          </h4>
+        )}
         <p className="text-[11px] text-muted-foreground tabular-nums">
           {file.size} · {file.modifiedAt}
         </p>
@@ -183,16 +282,23 @@ function GridLayout({
   );
 }
 
+/* ───────────────────────── List Layout ───────────────────────── */
+
 function ListLayout({
   file,
   kind,
   isUploading,
   hovered,
   selected,
+  isRenaming,
+  onStartRename,
+  onFinishRename,
   onStar,
   onShare,
   onDownload,
   onDelete,
+  onRename,
+  onCopyLink,
 }) {
   return (
     <div className="flex flex-col gap-3 md:grid md:grid-cols-[1fr_auto] md:items-center md:gap-6">
@@ -201,9 +307,22 @@ function ListLayout({
           <FileTypeIcon kind={kind} />
           <div className="min-w-0 flex-1 space-y-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h4 className="truncate text-sm font-semibold text-foreground sm:text-[15px]">
-                {file.name}
-              </h4>
+              {isRenaming ? (
+                <InlineRenameInput
+                  currentName={file.name}
+                  onFinish={onFinishRename}
+                />
+              ) : (
+                <h4
+                  className="truncate text-sm font-semibold text-foreground sm:text-[15px]"
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    if (onRename) onStartRename();
+                  }}
+                >
+                  {file.name}
+                </h4>
+              )}
               {file.starred && <Badge variant="star">Starred</Badge>}
               {file.shared && <Badge variant="shared">Shared</Badge>}
             </div>
@@ -223,19 +342,119 @@ function ListLayout({
       </div>
 
       <div className="flex items-center justify-between gap-3 md:justify-end md:w-36 md:pr-1">
-        <FileRowActions
+        <QuickActions
           fileId={file.id}
           starred={file.starred}
+          isDirectory={file.isDirectory}
           visible={hovered || selected}
           onStar={onStar}
           onShare={onShare}
           onDownload={onDownload}
           onDelete={onDelete}
+          onRename={onStartRename}
+          onCopyLink={onCopyLink}
         />
       </div>
     </div>
   );
 }
+
+/* ───────────────────────── Inline Rename Input ───────────────────────── */
+
+function InlineRenameInput({ currentName, onFinish }) {
+  const [value, setValue] = useState(currentName);
+  const [error, setError] = useState(null);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.focus();
+      // Select name without extension
+      const dotIndex = currentName.lastIndexOf(".");
+      if (dotIndex > 0) {
+        inputRef.current.setSelectionRange(0, dotIndex);
+      } else {
+        inputRef.current.select();
+      }
+    }
+  }, [currentName]);
+
+  const handleSubmit = (e) => {
+    e?.preventDefault();
+    const trimmed = value.trim();
+    if (!trimmed) {
+      setError("Name cannot be empty");
+      return;
+    }
+    onFinish(trimmed);
+  };
+
+  const handleCancel = () => {
+    onFinish(null);
+  };
+
+  const handleKeyDown = (e) => {
+    e.stopPropagation();
+    if (e.key === "Escape") {
+      handleCancel();
+    } else if (e.key === "Enter") {
+      handleSubmit();
+    }
+  };
+
+  return (
+    <div
+      className="flex items-center gap-1.5 max-w-full"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="relative flex-1 min-w-0">
+        <input
+          ref={inputRef}
+          type="text"
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setError(null);
+          }}
+          onKeyDown={handleKeyDown}
+          onBlur={handleSubmit}
+          className={cn(
+            "w-full rounded-lg border px-2.5 py-1.5 text-sm font-semibold text-foreground",
+            "bg-background/90 backdrop-blur-sm outline-none",
+            "transition-all duration-200",
+            error
+              ? "border-destructive ring-2 ring-destructive/20"
+              : "border-primary/40 ring-2 ring-primary/20 focus:border-primary focus:ring-primary/30",
+          )}
+          maxLength={255}
+        />
+        {error && (
+          <p className="absolute -bottom-5 left-0 text-[10px] text-destructive font-medium">
+            {error}
+          </p>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={handleSubmit}
+        className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors shrink-0"
+        title="Save"
+      >
+        <Check className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
+        onClick={handleCancel}
+        className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-secondary text-muted-foreground hover:bg-secondary/80 hover:text-foreground transition-colors shrink-0"
+        title="Cancel"
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
+/* ───────────────────────── Badge ───────────────────────── */
 
 function Badge({ variant, children }) {
   const styles =
@@ -254,6 +473,8 @@ function Badge({ variant, children }) {
     </span>
   );
 }
+
+/* ───────────────────────── Upload Progress ───────────────────────── */
 
 function UploadProgress({ percent }) {
   return (
@@ -277,78 +498,353 @@ function UploadProgress({ percent }) {
   );
 }
 
-function FileRowActions({
+/* ───────────────────────── Quick Actions (Redesigned) ───────────────────────── */
+
+function QuickActions({
   fileId,
   starred,
+  isDirectory,
   visible,
   compact,
   onStar,
   onShare,
   onDownload,
   onDelete,
+  onRename,
+  onCopyLink,
 }) {
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef(null);
+  const dropdownRef = useRef(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!moreOpen) return;
+    const close = (e) => {
+      if (
+        moreRef.current &&
+        !moreRef.current.contains(e.target) &&
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target)
+      ) {
+        setMoreOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", close);
+    return () => window.removeEventListener("mousedown", close);
+  }, [moreOpen]);
+
   const stop = (e) => e.stopPropagation();
-  const btn =
-    "inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30";
+
+  const iconBtn = cn(
+    "inline-flex h-8 w-8 items-center justify-center rounded-xl",
+    "text-muted-foreground transition-all duration-200",
+    "hover:bg-secondary/80 hover:text-foreground hover:scale-105",
+    "active:scale-95",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+  );
 
   return (
     <div
       role="toolbar"
       aria-label="File actions"
       className={cn(
-        "flex items-center gap-0.5 rounded-lg border border-border bg-background/80 p-0.5 backdrop-blur-sm",
+        "flex items-center gap-0.5 rounded-xl border border-border/60 bg-background/90 p-0.5 backdrop-blur-md",
+        "shadow-sm dark:shadow-none dark:bg-card/80",
         "transition-all duration-200",
         visible
-          ? "opacity-100"
-          : "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto",
-        compact ? "" : "max-md:opacity-100 max-md:pointer-events-auto",
+          ? "opacity-100 translate-y-0"
+          : "opacity-0 -translate-y-1 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:translate-y-0 group-focus-within:pointer-events-auto",
+        compact ? "" : "max-md:opacity-100 max-md:translate-y-0 max-md:pointer-events-auto",
       )}
       onClick={stop}
       onKeyDown={stop}
     >
-      <button
-        type="button"
-        className={cn(btn, starred && "text-amber-600 dark:text-amber-400")}
-        title={starred ? "Unstar" : "Star"}
-        aria-pressed={starred}
-        onClick={() => onStar?.(fileId)}
-      >
-        <Star className={cn("h-3.5 w-3.5", starred && "fill-current")} />
-      </button>
-      <button
-        type="button"
-        className={btn}
-        title="Share"
-        onClick={() => onShare?.(fileId)}
-      >
-        <Share2 className="h-3.5 w-3.5" />
-      </button>
-      <button
-        type="button"
-        className={btn}
-        title="Download"
-        onClick={() => onDownload?.(fileId)}
-      >
-        <Download className="h-3.5 w-3.5" />
-      </button>
-      <button
-        type="button"
-        className={cn(btn, "hover:text-destructive")}
-        title="Delete"
-        onClick={() => onDelete?.(fileId)}
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-      </button>
-      {!compact && (
+      {/* Star */}
+      <Tooltip label={starred ? "Unstar" : "Star"}>
         <button
           type="button"
-          className={btn}
-          title="More"
-          aria-label="More options"
+          className={cn(iconBtn, starred && "text-amber-500 dark:text-amber-400")}
+          aria-pressed={starred}
+          onClick={() => onStar?.(fileId)}
         >
-          <MoreHorizontal className="h-3.5 w-3.5" />
+          <Star className={cn("h-3.5 w-3.5", starred && "fill-current")} />
         </button>
+      </Tooltip>
+
+      {/* Download (only for files) */}
+      {!isDirectory && (
+        <Tooltip label="Download">
+          <button
+            type="button"
+            className={iconBtn}
+            onClick={() => onDownload?.(fileId)}
+          >
+            <Download className="h-3.5 w-3.5" />
+          </button>
+        </Tooltip>
       )}
+
+      {/* More actions dropdown */}
+      <div className="relative">
+        <Tooltip label="More actions">
+          <button
+            ref={moreRef}
+            type="button"
+            className={cn(
+              iconBtn,
+              moreOpen && "bg-secondary text-foreground",
+            )}
+            onClick={() => setMoreOpen((o) => !o)}
+            aria-expanded={moreOpen}
+            aria-label="More options"
+          >
+            <MoreHorizontal className="h-3.5 w-3.5" />
+          </button>
+        </Tooltip>
+
+        <AnimatePresence>
+          {moreOpen && (
+            <motion.div
+              ref={dropdownRef}
+              initial={{ opacity: 0, scale: 0.92, y: -4 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: -4 }}
+              transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
+              className={cn(
+                "absolute right-0 z-150 mt-2 w-48 origin-top-right",
+                "rounded-xl border border-border bg-popover p-1.5",
+                "shadow-elegant dark:shadow-[0_16px_48px_-12px_rgba(0,0,0,0.5)]",
+                "backdrop-blur-xl",
+              )}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Rename */}
+              {onRename && (
+                <DropdownItem
+                  icon={<Pencil className="h-3.5 w-3.5" />}
+                  label="Rename"
+                  onClick={() => { setMoreOpen(false); onRename(); }}
+                />
+              )}
+
+              {/* Share */}
+              <DropdownItem
+                icon={<Share2 className="h-3.5 w-3.5" />}
+                label="Share"
+                onClick={() => { setMoreOpen(false); onShare?.(fileId); }}
+              />
+
+              {/* Copy link */}
+              {onCopyLink && (
+                <DropdownItem
+                  icon={<Copy className="h-3.5 w-3.5" />}
+                  label="Copy link"
+                  onClick={() => { setMoreOpen(false); onCopyLink?.(fileId); }}
+                />
+              )}
+
+              {/* Download (in dropdown for grid compact mode where it might be hidden) */}
+              {isDirectory ? null : (
+                <DropdownItem
+                  icon={<Download className="h-3.5 w-3.5" />}
+                  label="Download"
+                  onClick={() => { setMoreOpen(false); onDownload?.(fileId); }}
+                />
+              )}
+
+              {/* Divider */}
+              <div className="my-1.5 h-px bg-border/60" />
+
+              {/* Delete */}
+              <DropdownItem
+                icon={<Trash2 className="h-3.5 w-3.5" />}
+                label={isDirectory ? "Delete folder" : "Move to trash"}
+                variant="destructive"
+                onClick={() => { setMoreOpen(false); onDelete?.(fileId); }}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
+  );
+}
+
+/* ───────────────────────── Dropdown Item ───────────────────────── */
+
+function DropdownItem({ icon, label, variant, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium",
+        "transition-all duration-150",
+        variant === "destructive"
+          ? "text-destructive hover:bg-destructive/10"
+          : "text-foreground/80 hover:bg-secondary/80 hover:text-foreground",
+      )}
+    >
+      <span className={cn(
+        "inline-flex h-6 w-6 items-center justify-center rounded-md shrink-0",
+        variant === "destructive"
+          ? "bg-destructive/10 text-destructive"
+          : "bg-secondary/60 text-muted-foreground",
+      )}>
+        {icon}
+      </span>
+      {label}
+    </button>
+  );
+}
+
+/* ───────────────────────── Tooltip ───────────────────────── */
+
+function Tooltip({ label, children }) {
+  const [show, setShow] = useState(false);
+  const timeoutRef = useRef(null);
+
+  const handleEnter = () => {
+    timeoutRef.current = setTimeout(() => setShow(true), 500);
+  };
+  const handleLeave = () => {
+    clearTimeout(timeoutRef.current);
+    setShow(false);
+  };
+
+  return (
+    <div
+      className="relative inline-flex"
+      onMouseEnter={handleEnter}
+      onMouseLeave={handleLeave}
+    >
+      {children}
+      <AnimatePresence>
+        {show && (
+          <motion.span
+            initial={{ opacity: 0, y: 4, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 2, scale: 0.96 }}
+            transition={{ duration: 0.12 }}
+            className="absolute -bottom-9 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap rounded-lg bg-foreground/90 px-2.5 py-1 text-[11px] font-medium text-background shadow-lg pointer-events-none"
+          >
+            {label}
+            <span className="absolute -top-[3px] left-1/2 -translate-x-1/2 h-1.5 w-1.5 rotate-45 bg-foreground/90" />
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/* ───────────────────────── Context Menu (Right-Click) ───────────────────────── */
+
+function ContextMenu({
+  x,
+  y,
+  file,
+  onClose,
+  onRename,
+  onDownload,
+  onShare,
+  onStar,
+  onCopyLink,
+  onDelete,
+}) {
+  const menuRef = useRef(null);
+
+  // Adjust position so menu doesn't overflow viewport
+  const [position, setPosition] = useState({ x, y });
+
+  useEffect(() => {
+    if (menuRef.current) {
+      const rect = menuRef.current.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+
+      let adjustedX = x;
+      let adjustedY = y;
+
+      if (x + rect.width > vw - 12) adjustedX = vw - rect.width - 12;
+      if (y + rect.height > vh - 12) adjustedY = vh - rect.height - 12;
+      if (adjustedX < 12) adjustedX = 12;
+      if (adjustedY < 12) adjustedY = 12;
+
+      setPosition({ x: adjustedX, y: adjustedY });
+    }
+  }, [x, y]);
+
+  return createPortal(
+    <motion.div
+      ref={menuRef}
+      initial={{ opacity: 0, scale: 0.92 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.92 }}
+      transition={{ duration: 0.12, ease: [0.22, 1, 0.36, 1] }}
+      style={{ left: position.x, top: position.y }}
+      className={cn(
+        "fixed z-[200] w-52 origin-top-left",
+        "rounded-xl border border-border bg-popover p-1.5",
+        "shadow-elegant dark:shadow-[0_16px_48px_-12px_rgba(0,0,0,0.6)]",
+        "backdrop-blur-xl",
+      )}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* File info header */}
+      <div className="px-2.5 py-2 mb-1">
+        <p className="text-xs font-semibold text-foreground truncate">
+          {file.name}
+        </p>
+        <p className="text-[10px] text-muted-foreground mt-0.5">
+          {file.size} {file.size && file.modifiedAt && "·"} {file.modifiedAt}
+        </p>
+      </div>
+
+      <div className="h-px bg-border/60 mb-1.5" />
+
+      {/* Actions */}
+      <DropdownItem
+        icon={<Pencil className="h-3.5 w-3.5" />}
+        label="Rename"
+        onClick={onRename}
+      />
+
+      {!file.isDirectory && (
+        <DropdownItem
+          icon={<Download className="h-3.5 w-3.5" />}
+          label="Download"
+          onClick={onDownload}
+        />
+      )}
+
+      <DropdownItem
+        icon={<Share2 className="h-3.5 w-3.5" />}
+        label="Share"
+        onClick={onShare}
+      />
+
+      <DropdownItem
+        icon={<Star className={cn("h-3.5 w-3.5", file.starred && "fill-amber-400 text-amber-400")} />}
+        label={file.starred ? "Remove star" : "Add star"}
+        onClick={onStar}
+      />
+
+      <DropdownItem
+        icon={<Copy className="h-3.5 w-3.5" />}
+        label="Copy link"
+        onClick={onCopyLink}
+      />
+
+      <div className="my-1.5 h-px bg-border/60" />
+
+      <DropdownItem
+        icon={<Trash2 className="h-3.5 w-3.5" />}
+        label={file.isDirectory ? "Delete folder" : "Move to trash"}
+        variant="destructive"
+        onClick={onDelete}
+      />
+    </motion.div>,
+    document.body,
   );
 }

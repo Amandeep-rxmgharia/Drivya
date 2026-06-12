@@ -152,6 +152,48 @@ export const downloadFile = async (req, res, next) => {
   }
 };
 
+// ─── Rename File ─────────────────────────────────────────────────
+export const renameFile = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+    const { name } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ message: "File name is required." });
+    }
+
+    const trimmedName = name.trim();
+
+    // Find the file first to get its directoryId
+    const file = await File.findOne({ _id: id, userId, isTrashed: false });
+    if (!file) {
+      return res.status(404).json({ message: "File not found." });
+    }
+
+    // Check for duplicate name in the same directory
+    const duplicate = await File.findOne({
+      userId,
+      directoryId: file.directoryId,
+      originalName: trimmedName,
+      _id: { $ne: id },
+    }).lean();
+
+    if (duplicate) {
+      return res.status(409).json({
+        message: `A file named "${trimmedName}" already exists in this directory.`,
+      });
+    }
+
+    file.originalName = trimmedName;
+    await file.save();
+
+    return res.json({ message: "File renamed successfully.", file });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // ─── Soft Delete (Move to Trash) ─────────────────────────────────
 export const trashFile = async (req, res, next) => {
   try {

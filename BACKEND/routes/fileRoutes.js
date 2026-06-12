@@ -2,6 +2,7 @@ import express from "express";
 import {
   uploadFiles,
   downloadFile,
+  renameFile,
   trashFile,
   restoreFile,
   listTrash,
@@ -9,6 +10,7 @@ import {
   permanentDeleteFile,
   restoreAllFiles,
 } from "../controllers/fileController.js";
+import { handleValidationErrors } from "../middlewares/validators.js";
 import { authenticate } from "../middlewares/authMiddleware.js";
 import { uploadFiles as uploadMiddleware } from "../middlewares/uploadMiddleware.js";
 
@@ -20,6 +22,7 @@ router.use(authenticate);
 // ─── File Routes ─────────────────────────────────────────────────
 router.post("/upload", uploadMiddleware, uploadFiles);
 router.get("/:id/download", downloadFile);
+router.patch("/:id/rename", renameFile);
 
 // Trash operations
 router.get("/trash", listTrash);

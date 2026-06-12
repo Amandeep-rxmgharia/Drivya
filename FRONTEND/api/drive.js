@@ -96,6 +96,16 @@ export const downloadFile = async (fileId, fileName) => {
 };
 
 /**
+ * Rename a file.
+ * @param {string} fileId
+ * @param {string} name
+ */
+export const renameFile = async (fileId, name) => {
+  const response = await api.patch(`/api/files/${fileId}/rename`, { name });
+  return response.data;
+};
+
+/**
  * Move a file to trash (soft delete).
  * @param {string} fileId
  */
