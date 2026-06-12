@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
 import {
   AlertTriangle,
+  AlertCircle,
   ArrowUpDown,
   ChevronDown,
   Clock,
@@ -19,6 +20,7 @@ import {
   Trash2,
   Undo2,
   X,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { detectFileKind } from "@/lib/file-types";
@@ -29,123 +31,13 @@ import {
   chip,
 } from "@/components/dashboard/dashboard-tokens";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
-
-/* ───────────────────────── Mock Data ───────────────────────── */
-
-const INITIAL_TRASH = [
-  {
-    id: "tr1",
-    name: "old-proposal-draft.docx",
-    size: "2.4 MB",
-    deletedAt: new Date(Date.now() - 1 * 60 * 60 * 1000),
-    kind: "document",
-    originalPath: "My Drive / Projects",
-  },
-  {
-    id: "tr2",
-    name: "unused-banner.png",
-    size: "6.8 MB",
-    deletedAt: new Date(Date.now() - 3 * 60 * 60 * 1000),
-    kind: "image",
-    originalPath: "My Drive / Marketing",
-  },
-  {
-    id: "tr3",
-    name: "temp-archive.zip",
-    size: "340 MB",
-    deletedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-    kind: "archive",
-    originalPath: "My Drive / Backups",
-  },
-  {
-    id: "tr4",
-    name: "outdated-deck.pptx",
-    size: "18.6 MB",
-    deletedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-    kind: "document",
-    originalPath: "My Drive / Presentations",
-  },
-  {
-    id: "tr5",
-    name: "Screenshot-2025-12.png",
-    size: "1.2 MB",
-    deletedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
-    kind: "image",
-    originalPath: "My Drive / Screenshots",
-  },
-  {
-    id: "tr6",
-    name: "test-video-raw.mp4",
-    size: "512 MB",
-    deletedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-    kind: "video",
-    originalPath: "My Drive / Videos",
-  },
-  {
-    id: "tr7",
-    name: "deprecated-api.ts",
-    size: "8 KB",
-    deletedAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000),
-    kind: "code",
-    originalPath: "My Drive / Dev",
-  },
-  {
-    id: "tr8",
-    name: "draft-notes.md",
-    size: "4 KB",
-    deletedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-    kind: "document",
-    originalPath: "My Drive / Notes",
-  },
-  {
-    id: "tr9",
-    name: "legacy-icons",
-    size: "86 items",
-    deletedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
-    kind: "folder",
-    originalPath: "My Drive / Design",
-  },
-  {
-    id: "tr10",
-    name: "recording-jan.mp3",
-    size: "24 MB",
-    deletedAt: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000),
-    kind: "audio",
-    originalPath: "My Drive / Audio",
-  },
-  {
-    id: "tr11",
-    name: "old-photo-batch.jpg",
-    size: "14 MB",
-    deletedAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000),
-    kind: "image",
-    originalPath: "My Drive / Photos",
-  },
-  {
-    id: "tr12",
-    name: "rejected-wireframe.fig",
-    size: "42 MB",
-    deletedAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000),
-    kind: "image",
-    originalPath: "My Drive / Design",
-  },
-  {
-    id: "tr13",
-    name: "backup-config.yml",
-    size: "2 KB",
-    deletedAt: new Date(Date.now() - 22 * 24 * 60 * 60 * 1000),
-    kind: "code",
-    originalPath: "My Drive / Dev",
-  },
-  {
-    id: "tr14",
-    name: "unused-exports.zip",
-    size: "128 MB",
-    deletedAt: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000),
-    kind: "archive",
-    originalPath: "My Drive / Exports",
-  },
-];
+import {
+  listTrash,
+  restoreFile,
+  permanentDeleteFile,
+  emptyTrash,
+  trashFile,
+} from "../../api/drive.js";
 
 /* ───────────────────────── Helpers ───────────────────────── */
 
@@ -172,18 +64,13 @@ function daysUntilAutoDelete(deletedAt) {
   return Math.max(0, AUTO_DELETE_DAYS - elapsed);
 }
 
-function parseSizeToMB(sizeStr) {
-  const num = parseFloat(sizeStr);
-  if (sizeStr.includes("GB")) return num * 1024;
-  if (sizeStr.includes("MB")) return num;
-  if (sizeStr.includes("KB")) return num / 1024;
-  return 0;
-}
-
-function formatSize(mb) {
-  if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
-  if (mb >= 1) return `${mb.toFixed(1)} MB`;
-  return `${(mb * 1024).toFixed(0)} KB`;
+function formatSize(bytes) {
+  if (bytes == null) return "";
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  if (bytes < 1024 * 1024 * 1024)
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  return (bytes / (1024 * 1024 * 1024)).toFixed(2) + " GB";
 }
 
 const CATEGORY_MAP = {
@@ -268,7 +155,7 @@ const StatMini = memo(function StatMini({
 
 function TrashHero({ files }) {
   const totalItems = files.length;
-  const totalSizeMB = files.reduce((sum, f) => sum + parseSizeToMB(f.size), 0);
+  const totalSizeBytes = files.reduce((sum, f) => sum + (f.rawSize || 0), 0);
   const expiringCount = files.filter(
     (f) => daysUntilAutoDelete(f.deletedAt) <= 7,
   ).length;
@@ -301,7 +188,7 @@ function TrashHero({ files }) {
                 </span>{" "}
                 using{" "}
                 <span className="font-semibold text-foreground">
-                  {formatSize(totalSizeMB)}
+                  {formatSize(totalSizeBytes)}
                 </span>
                 . Restore or permanently delete files here.
               </>
@@ -326,7 +213,7 @@ function TrashHero({ files }) {
           <StatMini
             icon={FileStack}
             label="Space used"
-            value={formatSize(totalSizeMB)}
+            value={formatSize(totalSizeBytes)}
           />
         </div>
       </div>
@@ -796,7 +683,10 @@ function EmptyState({ hasFilters }) {
 /* ───────────────────────── Main Page ───────────────────────── */
 
 export default function TrashFiles() {
-  const [files, setFiles] = useState(INITIAL_TRASH);
+  const [files, setFiles] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   const [activeFilter, setActiveFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("deleted");
@@ -809,34 +699,93 @@ export default function TrashFiles() {
   // Confirm modal state
   const [confirmAction, setConfirmAction] = useState(null); // { title, description, confirmLabel, onConfirm }
 
+  /* ── Fetch Live Data ── */
+
+  const fetchTrash = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await listTrash();
+      const normalized = (data.files || []).map((f) => ({
+        id: f._id,
+        name: f.originalName,
+        rawSize: f.size,
+        size: formatSize(f.size),
+        deletedAt: new Date(f.trashedAt || Date.now()),
+        kind: detectFileKind(f.originalName, f.mimeType || ""),
+        originalPath: "My Drive",
+        _raw: f,
+      }));
+      setFiles(normalized);
+    } catch (err) {
+      console.error("Failed to fetch trash:", err);
+      setError(err.response?.data?.message || "Failed to load trashed files.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchTrash();
+  }, [fetchTrash]);
+
   /* ── Actions ── */
 
   const handleRestore = useCallback(
-    (id) => {
+    async (id) => {
       const file = files.find((f) => f.id === id);
       if (!file) return;
-      setFiles((prev) => prev.filter((f) => f.id !== id));
-      setToast({
-        message: (
-          <>
-            Restored <span className="font-semibold">{file.name}</span> to{" "}
-            {file.originalPath}
-          </>
-        ),
-        undoData: file,
-      });
+      try {
+        await restoreFile(id);
+        setFiles((prev) => prev.filter((f) => f.id !== id));
+        
+        window.dispatchEvent(
+          new CustomEvent("add-drivya-toast", {
+            detail: {
+              message: `Restored "${file.name}" successfully!`,
+              type: "success"
+            }
+          })
+        );
+        
+        setToast({
+          message: (
+            <>
+              Restored <span className="font-semibold">{file.name}</span> to{" "}
+              {file.originalPath}
+            </>
+          ),
+          undoData: file,
+        });
+      } catch (err) {
+        console.error("Failed to restore file:", err);
+        window.dispatchEvent(
+          new CustomEvent("add-drivya-toast", {
+            detail: {
+              message: err.response?.data?.message || "Failed to restore file.",
+              type: "error"
+            }
+          })
+        );
+      }
     },
     [files],
   );
 
-  const handleUndoRestore = useCallback(() => {
+  const handleUndoRestore = useCallback(async () => {
     if (!toast?.undoData) return;
-    setFiles((prev) => {
-      const newList = [...prev, toast.undoData];
-      newList.sort((a, b) => b.deletedAt - a.deletedAt);
-      return newList;
-    });
-    setToast(null);
+    try {
+      const file = toast.undoData;
+      await trashFile(file.id);
+      setFiles((prev) => {
+        const newList = [...prev, file];
+        newList.sort((a, b) => b.deletedAt - a.deletedAt);
+        return newList;
+      });
+      setToast(null);
+    } catch (err) {
+      console.error("Failed to undo restore:", err);
+    }
   }, [toast]);
 
   const handleDeletePermanently = useCallback((file) => {
@@ -844,18 +793,32 @@ export default function TrashFiles() {
       title: "Delete permanently?",
       description: `"${file.name}" will be permanently removed. This action cannot be undone.`,
       confirmLabel: "Delete forever",
-      onConfirm: () => {
-        setFiles((prev) => prev.filter((f) => f.id !== file.id));
-        setConfirmAction(null);
-        setToast({
-          message: (
-            <>
-              Permanently deleted{" "}
-              <span className="font-semibold">{file.name}</span>
-            </>
-          ),
-          undoData: null,
-        });
+      onConfirm: async () => {
+        try {
+          await permanentDeleteFile(file.id);
+          setFiles((prev) => prev.filter((f) => f.id !== file.id));
+          setConfirmAction(null);
+          
+          window.dispatchEvent(
+            new CustomEvent("add-drivya-toast", {
+              detail: {
+                message: `Permanently deleted "${file.name}"`,
+                type: "success"
+              }
+            })
+          );
+        } catch (err) {
+          console.error("Failed to delete permanently:", err);
+          setConfirmAction(null);
+          window.dispatchEvent(
+            new CustomEvent("add-drivya-toast", {
+              detail: {
+                message: err.response?.data?.message || "Failed to delete file.",
+                type: "error"
+              }
+            })
+          );
+        }
       },
     });
   }, []);
@@ -866,36 +829,72 @@ export default function TrashFiles() {
       title: "Empty trash?",
       description: `All ${files.length} item${files.length !== 1 ? "s" : ""} will be permanently deleted. This action cannot be undone.`,
       confirmLabel: "Empty trash",
-      onConfirm: () => {
-        setFiles([]);
-        setConfirmAction(null);
-        setToast({
-          message: "Trash emptied permanently",
-          undoData: null,
-        });
+      onConfirm: async () => {
+        try {
+          await emptyTrash();
+          setFiles([]);
+          setConfirmAction(null);
+          window.dispatchEvent(
+            new CustomEvent("add-drivya-toast", {
+              detail: {
+                message: "Trash emptied successfully!",
+                type: "success"
+              }
+            })
+          );
+        } catch (err) {
+          console.error("Failed to empty trash:", err);
+          setConfirmAction(null);
+          window.dispatchEvent(
+            new CustomEvent("add-drivya-toast", {
+              detail: {
+                message: err.response?.data?.message || "Failed to empty trash.",
+                type: "error"
+              }
+            })
+          );
+        }
       },
     });
   }, [files.length]);
 
-  const handleRestoreAll = useCallback(() => {
+  const handleRestoreAll = useCallback(async () => {
     if (files.length === 0) return;
     const backup = [...files];
-    setFiles([]);
-    setToast({
-      message: (
-        <>
-          Restored <span className="font-semibold">{backup.length} items</span>{" "}
-          to their original locations
-        </>
-      ),
-      undoData: backup,
-    });
-  }, [files]);
+    try {
+      await Promise.all(backup.map((f) => restoreFile(f.id)));
+      setFiles([]);
+      window.dispatchEvent(
+        new CustomEvent("add-drivya-toast", {
+          detail: {
+            message: `Restored ${backup.length} items successfully!`,
+            type: "success"
+          }
+        })
+      );
+    } catch (err) {
+      console.error("Failed to restore all files:", err);
+      window.dispatchEvent(
+        new CustomEvent("add-drivya-toast", {
+          detail: {
+            message: "Failed to restore some files.",
+            type: "error"
+          }
+        })
+      );
+      fetchTrash();
+    }
+  }, [files, fetchTrash]);
 
-  const handleUndoRestoreAll = useCallback(() => {
+  const handleUndoRestoreAll = useCallback(async () => {
     if (!toast?.undoData || !Array.isArray(toast.undoData)) return;
-    setFiles(toast.undoData);
-    setToast(null);
+    try {
+      await Promise.all(toast.undoData.map((f) => trashFile(f.id)));
+      setFiles(toast.undoData);
+      setToast(null);
+    } catch (err) {
+      console.error("Failed to undo restore all files:", err);
+    }
   }, [toast]);
 
   /* ── Filtered & sorted files ── */
@@ -921,7 +920,7 @@ export default function TrashFiles() {
     list.sort((a, b) => {
       if (sortBy === "name") return a.name.localeCompare(b.name);
       if (sortBy === "size") {
-        return parseSizeToMB(b.size) - parseSizeToMB(a.size);
+        return (b.rawSize || 0) - (a.rawSize || 0);
       }
       if (sortBy === "expiry") {
         return (
@@ -1141,7 +1140,23 @@ export default function TrashFiles() {
 
         {/* Category groups */}
         <div className="divide-y divide-border/60">
-          {grouped.length === 0 ? (
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-20">
+              <Loader2 className="h-10 w-10 animate-spin text-primary" />
+              <p className="mt-4 text-sm text-muted-foreground">Loading trash contents...</p>
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center py-20 text-destructive text-center px-4">
+              <AlertCircle className="h-10 w-10 mx-auto" />
+              <p className="mt-4 text-sm font-medium">{error}</p>
+              <button
+                onClick={fetchTrash}
+                className="mt-4 rounded-xl border border-border bg-secondary/50 px-4 py-2 text-xs font-semibold hover:bg-secondary transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          ) : grouped.length === 0 ? (
             <EmptyState hasFilters={hasFilters} />
           ) : (
             grouped.map((group, gi) => (

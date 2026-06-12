@@ -66,14 +66,11 @@ export function setTokenCookies(res, accessToken, refreshToken) {
     secure: isProduction,
     sameSite: isProduction ? "strict" : "lax",
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    path: "/auth/refresh", // only sent on refresh endpoint
+    // path: "/auth/refresh", // only sent on refresh endpoint
   });
 }
 
-/**
- * Clear auth cookies on logout.
- */
 export function clearTokenCookies(res) {
   res.clearCookie("accessToken");
-  res.clearCookie("refreshToken", { path: "/auth/refresh" });
+  res.clearCookie("refreshToken");
 }

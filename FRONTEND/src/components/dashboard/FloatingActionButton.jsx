@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import {
   Plus,
   X,
@@ -11,6 +12,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { easeSmooth } from "@/lib/motion-presets";
+import { createDirectory, uploadFiles } from "../../../api/drive.js";
 
 /* ───────────────────────── Create Folder Modal ───────────────────────── */
 
@@ -18,12 +20,18 @@ function CreateFolderModal({ onClose }) {
   const [folderName, setFolderName] = useState("");
   const [status, setStatus] = useState("idle"); // idle | creating | success | error
   const inputRef = useRef(null);
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!folderName.trim()) return;
     setStatus("creating");
-    // Simulate folder creation
-    setTimeout(() => {
+    try {
+      const isDrivePage = location.pathname.startsWith("/dashboard/drive");
+      const parentDirId = isDrivePage ? (searchParams.get("dir") || null) : null;
+
+      await createDirectory({ name: folderName.trim(), parentDirId });
       setStatus("success");
       
       window.dispatchEvent(
@@ -38,8 +46,17 @@ function CreateFolderModal({ onClose }) {
         })
       );
 
+      if (isDrivePage) {
+        window.dispatchEvent(new CustomEvent("refresh-drive"));
+      } else {
+        navigate("/dashboard/drive");
+      }
+
       setTimeout(() => onClose(), 1200);
-    }, 1000);
+    } catch (err) {
+      console.error("Failed to create folder:", err);
+      setStatus("error");
+    }
   };
 
   return (
@@ -129,7 +146,7 @@ function CreateFolderModal({ onClose }) {
                 className="mt-4 flex items-center gap-2 text-sm font-medium text-destructive"
               >
                 <AlertCircle className="h-4 w-4" />
-                Failed to create folder. Please try again.
+                Failed to create folder. A folder with this name may already exist.
               </motion.div>
             )}
           </AnimatePresence>
@@ -176,7 +193,11 @@ function UploadFilesModal({ onClose }) {
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({});
+  const [errorMessage, setErrorMessage] = useState("");
   const fileInputRef = useRef(null);
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const handleFiles = useCallback((fileList) => {
     const newFiles = Array.from(fileList).map((f) => ({
@@ -207,34 +228,27 @@ function UploadFilesModal({ onClose }) {
     return (bytes / (1024 * 1024)).toFixed(1) + " MB";
   };
 
-  const handleUpload = () => {
+  const handleUpload = async () => {
     if (files.length === 0) return;
     setUploading(true);
+    setErrorMessage("");
 
-    // Simulate upload progress
-    files.forEach((f, i) => {
-      let progress = 0;
-      const interval = setInterval(
-        () => {
-          progress += Math.random() * 25 + 10;
-          if (progress >= 100) {
-            progress = 100;
-            clearInterval(interval);
-          }
-          setUploadProgress((prev) => ({
-            ...prev,
-            [f.id]: Math.min(progress, 100),
-          }));
-        },
-        300 + i * 100,
-      );
-    });
+    try {
+      const isDrivePage = location.pathname.startsWith("/dashboard/drive");
+      const parentDirId = isDrivePage ? (searchParams.get("dir") || "") : "";
+      const fileObjects = files.map((f) => f.file);
 
-    // Simulate completion
-    setTimeout(() => {
+      // Single call to uploadFiles API with progress reporting
+      await uploadFiles(parentDirId, fileObjects, (progress) => {
+        const updatedProgress = {};
+        files.forEach((f) => {
+          updatedProgress[f.id] = progress;
+        });
+        setUploadProgress(updatedProgress);
+      });
+
       setUploading(false);
 
-      const fileNames = files.map((f) => f.name).join(", ");
       const totalSize = files.reduce((acc, f) => acc + f.size, 0);
       const formattedSize = formatSize(totalSize);
 
@@ -252,8 +266,21 @@ function UploadFilesModal({ onClose }) {
         })
       );
 
+      if (isDrivePage) {
+        window.dispatchEvent(new CustomEvent("refresh-drive"));
+      } else {
+        navigate("/dashboard/drive");
+      }
+
       setTimeout(() => onClose(), 800);
-    }, 2500);
+    } catch (err) {
+      console.error("Upload failed:", err);
+      setUploading(false);
+      setUploadProgress({});
+      setErrorMessage(
+        err.response?.data?.message || "Upload failed. Please ensure file sizes are within 50MB and quota is not exceeded."
+      );
+    }
   };
 
   const allDone =
@@ -287,7 +314,7 @@ function UploadFilesModal({ onClose }) {
         transition={{ type: "tween", duration: 0.35, ease: easeSmooth }}
       >
         {/* Ambient glow */}
-        <div className="absolute -top-20 -left-20 h-40 w-40 rounded-full bg-ambient-primary blur-3xl opacity-60 pointer-events-none" />
+        <div className="absolute -top-20 -right-20 h-40 w-40 rounded-full bg-ambient-primary blur-3xl opacity-60 pointer-events-none" />
 
         <div className="relative p-6">
           {/* Header */}
@@ -429,7 +456,7 @@ function UploadFilesModal({ onClose }) {
             )}
           </AnimatePresence>
 
-          {/* All done message */}
+          {/* Messages */}
           <AnimatePresence>
             {allDone && (
               <motion.div
@@ -439,6 +466,16 @@ function UploadFilesModal({ onClose }) {
               >
                 <CheckCircle2 className="h-4 w-4" />
                 All files uploaded successfully!
+              </motion.div>
+            )}
+            {errorMessage && (
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-4 flex items-start gap-2 text-sm font-medium text-destructive"
+              >
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>{errorMessage}</span>
               </motion.div>
             )}
           </AnimatePresence>
@@ -484,6 +521,7 @@ function UploadFilesModal({ onClose }) {
     </motion.div>
   );
 }
+
 
 /* ───────────────────────── FAB Component ───────────────────────── */
 

@@ -42,6 +42,16 @@ const userSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: "Directory",
     },
+    storageUsed: {
+      type: Number,
+      default: 0,
+      min: [0, "Storage used cannot be negative"],
+    },
+    storageLimit: {
+      type: Number,
+      default: 1 * 1024 * 1024 * 1024, // 1 GB default
+      min: [0, "Storage limit cannot be negative"],
+    },
   },
   {
     strict: "throw",

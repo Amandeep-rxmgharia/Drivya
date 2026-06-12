@@ -30,19 +30,22 @@ export const register = async (req, res, next) => {
       );
 
       // Create root directory linked to user
+      const rootDirId = new Types.ObjectId();
       await Directory.create(
         [
           {
-            _id: new Types.ObjectId(),
+            _id: rootDirId,
             name: `root@${email}`,
             userId: user._id,
+            path: [],
+            depth: 0,
           },
         ],
         { session },
       );
 
       // Update user with root directory reference
-      user.rootDirId = user._id;
+      user.rootDirId = rootDirId;
       await user.save({ session });
 
       // Generate tokens
@@ -56,6 +59,7 @@ export const register = async (req, res, next) => {
           id: user._id,
           name: user.name,
           email: user.email,
+          rootDirId: rootDirId,
         },
       });
     });
@@ -89,7 +93,6 @@ export const login = async (req, res, next) => {
     if (!user) {
       return res.status(401).json({ message: "Invalid credentials." });
     }
-
     // Securely compare passwords using bcrypt
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
@@ -107,6 +110,7 @@ export const login = async (req, res, next) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        rootDirId: user.rootDirId,
       },
     });
   } catch (err) {
@@ -124,7 +128,6 @@ export const refresh = async (req, res, next) => {
 
   try {
     const decoded = verifyRefreshToken(token);
-
     // Verify user still exists
     const user = await User.findById(decoded.id).lean().select("_id");
     if (!user) {

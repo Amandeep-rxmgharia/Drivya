@@ -11,6 +11,11 @@ export function authenticate(req, res, next) {
     req.headers.authorization?.replace("Bearer ", "");
 
   if (!token) {
+    if (req.cookies?.refreshToken) {
+      return res
+        .status(401)
+        .json({ message: "Token expired.", code: "TOKEN_EXPIRED" });
+    }
     return res.status(401).json({ message: "Authentication required." });
   }
 

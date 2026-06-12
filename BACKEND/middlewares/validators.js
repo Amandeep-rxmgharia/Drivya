@@ -69,3 +69,28 @@ export function handleValidationErrors(req, res, next) {
   }
   next();
 }
+
+// ─── Directory Validators ────────────────────────────────────────
+
+const directoryNameChain = body("name")
+  .trim()
+  .notEmpty()
+  .withMessage("Directory name is required.")
+  .isLength({ min: 1, max: 255 })
+  .withMessage("Directory name must be between 1 and 255 characters.")
+  .not()
+  .matches(/[\/\\:*?"<>|]/)
+  .withMessage(
+    'Directory name cannot contain special characters: / \\ : * ? " < > |',
+  );
+
+/**
+ * Validation chain for creating a directory.
+ */
+export const validateCreateDirectory = [directoryNameChain];
+
+/**
+ * Validation chain for renaming a directory.
+ */
+export const validateRenameDirectory = [directoryNameChain];
+

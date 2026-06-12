@@ -37,6 +37,7 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { chip, iconBtn, primaryBtn, Kbd } from "./dashboard-tokens.jsx";
 import { FloatingActionButton } from "./FloatingActionButton.jsx";
 import { AiAssistantPanel } from "./AiAssistantPanel.jsx";
+import { getCurrentUser } from "../../../api/auth.js";
 
 /* ───────────────────────── Sidebar ───────────────────────── */
 
@@ -49,7 +50,16 @@ const navMain = [
   { icon: Trash2, label: "Trash", to: "trash" },
 ];
 
-function Sidebar({ collapsed, onClose, mobileOpen }) {
+function formatBytes(bytes) {
+  if (bytes == null) return "0 B";
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  if (bytes < 1024 * 1024 * 1024)
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  return (bytes / (1024 * 1024 * 1024)).toFixed(1) + " GB";
+}
+
+function Sidebar({ collapsed, onClose, mobileOpen, userProfile }) {
   const location = useLocation();
   // Extract the active segment from URL: /dashboard/home → "home"
   const activeSegment =
@@ -132,13 +142,21 @@ function Sidebar({ collapsed, onClose, mobileOpen }) {
               </span>
               <span className={chip}>
                 <Sparkles className="h-3 w-3 text-primary" />
-                Pro
+                {userProfile?.tier || "Free"}
               </span>
             </div>
             <div className="mt-3 h-1.5 w-full rounded-full bg-secondary/60 overflow-hidden">
               <motion.div
                 initial={{ width: 0 }}
-                animate={{ width: "62%" }}
+                animate={{
+                  width: `${Math.min(
+                    100,
+                    Math.round(
+                      ((userProfile?.storageUsed || 0) * 100) /
+                        (userProfile?.storageLimit || 1024 * 1024 * 1024)
+                    )
+                  )}%`,
+                }}
                 transition={{
                   type: "tween",
                   duration: 1.1,
@@ -149,7 +167,10 @@ function Sidebar({ collapsed, onClose, mobileOpen }) {
               />
             </div>
             <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
-              <span>156 GB of 250 GB</span>
+              <span>
+                {formatBytes(userProfile?.storageUsed || 0)} of{" "}
+                {formatBytes(userProfile?.storageLimit || 1024 * 1024 * 1024)}
+              </span>
               <Link to='/dashboard/payment?plan=pro' onClick={onClose} className="font-semibold text-foreground hover:text-primary transition-colors">
                 Upgrade
               </Link>
@@ -1003,6 +1024,33 @@ export function DashboardLayout() {
   }, [userProfile]);
 
   useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const data = await getCurrentUser();
+        if (data?.user) {
+          setUserProfile((prev) => ({
+            ...prev,
+            id: data.user._id,
+            name: data.user.name,
+            displayName: data.user.name,
+            email: data.user.email,
+            storageUsed: data.user.storageUsed || 0,
+            storageLimit: data.user.storageLimit || 1024 * 1024 * 1024,
+            tier: data.user.storageLimit > 2 * 1024 * 1024 * 1024 ? "Pro" : "Free",
+          }));
+        }
+      } catch (err) {
+        console.error("Failed to fetch user profile:", err);
+      }
+    };
+    fetchUser();
+
+    const handleRefresh = () => fetchUser();
+    window.addEventListener("refresh-drive", handleRefresh);
+    return () => window.removeEventListener("refresh-drive", handleRefresh);
+  }, []);
+
+  useEffect(() => {
     const handleOpenAi = (e) => {
       setAiAssistantOpen(true);
       if (e.detail) {
@@ -1029,6 +1077,7 @@ export function DashboardLayout() {
           collapsed={collapsed}
           mobileOpen={mobileOpen}
           onClose={() => setMobileOpen(false)}
+          userProfile={userProfile}
         />
         <motion.div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <Topbar

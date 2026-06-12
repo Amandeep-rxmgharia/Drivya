@@ -5,12 +5,18 @@ import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
 import authRoutes from "./routes/authRoutes.js";
+import directoryRoutes from "./routes/directoryRoutes.js";
+import fileRoutes from "./routes/fileRoutes.js";
 import { connectDb } from "./config/db.js";
+import { ensureStorageRoot } from "./services/storageService.js";
 
 const { PORT = 3000, CORS_ORIGIN = "http://localhost:5173", NODE_ENV } = process.env;
 
 // ─── Connect to Database ─────────────────────────────────────
 await connectDb();
+
+// ─── Ensure Storage Directory Exists ─────────────────────────
+await ensureStorageRoot();
 
 const app = express();
 
@@ -29,7 +35,7 @@ app.use(
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // 100 requests per window per IP
+    max: 1000, // 100 requests per window per IP
     standardHeaders: true,
     legacyHeaders: false,
   }),
@@ -41,6 +47,8 @@ app.use(cookieParser());
 
 // ─── Routes ──────────────────────────────────────────────────
 app.use("/auth", authRoutes);
+app.use("/api/directories", directoryRoutes);
+app.use("/api/files", fileRoutes);
 
 // ─── Global Error Handler ────────────────────────────────────
 app.use((err, req, res, next) => {

@@ -4,11 +4,15 @@ import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowUpDown,
   ChevronDown,
+  ChevronRight,
   FileStack,
   FolderOpen,
+  Home,
   LayoutGrid,
   List,
   UploadCloud,
+  AlertCircle,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { easeSmooth } from "@/lib/motion-presets";
@@ -17,164 +21,216 @@ import { ShareModal } from "./ShareModal";
 
 const card = "rounded-2xl glass shadow-elegant";
 
-export const RECENT_FILES = [
-  {
-    id: "1",
-    name: "Brand Guidelines v3.pdf",
-    size: "4.2 MB",
-    modifiedAt: "May 12, 2026",
-    owner: "Amelia M.",
-    starred: true,
-  },
-  {
-    id: "2",
-    name: "Q4-keynote-final.mp4",
-    size: "128 MB",
-    modifiedAt: "May 12, 2026",
-    owner: "Lukas R.",
-    shared: true,
-  },
-  {
-    id: "3",
-    name: "Hero-shot-005.png",
-    size: "8.1 MB",
-    modifiedAt: "May 12, 2026",
-    owner: "Amelia M.",
-    starred: true,
-    shared: true,
-  },
-  {
-    id: "4",
-    name: "investor-deck.key",
-    size: "12.4 MB",
-    modifiedAt: "May 12, 2026",
-    owner: "Maya P.",
-    uploadProgress: 64,
-  },
-  {
-    id: "5",
-    name: "client-archives.zip",
-    size: "640 MB",
-    modifiedAt: "May 12, 2026",
-    owner: "Amelia M.",
-  },
-  {
-    id: "6",
-    name: "Design System",
-    size: "248 items",
-    modifiedAt: "May 11, 2026",
-    owner: "Team",
-    kind: "folder",
-    shared: true,
-  },
-  {
-    id: "7",
-    name: "api-routes.ts",
-    size: "24 KB",
-    modifiedAt: "May 10, 2026",
-    owner: "Dev",
-    kind: "code",
-  },
-  {
-    id: "8",
-    name: "podcast-ep12.mp3",
-    size: "48 MB",
-    modifiedAt: "May 9, 2026",
-    owner: "Marketing",
-    kind: "audio",
-  },
-  {
-    id: "9",
-    name: "launch-assets",
-    size: "1.2 GB",
-    modifiedAt: "May 8, 2026",
-    owner: "Design",
-    kind: "folder",
-  },
-];
-
 const SORT_OPTIONS = [
-  { id: "modified", label: "Modified" },
   { id: "name", label: "Name" },
+  { id: "modified", label: "Modified" },
   { id: "size", label: "Size" },
 ];
 
 const FILTER_OPTIONS = [
   { id: "all", label: "All" },
-  { id: "starred", label: "Starred" },
-  { id: "shared", label: "Shared" },
+  { id: "folders", label: "Folders" },
+  { id: "files", label: "Files" },
 ];
 
-export function FilesLayout({ files = RECENT_FILES, className, layoutHeader }) {
-  console.log(className);
-  console.log(layoutHeader);
-  console.log();
+/**
+ * Format bytes into human-readable size.
+ */
+function formatSize(bytes) {
+  if (bytes == null) return "";
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  if (bytes < 1024 * 1024 * 1024)
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  return (bytes / (1024 * 1024 * 1024)).toFixed(2) + " GB";
+}
+
+/**
+ * Format a Date/ISO string to a readable date.
+ */
+function formatDate(dateStr) {
+  if (!dateStr) return "";
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diff = now - date;
+
+  if (diff < 60_000) return "Just now";
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
+  });
+}
+
+/**
+ * Normalize backend directory/file data into the shape FileRow expects.
+ */
+function normalizeItems(directories = [], files = []) {
+  const dirs = directories.map((d) => ({
+    id: d._id,
+    name: d.name,
+    size: "",
+    modifiedAt: formatDate(d.updatedAt),
+    kind: "folder",
+    isDirectory: true,
+    _raw: d,
+  }));
+
+  const fls = files.map((f) => ({
+    id: f._id,
+    name: f.originalName,
+    size: formatSize(f.size),
+    rawSize: f.size,
+    modifiedAt: formatDate(f.updatedAt),
+    kind: undefined, // auto-detect from filename
+    isDirectory: false,
+    mimeType: f.mimeType,
+    _raw: f,
+  }));
+
+  return [...dirs, ...fls];
+}
+
+export function FilesLayout({
+  layoutHeader = "My Drive",
+  directories = [],
+  files = [],
+  breadcrumb = [],
+  currentDir = null,
+  isLoading = false,
+  error = null,
+  currentDirId = null,
+  onNavigate,
+  onBreadcrumbNav,
+  onRefresh,
+  onDownload,
+  onTrashFile,
+  onDeleteDir,
+  onRenameDir,
+  className,
+}) {
+  const allItems = useMemo(
+    () => normalizeItems(directories, files),
+    [directories, files],
+  );
+
   const [selectedId, setSelectedId] = useState(null);
   const [activeId, setActiveId] = useState(null);
-  const [starred, setStarred] = useState(() =>
-    Object.fromEntries(files.filter((f) => f.starred).map((f) => [f.id, true])),
-  );
-  const [shared, setShared] = useState(() =>
-    Object.fromEntries(files.filter((f) => f.shared).map((f) => [f.id, true])),
-  );
+  const [starred, setStarred] = useState({});
   const [sharingFile, setSharingFile] = useState(null);
-  const [sortBy, setSortBy] = useState("modified");
+  const [sortBy, setSortBy] = useState("name");
   const [filter, setFilter] = useState("all");
   const [view, setView] = useState("grid");
   const [sortOpen, setSortOpen] = useState(false);
-
-  const [deletedIds, setDeletedIds] = useState({});
   const [toastMessage, setToastMessage] = useState(null);
 
+  // Reset selection when directory changes
+  useEffect(() => {
+    setSelectedId(null);
+    setActiveId(null);
+  }, [currentDirId]);
+
+  // Filter & sort
   const visibleFiles = useMemo(() => {
-    let list = [...files].filter((f) => !deletedIds[f.id]);
-    if (filter === "starred")
-      list = list.filter((f) => starred[f.id] || f.starred);
-    if (filter === "shared")
-      list = list.filter((f) => shared[f.id] || f.shared);
+    let list = [...allItems];
+    if (filter === "folders") list = list.filter((f) => f.isDirectory);
+    if (filter === "files") list = list.filter((f) => !f.isDirectory);
+
     list.sort((a, b) => {
+      // Always put directories first
+      if (a.isDirectory && !b.isDirectory) return -1;
+      if (!a.isDirectory && b.isDirectory) return 1;
+
       if (sortBy === "name") return a.name.localeCompare(b.name);
-      if (sortBy === "size") return a.size.localeCompare(b.size);
-      return a.modifiedAt.localeCompare(b.modifiedAt);
+      if (sortBy === "size") return (a.rawSize || 0) - (b.rawSize || 0);
+      // modified
+      return (
+        new Date(b._raw?.updatedAt || 0) - new Date(a._raw?.updatedAt || 0)
+      );
     });
+
     return list;
-  }, [files, filter, sortBy, starred, shared, deletedIds]);
+  }, [allItems, filter, sortBy]);
 
-  const handleDownload = useCallback((id) => {
-    const file = files.find((f) => f.id === id);
-    if (file) {
-      setToastMessage(`Downloading "${file.name}"...`);
-    }
-  }, [files]);
-
-  const handleCopyLink = useCallback((id) => {
-    const file = files.find((f) => f.id === id);
-    if (file) {
-      const mockLink = `https://drivya.com/s/${file.id}`;
-      navigator.clipboard.writeText(mockLink)
-        .then(() => {
-          setToastMessage(`Link for "${file.name}" copied to clipboard!`);
-        })
-        .catch(() => {
-          setToastMessage(`Failed to copy link for "${file.name}".`);
-        });
-    }
-  }, [files]);
-
-  const handleDelete = useCallback((id) => {
-    const file = files.find((f) => f.id === id);
-    if (file) {
-      setDeletedIds((prev) => ({ ...prev, [id]: true }));
-      setToastMessage(`"${file.name}" moved to Trash.`);
-      if (selectedId === id) {
-        setSelectedId(null);
+  const handleItemClick = useCallback(
+    (id) => {
+      const item = allItems.find((f) => f.id === id);
+      if (item?.isDirectory && onNavigate) {
+        onNavigate(id);
+      } else {
+        setSelectedId(id);
+        setActiveId(id);
       }
-    }
-  }, [files, selectedId]);
+    },
+    [allItems, onNavigate],
+  );
 
+  const handleDownload = useCallback(
+    (id) => {
+      const file = allItems.find((f) => f.id === id);
+      if (file && !file.isDirectory && onDownload) {
+        onDownload(id, file.name);
+        setToastMessage(`Downloading "${file.name}"...`);
+      }
+    },
+    [allItems, onDownload],
+  );
+
+  const handleDelete = useCallback(
+    (id) => {
+      const item = allItems.find((f) => f.id === id);
+      if (!item) return;
+
+      if (item.isDirectory) {
+        onDeleteDir?.(id);
+        setToastMessage(`Folder "${item.name}" deleted.`);
+      } else {
+        onTrashFile?.(id);
+        setToastMessage(`"${item.name}" moved to Trash.`);
+      }
+
+      if (selectedId === id) setSelectedId(null);
+    },
+    [allItems, onDeleteDir, onTrashFile, selectedId],
+  );
+
+  const handleCopyLink = useCallback(
+    (id) => {
+      const file = allItems.find((f) => f.id === id);
+      if (file) {
+        const mockLink = `https://drivya.com/s/${file.id}`;
+        navigator.clipboard
+          .writeText(mockLink)
+          .then(() =>
+            setToastMessage(
+              `Link for "${file.name}" copied to clipboard!`,
+            ),
+          )
+          .catch(() =>
+            setToastMessage(`Failed to copy link for "${file.name}".`),
+          );
+      }
+    },
+    [allItems],
+  );
+
+  const toggleStar = (id) => {
+    setStarred((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const handleShare = (id) => {
+    const file = allItems.find((f) => f.id === id);
+    if (file) setSharingFile(file);
+  };
+
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
-      const shortcutsEnabled = localStorage.getItem("drivya-shortcuts") !== "false";
+      const shortcutsEnabled =
+        localStorage.getItem("drivya-shortcuts") !== "false";
       if (!shortcutsEnabled) return;
 
       const activeEl = document.activeElement;
@@ -183,9 +239,8 @@ export function FilesLayout({ files = RECENT_FILES, className, layoutHeader }) {
         (activeEl.tagName === "INPUT" ||
           activeEl.tagName === "TEXTAREA" ||
           activeEl.isContentEditable)
-      ) {
+      )
         return;
-      }
 
       const isCmdOrCtrl = e.metaKey || e.ctrlKey;
       const isShift = e.shiftKey;
@@ -212,37 +267,61 @@ export function FilesLayout({ files = RECENT_FILES, className, layoutHeader }) {
           e.preventDefault();
           handleDelete(selectedId);
         }
-        return;
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedId, handleDownload, handleCopyLink, handleDelete]);
 
-  const toggleStar = (id) => {
-    setStarred((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
-
-  const handleShare = (id) => {
-    const file = files.find((f) => f.id === id);
-    if (file) {
-      setSharingFile(file);
-    }
-  };
-
-  const handleShareUpdated = (id, isShared) => {
-    setShared((prev) => ({ ...prev, [id]: isShared }));
-  };
-
   const isGrid = view === "grid";
+
+  // ─── Breadcrumb ──────────────────────────────────────────────
+  const renderBreadcrumb = () => {
+    if (!breadcrumb || breadcrumb.length === 0) return null;
+
+    return (
+      <nav
+        aria-label="Breadcrumb"
+        className="flex items-center gap-1 text-sm flex-wrap"
+      >
+        <button
+          type="button"
+          onClick={() => onBreadcrumbNav?.(null, true)}
+          className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors font-medium"
+        >
+          <Home className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">My Drive</span>
+        </button>
+
+        {breadcrumb.slice(1).map((dir, i) => {
+          const isLast = i === breadcrumb.length - 2;
+          return (
+            <div key={dir._id} className="flex items-center gap-1">
+              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50" />
+              <button
+                type="button"
+                onClick={() => !isLast && onBreadcrumbNav?.(dir._id, false)}
+                className={cn(
+                  "rounded-lg px-2 py-1 transition-colors font-medium",
+                  isLast
+                    ? "text-foreground cursor-default"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/50",
+                )}
+              >
+                {dir.name}
+              </button>
+            </div>
+          );
+        })}
+      </nav>
+    );
+  };
 
   return (
     <section
       className={cn(card, "overflow-hidden animate-fade-in", className)}
-      aria-labelledby="recent-files-heading"
+      aria-labelledby="files-heading"
     >
       <header className="border-b border-border px-5 py-5 sm:px-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -256,17 +335,24 @@ export function FilesLayout({ files = RECENT_FILES, className, layoutHeader }) {
               </span>
             </div>
             <h3
-              id="recent-files-heading"
+              id="files-heading"
               className="mt-3 font-display text-lg font-semibold tracking-tight text-foreground sm:text-xl"
             >
               {layoutHeader}
             </h3>
+
+            {/* Breadcrumb */}
+            <div className="mt-2">{renderBreadcrumb()}</div>
+
             <p className="mt-1 text-sm text-muted-foreground">
-              {visibleFiles.length} item{visibleFiles.length === 1 ? "" : "s"}
+              {isLoading
+                ? "Loading..."
+                : `${visibleFiles.length} item${visibleFiles.length === 1 ? "" : "s"}`}
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {/* Filter tabs */}
             <div
               className="flex rounded-xl border border-border bg-secondary/40 p-0.5"
               role="tablist"
@@ -290,6 +376,7 @@ export function FilesLayout({ files = RECENT_FILES, className, layoutHeader }) {
               ))}
             </div>
 
+            {/* Sort dropdown */}
             <div className="relative">
               <button
                 type="button"
@@ -330,6 +417,7 @@ export function FilesLayout({ files = RECENT_FILES, className, layoutHeader }) {
               )}
             </div>
 
+            {/* View toggle */}
             <div className="flex rounded-xl border border-border bg-secondary/40 p-0.5">
               <button
                 type="button"
@@ -364,12 +452,13 @@ export function FilesLayout({ files = RECENT_FILES, className, layoutHeader }) {
         </div>
       </header>
 
-      {!isGrid && (
+      {/* List header (list view only) */}
+      {!isGrid && !isLoading && visibleFiles.length > 0 && (
         <div className="hidden md:grid md:grid-cols-[1fr_auto] gap-10 border-b border-border/60 px-5 py-2 sm:px-6">
-          <div className="grid grid-cols-[minmax(0,1fr)_6rem_4.5rem]  gap-8 lg:gap-11 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+          <div className="grid grid-cols-[minmax(0,1fr)_6rem_4.5rem] gap-8 lg:gap-11 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             <span className="pl-5">Name</span>
             <span>Modified</span>
-            <span className="">Size</span>
+            <span>Size</span>
           </div>
           <span className="w-36 text-right text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground pr-1">
             Actions
@@ -377,6 +466,7 @@ export function FilesLayout({ files = RECENT_FILES, className, layoutHeader }) {
         </div>
       )}
 
+      {/* Content area */}
       <div
         className={cn(
           "p-4 sm:p-4",
@@ -386,7 +476,11 @@ export function FilesLayout({ files = RECENT_FILES, className, layoutHeader }) {
         )}
         role="list"
       >
-        {visibleFiles.length === 0 ? (
+        {isLoading ? (
+          <LoadingSkeleton isGrid={isGrid} />
+        ) : error ? (
+          <ErrorState message={error} onRetry={onRefresh} />
+        ) : visibleFiles.length === 0 ? (
           <EmptyState />
         ) : (
           visibleFiles.map((file, i) => (
@@ -395,16 +489,12 @@ export function FilesLayout({ files = RECENT_FILES, className, layoutHeader }) {
               viewType={view}
               file={{
                 ...file,
-                starred: Boolean(starred[file.id] ?? file.starred),
-                shared: Boolean(shared[file.id] ?? file.shared),
+                starred: Boolean(starred[file.id]),
               }}
               index={i}
               selected={selectedId === file.id}
               active={activeId === file.id}
-              onSelect={(id) => {
-                setSelectedId(id);
-                setActiveId(id);
-              }}
+              onSelect={handleItemClick}
               onStar={toggleStar}
               onShare={handleShare}
               onDownload={handleDownload}
@@ -414,19 +504,18 @@ export function FilesLayout({ files = RECENT_FILES, className, layoutHeader }) {
         )}
       </div>
 
+      {/* Share modal */}
       <AnimatePresence>
         {sharingFile && (
           <ShareModal
-            file={{
-              ...sharingFile,
-              shared: Boolean(shared[sharingFile.id] ?? sharingFile.shared),
-            }}
+            file={sharingFile}
             onClose={() => setSharingFile(null)}
-            onShareUpdated={handleShareUpdated}
+            onShareUpdated={() => {}}
           />
         )}
       </AnimatePresence>
 
+      {/* Toast */}
       <AnimatePresence>
         {toastMessage && (
           <FilesToast
@@ -436,10 +525,105 @@ export function FilesLayout({ files = RECENT_FILES, className, layoutHeader }) {
         )}
       </AnimatePresence>
 
+      {/* Drop zone footer */}
       <footer className="border-t border-border p-4 sm:p-5">
-        <DropZone />
+        <DropZone currentDirId={currentDirId} onRefresh={onRefresh} />
       </footer>
     </section>
+  );
+}
+
+/* ───────────────────────── Loading Skeleton ───────────────────────── */
+
+function LoadingSkeleton({ isGrid }) {
+  const items = Array.from({ length: 6 });
+
+  if (isGrid) {
+    return items.map((_, i) => (
+      <div
+        key={i}
+        className="rounded-xl border border-border bg-card/50 p-4 animate-pulse"
+        style={{ animationDelay: `${i * 80}ms` }}
+      >
+        <div className="flex items-start justify-between">
+          <div className="h-10 w-10 rounded-xl bg-secondary/60" />
+          <div className="h-7 w-16 rounded-lg bg-secondary/40" />
+        </div>
+        <div className="mt-3 space-y-2">
+          <div className="h-4 w-3/4 rounded bg-secondary/50" />
+          <div className="h-3 w-1/2 rounded bg-secondary/30" />
+        </div>
+      </div>
+    ));
+  }
+
+  return items.map((_, i) => (
+    <div
+      key={i}
+      className="flex items-center gap-3 rounded-xl border border-border bg-card/50 p-4 animate-pulse"
+      style={{ animationDelay: `${i * 80}ms` }}
+    >
+      <div className="h-10 w-10 rounded-xl bg-secondary/60 shrink-0" />
+      <div className="flex-1 space-y-2">
+        <div className="h-4 w-2/3 rounded bg-secondary/50" />
+        <div className="h-3 w-1/3 rounded bg-secondary/30" />
+      </div>
+    </div>
+  ));
+}
+
+/* ───────────────────────── Error State ───────────────────────── */
+
+function ErrorState({ message, onRetry }) {
+  return (
+    <div className="col-span-full mx-auto flex max-w-sm flex-col items-center justify-center rounded-xl px-6 py-14 text-center">
+      <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-destructive/30 bg-destructive/10 text-destructive">
+        <AlertCircle className="h-5 w-5" />
+      </span>
+      <h4 className="mt-4 font-display text-base font-semibold text-foreground">
+        Something went wrong
+      </h4>
+      <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+        {message}
+      </p>
+      {onRetry && (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary px-4 h-9 text-sm font-medium text-primary-foreground shadow-sm hover:opacity-90 transition-opacity"
+        >
+          Try again
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ───────────────────────── Empty State ───────────────────────── */
+
+function EmptyState() {
+  return (
+    <div className="col-span-full mx-auto flex max-w-sm flex-col items-center justify-center rounded-xl px-6 py-14 text-center">
+      <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-border bg-secondary/60 text-primary">
+        <FolderOpen className="h-5 w-5" />
+      </span>
+      <h4 className="mt-4 font-display text-base font-semibold text-foreground">
+        This folder is empty
+      </h4>
+      <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+        Upload documents, images, or create folders to get started.
+      </p>
+      <button
+        type="button"
+        onClick={() =>
+          window.dispatchEvent(new CustomEvent("open-upload-modal"))
+        }
+        className="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary px-4 h-9 text-sm font-medium text-primary-foreground shadow-sm hover:opacity-90 transition-opacity"
+      >
+        <UploadCloud className="h-4 w-4" />
+        Upload files
+      </button>
+    </div>
   );
 }
 
@@ -457,7 +641,7 @@ function FilesToast({ message, onClose }) {
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -15, scale: 0.95 }}
       transition={{ type: "spring", stiffness: 350, damping: 25 }}
-      className="fixed top-28 right-15  z-[100] flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-elegant border border-white/10 dark:border-white/5 bg-background/90 dark:bg-card/90 backdrop-blur-md text-xs font-semibold text-foreground pointer-events-auto"
+      className="fixed top-28 right-15 z-[100] flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-elegant border border-white/10 dark:border-white/5 bg-background/90 dark:bg-card/90 backdrop-blur-md text-xs font-semibold text-foreground pointer-events-auto"
     >
       <span className="h-2 w-2 rounded-full bg-primary shadow-glow animate-pulse shrink-0" />
       <span className="leading-tight">{message}</span>
@@ -466,31 +650,22 @@ function FilesToast({ message, onClose }) {
   );
 }
 
-function EmptyState() {
-  return (
-    <div className="col-span-full mx-auto flex max-w-sm flex-col items-center justify-center rounded-xl px-6 py-14 text-center">
-      <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-border bg-secondary/60 text-primary">
-        <FolderOpen className="h-5 w-5" />
-      </span>
-      <h4 className="mt-4 font-display text-base font-semibold text-foreground">
-        No files here yet
-      </h4>
-      <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
-        Upload documents, images, or folders to see them in your recent list.
-      </p>
-      <button
-        type="button"
-        className="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary px-4 h-9 text-sm font-medium text-primary-foreground shadow-sm hover:opacity-90 transition-opacity"
-      >
-        <UploadCloud className="h-4 w-4" />
-        Upload files
-      </button>
-    </div>
-  );
-}
+/* ───────────────────────── Drop Zone ───────────────────────── */
 
-function DropZone() {
+function DropZone({ currentDirId, onRefresh }) {
   const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useState(null);
+
+  const handleFileDrop = async (e) => {
+    e.preventDefault();
+    setDragOver(false);
+
+    if (e.dataTransfer.files.length > 0) {
+      // Trigger upload via FAB's upload modal or directly
+      // For now, dispatch the event that opens the upload modal
+      window.dispatchEvent(new CustomEvent("open-upload-modal"));
+    }
+  };
 
   return (
     <div
@@ -499,10 +674,7 @@ function DropZone() {
         setDragOver(true);
       }}
       onDragLeave={() => setDragOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setDragOver(false);
-      }}
+      onDrop={handleFileDrop}
       className={cn(
         "flex flex-col items-center justify-center rounded-xl border border-dashed px-4 py-5 text-center transition-colors",
         dragOver
@@ -512,7 +684,16 @@ function DropZone() {
     >
       <UploadCloud className="h-5 w-5 text-primary" />
       <p className="mt-2 text-sm font-medium text-foreground">
-        Drop files to upload · <span className="text-primary">browse</span>
+        Drop files to upload ·{" "}
+        <button
+          type="button"
+          onClick={() =>
+            window.dispatchEvent(new CustomEvent("open-upload-modal"))
+          }
+          className="text-primary hover:underline"
+        >
+          browse
+        </button>
       </p>
       <p className="mt-1 text-[11px] text-muted-foreground">
         Encrypted in transit · Resumable uploads
