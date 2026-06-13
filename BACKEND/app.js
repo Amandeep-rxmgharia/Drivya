@@ -7,6 +7,8 @@ import rateLimit from "express-rate-limit";
 import authRoutes from "./routes/authRoutes.js";
 import directoryRoutes from "./routes/directoryRoutes.js";
 import fileRoutes from "./routes/fileRoutes.js";
+import shareRoutes from "./routes/shareRoutes.js";
+import publicShareRoutes from "./routes/publicShareRoutes.js";
 import { connectDb } from "./config/db.js";
 import { ensureStorageRoot } from "./services/storageService.js";
 
@@ -62,6 +64,8 @@ app.use(cookieParser());
 app.use("/auth", authRoutes);
 app.use("/api/directories", directoryRoutes);
 app.use("/api/files", fileRoutes);
+app.use("/api/shares", shareRoutes);
+app.use("/public/shares", publicShareRoutes);
 
 // ─── Global Error Handler ────────────────────────────────────
 app.use((err, req, res, next) => {

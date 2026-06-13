@@ -8,6 +8,8 @@ import {
   deleteFile as deleteFromDisk,
   deleteFiles as deleteFilesFromDisk,
 } from "../services/storageService.js";
+import { revokeSharesForResource } from "../services/shareService.js";
+import { RESOURCE_TYPES } from "../constants/shareConstants.js";
 import { generateStorageName } from "../middlewares/uploadMiddleware.js";
 
 // ─── Upload Files ────────────────────────────────────────────────
@@ -314,7 +316,7 @@ export const emptyTrash = async (req, res, next) => {
 
     await session.withTransaction(async () => {
       const trashedFiles = await File.find({ userId, isTrashed: true })
-        .select("storagePath size")
+        .select("_id storagePath size")
         .session(session)
         .lean();
 
@@ -330,6 +332,13 @@ export const emptyTrash = async (req, res, next) => {
         { _id: userId },
         { $inc: { storageUsed: -totalSize } },
       ).session(session);
+
+      const fileIds = trashedFiles.map((f) => f._id);
+      await Promise.all(
+        fileIds.map((fileId) =>
+          revokeSharesForResource(userId, RESOURCE_TYPES.FILE, fileId.toString()),
+        ),
+      );
 
       // Disk cleanup — fire and forget
       const storagePaths = trashedFiles.map((f) => f.storagePath);
@@ -371,6 +380,12 @@ export const permanentDeleteFile = async (req, res, next) => {
         { _id: userId },
         { $inc: { storageUsed: -file.size } },
       ).session(session);
+
+      await revokeSharesForResource(
+        userId,
+        RESOURCE_TYPES.FILE,
+        file._id.toString(),
+      );
 
       // Disk cleanup
       deleteFromDisk(file.storagePath).catch((err) =>

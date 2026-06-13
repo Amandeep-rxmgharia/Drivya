@@ -94,3 +94,85 @@ export const validateCreateDirectory = [directoryNameChain];
  */
 export const validateRenameDirectory = [directoryNameChain];
 
+// ─── Share Validators ────────────────────────────────────────────
+
+export const validateCreateShare = [
+  body("resourceId")
+    .notEmpty()
+    .withMessage("resourceId is required.")
+    .isMongoId()
+    .withMessage("resourceId must be a valid ID."),
+
+  body("resourceType")
+    .optional()
+    .isIn(["file", "directory"])
+    .withMessage("resourceType must be 'file' or 'directory'."),
+];
+
+export const validateUpdateShare = [
+  body("isActive")
+    .optional()
+    .isBoolean()
+    .withMessage("isActive must be a boolean."),
+
+  body("isStarred")
+    .optional()
+    .isBoolean()
+    .withMessage("isStarred must be a boolean."),
+
+  body("visibility")
+    .optional()
+    .isIn(["public", "restricted"])
+    .withMessage("visibility must be 'public' or 'restricted'."),
+
+  body("password")
+    .optional({ nullable: true })
+    .isLength({ min: 4, max: 128 })
+    .withMessage("Password must be between 4 and 128 characters."),
+
+  body("expirationPreset")
+    .optional()
+    .isIn(["Never", "1 Day", "7 Days", "30 Days"])
+    .withMessage("Invalid expiration preset."),
+
+  body("permissions.allowView")
+    .optional()
+    .isBoolean()
+    .withMessage("permissions.allowView must be a boolean."),
+
+  body("permissions.allowDownload")
+    .optional()
+    .isBoolean()
+    .withMessage("permissions.allowDownload must be a boolean."),
+];
+
+export const validateInviteCollaborator = [
+  body("email")
+    .trim()
+    .notEmpty()
+    .withMessage("Email is required.")
+    .isEmail()
+    .withMessage("Please enter a valid email.")
+    .normalizeEmail(),
+
+  body("role")
+    .optional()
+    .isIn(["viewer", "editor"])
+    .withMessage("role must be 'viewer' or 'editor'."),
+];
+
+export const validateCollaboratorRole = [
+  body("role")
+    .notEmpty()
+    .withMessage("role is required.")
+    .isIn(["viewer", "editor"])
+    .withMessage("role must be 'viewer' or 'editor'."),
+];
+
+export const validateSharePassword = [
+  body("password")
+    .optional()
+    .isLength({ max: 128 })
+    .withMessage("Password cannot exceed 128 characters."),
+];
+

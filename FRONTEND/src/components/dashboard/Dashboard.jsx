@@ -43,8 +43,8 @@ import { getCurrentUser } from "../../../api/auth.js";
 
 const navMain = [
   { icon: Home, label: "Home", to: "home" },
-  { icon: Folder, label: "My Drive", to: "drive", count: 248 },
-  { icon: Share2, label: "Shared Files", to: "shared", count: 14 },
+  { icon: Folder, label: "My Drive", to: "drive" },
+  { icon: Share2, label: "Shared Files", to: "shared" },
   { icon: Clock, label: "Recent", to: "recent" },
   { icon: Star, label: "Starred", to: "starred" },
   { icon: Trash2, label: "Trash", to: "trash" },

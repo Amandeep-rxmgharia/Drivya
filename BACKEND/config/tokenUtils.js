@@ -3,10 +3,14 @@ import jwt from "jsonwebtoken";
 const {
   JWT_ACCESS_SECRET,
   JWT_REFRESH_SECRET,
+  JWT_SHARE_SECRET,
   ACCESS_TOKEN_EXPIRY = "15m",
   REFRESH_TOKEN_EXPIRY = "7d",
+  SHARE_ACCESS_TOKEN_EXPIRY = "1h",
   NODE_ENV,
 } = process.env;
+
+const SHARE_SECRET = JWT_SHARE_SECRET || JWT_ACCESS_SECRET;
 
 /**
  * Generate a short-lived access token.
@@ -73,4 +77,41 @@ export function setTokenCookies(res, accessToken, refreshToken) {
 export function clearTokenCookies(res) {
   res.clearCookie("accessToken");
   res.clearCookie("refreshToken");
+}
+
+/**
+ * Short-lived token granting access to a password-protected public share.
+ * @param {string} shareToken - public share slug
+ */
+export function generateShareAccessToken(shareToken) {
+  return jwt.sign({ shareToken, type: "share_access" }, SHARE_SECRET, {
+    expiresIn: SHARE_ACCESS_TOKEN_EXPIRY,
+  });
+}
+
+/**
+ * Verify a share access token.
+ * @param {string} token
+ * @returns {{ shareToken: string, type: string }}
+ */
+export function verifyShareAccessToken(token) {
+  const decoded = jwt.verify(token, SHARE_SECRET);
+  if (decoded.type !== "share_access") {
+    throw new Error("Invalid share access token.");
+  }
+  return decoded;
+}
+
+/**
+ * Set share access cookie for public downloads/previews.
+ */
+export function setShareAccessCookie(res, token) {
+  const isProduction = NODE_ENV === "production";
+
+  res.cookie("shareAccessToken", token, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? "strict" : "lax",
+    maxAge: 60 * 60 * 1000, // 1 hour
+  });
 }

@@ -44,121 +44,20 @@ import {
   iconBtn,
   primaryBtn,
 } from "@/components/dashboard/dashboard-tokens";
+import {
+  listShares,
+  getShareStats,
+  getShare,
+  updateShare,
+  revokeShare,
+  inviteCollaborator,
+  updateCollaboratorRole,
+  revokeCollaborator,
+} from "../../api/shares.js";
+import { downloadFile } from "../../api/drive.js";
 
-/* ───────────────────────── Mock Data ───────────────────────── */
-
-const SHARED_FILES = [
-  {
-    id: "s1",
-    name: "Brand Guidelines v3.pdf",
-    size: "4.2 MB",
-    sharedAt: "May 22, 2026",
-    expiresAt: "Jun 22, 2026",
-    views: 47,
-    linkActive: true,
-    password: true,
-    starred: true,
-    linkUrl: "drivya.link/a8f3kd",
-    downloads: 12,
-  },
-  {
-    id: "s2",
-    name: "Q4-keynote-final.mp4",
-    size: "128 MB",
-    sharedAt: "May 20, 2026",
-    expiresAt: null,
-    views: 203,
-    linkActive: true,
-    password: false,
-    starred: false,
-    linkUrl: "drivya.link/v9x2mn",
-    downloads: 89,
-  },
-  {
-    id: "s3",
-    name: "Hero-shot-005.png",
-    size: "8.1 MB",
-    sharedAt: "May 18, 2026",
-    expiresAt: "May 25, 2026",
-    views: 31,
-    linkActive: true,
-    password: true,
-    starred: true,
-    linkUrl: "drivya.link/p4w7rt",
-    downloads: 5,
-  },
-  {
-    id: "s4",
-    name: "investor-deck.key",
-    size: "12.4 MB",
-    sharedAt: "May 15, 2026",
-    expiresAt: "May 30, 2026",
-    views: 156,
-    linkActive: true,
-    password: true,
-    starred: false,
-    linkUrl: "drivya.link/d2k8jf",
-    downloads: 42,
-  },
-  {
-    id: "s5",
-    name: "podcast-ep12.mp3",
-    size: "48 MB",
-    sharedAt: "May 12, 2026",
-    expiresAt: null,
-    views: 512,
-    linkActive: true,
-    password: false,
-    starred: false,
-    linkUrl: "drivya.link/m7n3vb",
-    kind: "audio",
-    downloads: 234,
-  },
-  {
-    id: "s6",
-    name: "api-routes.ts",
-    size: "24 KB",
-    sharedAt: "May 10, 2026",
-    expiresAt: "Jun 10, 2026",
-    views: 8,
-    linkActive: false,
-    password: false,
-    starred: false,
-    linkUrl: "drivya.link/c1q9zx",
-    kind: "code",
-    downloads: 2,
-  },
-  {
-    id: "s7",
-    name: "Design System",
-    size: "248 items",
-    sharedAt: "May 8, 2026",
-    expiresAt: null,
-    views: 94,
-    linkActive: true,
-    password: true,
-    starred: true,
-    linkUrl: "drivya.link/f5s6hy",
-    kind: "folder",
-    downloads: 0,
-  },
-  {
-    id: "s9",
-    name: "onboarding-flow.fig",
-    size: "34 MB",
-    sharedAt: "May 3, 2026",
-    expiresAt: "Jun 3, 2026",
-    views: 67,
-    linkActive: true,
-    password: false,
-    starred: false,
-    linkUrl: "drivya.link/g2h9qk",
-    downloads: 18,
-  },
-];
-
-const FILTER_OPTIONS = [
-  { id: "all", label: "All Links" },
+/* ───────────────────────── Filter / Sort Options ───────────────────────── */
+ const FILTER_OPTIONS = [{ id: "all", label: "All Links" },
   { id: "active", label: "Active" },
   { id: "protected", label: "Protected" },
   { id: "expired", label: "Expired" },
@@ -174,18 +73,11 @@ const rowEase = "duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]";
 
 /* ───────────────────────── Hero Section ───────────────────────── */
 
-const SharedHero = memo(function SharedHero({
-  linkStates = {},
-  passwordConfig = {},
-}) {
-  const activeLinks = SHARED_FILES.filter(
-    (f) => linkStates[f.id] ?? f.linkActive,
-  ).length;
-  const totalViews = SHARED_FILES.reduce((sum, f) => sum + f.views, 0);
-  const totalDownloads = SHARED_FILES.reduce((sum, f) => sum + f.downloads, 0);
-  const protectedCount = SHARED_FILES.filter(
-    (f) => passwordConfig[f.id]?.enabled ?? f.password,
-  ).length;
+const SharedHero = memo(function SharedHero({ stats = {} }) {
+  const activeLinks = stats.activeLinks ?? 0;
+  const totalViews = stats.totalViews ?? 0;
+  const totalDownloads = stats.totalDownloads ?? 0;
+  const protectedCount = stats.protectedCount ?? 0;
 
   return (
     <section
@@ -330,16 +222,13 @@ function SharingTips() {
 /* ───────────────────────── Shared Files Section ───────────────────────── */
 
 function SharedFilesSection({
-  starred,
-  setStarred,
-  linkStates,
-  setLinkStates,
-  passwordConfig,
-  onPasswordUpdate,
-  visibilityStates,
-  onVisibilityToggle,
-  expirationStates,
-  onExpirationUpdate,
+  shares = [],
+  isLoading = false,
+  onRefresh,
+  onToggleLink,
+  onToggleStar,
+  onRevokeShare,
+  onDownload,
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [filter, setFilter] = useState("all");
@@ -350,54 +239,43 @@ function SharedFilesSection({
   const [modalFile, setModalFile] = useState(null);
 
   const filteredFiles = useMemo(() => {
-    let list = [...SHARED_FILES];
+    let list = [...shares];
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       list = list.filter((f) => f.name.toLowerCase().includes(q));
     }
-    if (filter === "active") list = list.filter((f) => linkStates[f.id]);
-    if (filter === "protected")
-      list = list.filter((f) => passwordConfig[f.id]?.enabled);
+    if (filter === "active") list = list.filter((f) => f.linkActive);
+    if (filter === "protected") list = list.filter((f) => f.password);
     if (filter === "expired") {
-      list = list.filter((f) => {
-        const expiresAt = expirationStates[f.id];
-        const isExpired = expiresAt ? new Date(expiresAt) < new Date() : false;
-        return isExpired || !linkStates[f.id];
-      });
+      list = list.filter((f) => f.isExpired || !f.linkActive);
     }
     list.sort((a, b) => {
       if (sortBy === "views") return b.views - a.views;
       if (sortBy === "name") return a.name.localeCompare(b.name);
-      return new Date(b.sharedAt) - new Date(a.sharedAt);
+      return new Date(b._raw?.sharedAt || 0) - new Date(a._raw?.sharedAt || 0);
     });
     return list;
-  }, [
-    searchQuery,
-    filter,
-    sortBy,
-    linkStates,
-    passwordConfig,
-    expirationStates,
-  ]);
+  }, [shares, searchQuery, filter, sortBy]);
 
   const handleCopyLink = useCallback((fileId, url) => {
-    navigator.clipboard?.writeText?.(`https://${url}`);
+    const fullUrl = url.startsWith("http") ? url : `https://${url}`;
+    navigator.clipboard?.writeText?.(fullUrl);
     setCopiedId(fileId);
     setTimeout(() => setCopiedId(null), 2000);
   }, []);
 
   const handleToggleLink = useCallback(
     (fileId) => {
-      setLinkStates((prev) => ({ ...prev, [fileId]: !prev[fileId] }));
+      onToggleLink?.(fileId);
     },
-    [setLinkStates],
+    [onToggleLink],
   );
 
   const toggleStar = useCallback(
     (id) => {
-      setStarred((prev) => ({ ...prev, [id]: !prev[id] }));
+      onToggleStar?.(id);
     },
-    [setStarred],
+    [onToggleStar],
   );
 
   const handleOpenModal = useCallback((file) => {
@@ -573,27 +451,32 @@ function SharedFilesSection({
           )}
           role="list"
         >
-          {filteredFiles.length === 0 ? (
-            <EmptyState />
-          ) : (
-            filteredFiles.map((file, i) => (
-              <SharedFileCard
-                key={file.id}
-                file={{ ...file, expiresAt: expirationStates[file.id] }}
-                index={i}
-                isGrid={isGrid}
-                linkActive={linkStates[file.id]}
-                passwordProtected={passwordConfig[file.id]?.enabled}
-                visibility={visibilityStates[file.id]}
-                isStarred={Boolean(starred[file.id])}
-                copiedId={copiedId}
-                onCopyLink={handleCopyLink}
-                onToggleLink={handleToggleLink}
-                onStar={toggleStar}
-                onOpenModal={handleOpenModal}
-              />
-            ))
-          )}
+        {isLoading ? (
+          <div className="col-span-full flex flex-col items-center justify-center py-16 gap-3">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">Loading shared links...</p>
+          </div>
+        ) : filteredFiles.length === 0 ? (
+          <EmptyState />
+        ) : (
+          filteredFiles.map((file, i) => (
+            <SharedFileCard
+              key={file.id}
+              file={file}
+              index={i}
+              isGrid={isGrid}
+              linkActive={file.linkActive}
+              passwordProtected={file.password}
+              visibility={file.visibility}
+              isStarred={file.starred}
+              copiedId={copiedId}
+              onCopyLink={handleCopyLink}
+              onToggleLink={handleToggleLink}
+              onStar={toggleStar}
+              onOpenModal={handleOpenModal}
+            />
+          ))
+        )}
         </div>
       </section>
 
@@ -601,19 +484,12 @@ function SharedFilesSection({
       <AnimatePresence>
         {modalFile && (
           <LinkDetailModal
-            file={{ ...modalFile, expiresAt: expirationStates[modalFile.id] }}
-            linkActive={linkStates[modalFile.id]}
-            isStarred={Boolean(starred[modalFile.id])}
-            visibility={visibilityStates[modalFile.id]}
-            passwordEnabled={passwordConfig[modalFile.id]?.enabled}
-            passwordValue={passwordConfig[modalFile.id]?.value}
-            copiedId={copiedId}
-            onCopyLink={handleCopyLink}
-            onToggleLink={handleToggleLink}
-            onStar={toggleStar}
-            onPasswordUpdate={onPasswordUpdate}
-            onVisibilityToggle={onVisibilityToggle}
-            onExpirationUpdate={onExpirationUpdate}
+            file={modalFile}
+            onToggleLink={onToggleLink}
+            onToggleStar={onToggleStar}
+            onRevokeShare={onRevokeShare}
+            onDownload={onDownload}
+            onRefresh={onRefresh}
             onClose={() => setModalFile(null)}
           />
         )}
@@ -958,55 +834,65 @@ const calculateExpiryDate = (val) => {
 
 function LinkDetailModal({
   file,
-  linkActive: initialLinkActive,
-  isStarred: initialStarred,
-  visibility: initialVisibility,
-  passwordEnabled: initialPasswordEnabled,
-  passwordValue: initialPasswordValue,
-  copiedId,
-  onCopyLink,
   onToggleLink,
-  onStar,
-  onPasswordUpdate,
-  onVisibilityToggle,
-  onExpirationUpdate,
+  onToggleStar,
+  onRevokeShare,
+  onDownload,
+  onRefresh,
   onClose,
 }) {
   const kind = detectFileKind(file.name, file.kind);
-  const isCopied = copiedId === file.id;
-  const isExpired = file.expiresAt
-    ? new Date(file.expiresAt) < new Date()
-    : false;
+  const [copied, setCopied] = useState(false);
+  const isExpired = Boolean(file.isExpired);
 
-  // Local state for interactive settings
-  const [activeTab, setActiveTab] = useState("collaborators"); // "collaborators" | "settings"
-  const [linkActive, setLinkActive] = useState(initialLinkActive);
-  const [isStarred, setIsStarred] = useState(initialStarred);
-  const [visibility, setVisibility] = useState(
-    initialVisibility || (file.password ? "Restricted" : "Public"),
-  );
-
-  // Password protection state
-  const [passwordEnabled, setPasswordEnabled] = useState(
-    initialPasswordEnabled ?? file.password ?? false,
-  );
-  const [password, setPassword] = useState(initialPasswordValue || "");
+  const [activeTab, setActiveTab] = useState("collaborators");
+  const [linkActive, setLinkActive] = useState(file.linkActive);
+  const [isStarred, setIsStarred] = useState(file.starred);
+  const [visibility, setVisibility] = useState(file.visibility || "Public");
+  const [passwordEnabled, setPasswordEnabled] = useState(file.password);
+  const [hasPassword, setHasPassword] = useState(file.password);
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [passwordSaved, setPasswordSaved] = useState(false);
   const [showExpirationDropdown, setShowExpirationDropdown] = useState(false);
+  const [expiration, setExpiration] = useState(file.expiresAt || "Never");
 
-  // Invite states
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("Viewer");
   const [isInviting, setIsInviting] = useState(false);
   const [toasts, setToasts] = useState([]);
+  const [sharedUsers, setSharedUsers] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Seed with default users to make modification immediately testable
-  const [sharedUsers, setSharedUsers] = useState([
-    { email: "amelia@drivya.com", role: "Owner", name: "Amelia Moreau" },
-    { email: "marketing@drivya.com", role: "Editor", name: "Marketing Team" },
-    { email: "finance@drivya.com", role: "Viewer", name: "Finance Team" },
-  ]);
+  const shareId = file.id;
+
+  const addToast = (message) => {
+    const id = Date.now();
+    setToasts((prev) => [...prev, { id, message }]);
+  };
+
+  const removeToast = (id) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setIsLoading(true);
+      try {
+        const detail = await getShare(shareId);
+        if (!cancelled) setSharedUsers(detail.sharedUsers);
+      } catch {
+        if (!cancelled) addToast("Failed to load collaborators.");
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [shareId]);
 
   useEffect(() => {
     const handler = (e) => {
@@ -1023,17 +909,33 @@ function LinkDetailModal({
     };
   }, []);
 
-  const addToast = (message) => {
-    const id = Date.now();
-    setToasts((prev) => [...prev, { id, message }]);
+  const syncShare = async (updates) => {
+    try {
+      const { share } = await updateShare(shareId, updates);
+      setLinkActive(share.linkActive);
+      setIsStarred(share.starred);
+      setVisibility(share.visibility);
+      setPasswordEnabled(share.password);
+      setHasPassword(share.password);
+      if (share.expiresAt) setExpiration(share.expiresAt);
+      onRefresh?.();
+      return share;
+    } catch (err) {
+      addToast(err.response?.data?.message || "Failed to update share.");
+      return null;
+    }
   };
 
-  const removeToast = (id) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
+  const handleCopyLink = () => {
+    const url = file.fullLinkUrl || `https://${file.linkUrl}`;
+    navigator.clipboard?.writeText?.(url);
+    setCopied(true);
+    addToast("Link copied to clipboard");
+    setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleToggleActive = () => {
-    onToggleLink(file.id);
+  const handleToggleActive = async () => {
+    await onToggleLink?.(file.id);
     const nextState = !linkActive;
     setLinkActive(nextState);
     addToast(
@@ -1041,14 +943,14 @@ function LinkDetailModal({
     );
   };
 
-  const handleStarToggle = () => {
-    onStar(file.id);
+  const handleStarToggle = async () => {
+    await onToggleStar?.(file.id);
     const nextState = !isStarred;
     setIsStarred(nextState);
     addToast(nextState ? "Starred file link" : "Unstarred file link");
   };
 
-  const handleSendInvite = (e) => {
+  const handleSendInvite = async (e) => {
     e.preventDefault();
     if (!inviteEmail.trim()) return;
 
@@ -1059,64 +961,96 @@ function LinkDetailModal({
     }
 
     setIsInviting(true);
-    setTimeout(() => {
-      const email = inviteEmail.trim();
-      setSharedUsers((prev) => [
-        ...prev,
-        { email, role: inviteRole, name: email.split("@")[0] },
-      ]);
-      addToast(`Invited ${email} as ${inviteRole}`);
+    try {
+      await inviteCollaborator(shareId, {
+        email: inviteEmail.trim(),
+        role: inviteRole,
+      });
+      const detail = await getShare(shareId);
+      setSharedUsers(detail.sharedUsers);
+      addToast(`Invited ${inviteEmail.trim()} as ${inviteRole}`);
       setInviteEmail("");
+    } catch (err) {
+      addToast(err.response?.data?.message || "Failed to send invite.");
+    } finally {
       setIsInviting(false);
-    }, 800);
+    }
   };
 
-  const handleUpdateUserRole = (email, newRole) => {
-    setSharedUsers((prev) =>
-      prev.map((user) =>
-        user.email === email ? { ...user, role: newRole } : user,
-      ),
-    );
-    addToast(`Role updated to ${newRole} for ${email}`);
+  const handleUpdateUserRole = async (email, newRole) => {
+    const collaborator = sharedUsers.find((u) => u.email === email);
+    if (!collaborator?.id || collaborator.role === "Owner") return;
+
+    try {
+      await updateCollaboratorRole(shareId, collaborator.id, newRole);
+      setSharedUsers((prev) =>
+        prev.map((user) =>
+          user.email === email ? { ...user, role: newRole } : user,
+        ),
+      );
+      addToast(`Role updated to ${newRole} for ${email}`);
+    } catch (err) {
+      addToast(err.response?.data?.message || "Failed to update role.");
+    }
   };
 
-  const handleRemoveUser = (email) => {
-    setSharedUsers((prev) => prev.filter((user) => user.email !== email));
-    addToast(`Access revoked for ${email}`);
+  const handleRemoveUser = async (email) => {
+    const collaborator = sharedUsers.find((u) => u.email === email);
+    if (!collaborator?.id || collaborator.role === "Owner") return;
+
+    try {
+      await revokeCollaborator(shareId, collaborator.id);
+      setSharedUsers((prev) => prev.filter((user) => user.email !== email));
+      addToast(`Access revoked for ${email}`);
+    } catch (err) {
+      addToast(err.response?.data?.message || "Failed to revoke access.");
+    }
   };
 
-  const handleSavePassword = (e) => {
+  const handleSavePassword = async (e) => {
     e.preventDefault();
     if (!password.trim()) {
       addToast("Please enter a password");
       return;
     }
-    setPasswordSaved(true);
-    // Sync with parent when actually saved
-    onPasswordUpdate?.(file.id, true, password);
-    addToast("Share link password successfully set");
-    setTimeout(() => setPasswordSaved(false), 1500);
+
+    const share = await syncShare({
+      password: password.trim(),
+      visibility: "restricted",
+    });
+    if (share) {
+      setPasswordSaved(true);
+      addToast("Share link password successfully set");
+      setTimeout(() => setPasswordSaved(false), 1500);
+    }
   };
 
-  const handlePasswordToggle = () => {
+  const handlePasswordToggle = async () => {
     const nextState = !passwordEnabled;
     setPasswordEnabled(nextState);
 
-    // Only sync with parent immediately if turning OFF
-    // If turning ON, we wait for "Apply" (handleSavePassword)
     if (!nextState) {
-      onPasswordUpdate?.(file.id, false);
-      addToast("Password protection disabled");
-    } else {
-      if (initialPasswordValue) {
-        setPasswordSaved(true);
-        // Sync with parent when actually saved
-        onPasswordUpdate?.(file.id, true, password);
-        addToast("Share link password successfully set");
-        setTimeout(() => setPasswordSaved(false), 1500);
-      } else {
-        addToast("Set a password to enable protection");
+      const share = await syncShare({
+        passwordEnabled: false,
+        password: null,
+      });
+      if (share) {
+        setPassword("");
+        setHasPassword(false);
+        addToast("Password protection disabled");
       }
+    } else {
+      addToast("Set a password to enable protection");
+    }
+  };
+
+  const handleDeleteShare = async () => {
+    try {
+      await onRevokeShare?.(file.id);
+      addToast("Share link deleted");
+      onClose();
+    } catch (err) {
+      addToast(err.response?.data?.message || "Failed to delete share.");
     }
   };
 
@@ -1432,16 +1366,16 @@ function LinkDetailModal({
                       </div>
                       <button
                         type="button"
-                        onClick={() => onCopyLink(file.id, file.linkUrl)}
+                        onClick={handleCopyLink}
                         className={cn(
                           "inline-flex h-[38px] items-center justify-center gap-1.5 rounded-xl border px-4 text-xs font-semibold transition-all shrink-0 cursor-pointer",
-                          isCopied
+                          copied
                             ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shadow-sm"
                             : "border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 active:scale-95",
                         )}
                       >
                         <AnimatePresence mode="wait">
-                          {isCopied ? (
+                          {copied ? (
                             <motion.span
                               key="copied"
                               initial={{ scale: 0.8, opacity: 0 }}
@@ -1514,15 +1448,23 @@ function LinkDetailModal({
                           <button
                             key={val}
                             type="button"
-                            onClick={() => {
+                            onClick={async () => {
                               setVisibility(val);
-                              onVisibilityToggle?.(file.id, val);
                               if (val === "Public") {
-                                setPasswordEnabled(false);
-                                setPassword("");
-                                onPasswordUpdate?.(file.id, false, "");
+                                const share = await syncShare({
+                                  visibility: "public",
+                                  passwordEnabled: false,
+                                  password: null,
+                                });
+                                if (share) {
+                                  setPasswordEnabled(false);
+                                  setPassword("");
+                                  addToast("Visibility set to Public");
+                                }
+                              } else {
+                                await syncShare({ visibility: "restricted" });
+                                addToast("Visibility set to Restricted");
                               }
-                              addToast(`Visibility set to ${val}`);
                             }}
                             className={cn(
                               "rounded-lg px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-wider cursor-pointer transition-all duration-150",
@@ -1561,7 +1503,7 @@ function LinkDetailModal({
                               : "border-border/60 bg-secondary/50 text-muted-foreground hover:bg-secondary/80",
                           )}
                         >
-                          <span>{file.expiresAt || "Never"}</span>
+                          <span>{expiration}</span>
                           <ChevronDown
                             className={cn(
                               "h-3 w-3 text-muted-foreground/60 transition-transform",
@@ -1584,12 +1526,17 @@ function LinkDetailModal({
                                   <button
                                     key={val}
                                     type="button"
-                                    onClick={() => {
-                                      const calculated =
-                                        calculateExpiryDate(val);
-                                      onExpirationUpdate?.(file.id, calculated);
+                                    onClick={async () => {
                                       setShowExpirationDropdown(false);
-                                      addToast(`Expiration set to ${val}`);
+                                      const share = await syncShare({
+                                        expirationPreset: val,
+                                      });
+                                      if (share) {
+                                        setExpiration(
+                                          share.expiresAt || val,
+                                        );
+                                        addToast(`Expiration set to ${val}`);
+                                      }
                                     }}
                                     className={cn(
                                       "w-full rounded-lg px-2.5 py-1.5 text-left text-[11px] font-semibold transition-colors cursor-pointer",
@@ -1665,13 +1612,13 @@ function LinkDetailModal({
                               <div className="flex items-center justify-between pl-1">
                                 <div className="text-[9px] font-bold text-muted-foreground/80 flex items-center gap-1.5 uppercase tracking-wider">
                                   <KeyRound className="h-3.5 w-3.5 text-amber-500 animate-pulse" />
-                                  {initialPasswordValue
+                                  {hasPassword
                                     ? "Update Security Key"
                                     : "Set Security Key"}
                                 </div>
-                                {initialPasswordValue && (
+                                {hasPassword && (
                                   <span className="text-[9px] font-bold text-amber-500/80 uppercase tracking-tight bg-amber-500/5 px-2 py-0.5 rounded-lg border border-amber-500/10">
-                                    Current: {initialPasswordValue}
+                                    Password is set
                                   </span>
                                 )}
                               </div>
@@ -1685,8 +1632,8 @@ function LinkDetailModal({
                                       setPassword(e.target.value)
                                     }
                                     placeholder={
-                                      initialPasswordValue
-                                        ? `Current: ${initialPasswordValue}`
+                                      hasPassword
+                                        ? "Enter new password..."
                                         : "Create secure key..."
                                     }
                                     className="h-10 w-full rounded-xl border border-border/80 bg-background/50 pl-3.5 pr-10 text-xs text-foreground focus:outline-none focus:border-primary/50 transition-all font-mono"
@@ -1759,6 +1706,7 @@ function LinkDetailModal({
 
             <button
               type="button"
+              onClick={() => onDownload?.(file.resourceId, file.name)}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border bg-background/40 hover:bg-background/80 text-xs font-semibold text-foreground/85 transition-all cursor-pointer active:scale-95"
             >
               <Download className="h-4 w-4" /> Download File
@@ -1788,6 +1736,7 @@ function LinkDetailModal({
 
           <button
             type="button"
+            onClick={handleDeleteShare}
             className="w-full inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-destructive/25 bg-destructive/5 text-xs font-bold text-destructive hover:bg-destructive/10 transition-colors cursor-pointer active:scale-95"
           >
             <Trash2 className="h-4 w-4" /> Delete Shared Link
@@ -1900,66 +1849,102 @@ function EmptyState() {
 /* ───────────────────────── Page Export ───────────────────────── */
 
 export default function SharedFiles() {
-  const [starred, setStarred] = useState(() =>
-    Object.fromEntries(
-      SHARED_FILES.filter((f) => f.starred).map((f) => [f.id, true]),
-    ),
-  );
-  const [linkStates, setLinkStates] = useState(() =>
-    Object.fromEntries(SHARED_FILES.map((f) => [f.id, f.linkActive])),
-  );
-  // Combined state to reduce re-renders and fix lag
-  const [passwordConfig, setPasswordConfig] = useState(() =>
-    Object.fromEntries(
-      SHARED_FILES.map((f) => [
-        f.id,
-        {
-          enabled: f.password,
-          value: f.password ? "drivya123" : "",
-        },
-      ]),
-    ),
-  );
-  const [visibilityStates, setVisibilityStates] = useState(() =>
-    Object.fromEntries(
-      SHARED_FILES.map((f) => [f.id, f.password ? "Restricted" : "Public"]),
-    ),
-  );
-  const [expirationStates, setExpirationStates] = useState(() =>
-    Object.fromEntries(SHARED_FILES.map((f) => [f.id, f.expiresAt])),
-  );
-  const handleVisibilityToggle = useCallback((fileId, visibility) => {
-    setVisibilityStates((prev) => ({ ...prev, [fileId]: visibility }));
+  const [shares, setShares] = useState([]);
+  const [stats, setStats] = useState({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [listResult, statsResult] = await Promise.all([
+        listShares({ limit: 100, sort: "recent" }),
+        getShareStats(),
+      ]);
+      setShares(listResult.items);
+      setStats(statsResult);
+    } catch (err) {
+      setError(
+        err.response?.data?.message || "Failed to load shared files.",
+      );
+      setShares([]);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
-  const handlePasswordUpdate = useCallback((fileId, enabled, value) => {
-    setPasswordConfig((prev) => ({
-      ...prev,
-      [fileId]: {
-        enabled,
-        value: value !== undefined ? value : prev[fileId].value,
-      },
-    }));
-  }, []);
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
-  const handleExpirationUpdate = useCallback((fileId, expiresAt) => {
-    setExpirationStates((prev) => ({ ...prev, [fileId]: expiresAt }));
+  const handleToggleLink = useCallback(
+    async (shareId) => {
+      const share = shares.find((s) => s.id === shareId);
+      if (!share) return;
+
+      try {
+        await updateShare(shareId, { isActive: !share.linkActive });
+        await fetchData();
+      } catch (err) {
+        console.error("Toggle link failed:", err);
+      }
+    },
+    [shares, fetchData],
+  );
+
+  const handleToggleStar = useCallback(
+    async (shareId) => {
+      const share = shares.find((s) => s.id === shareId);
+      if (!share) return;
+
+      try {
+        await updateShare(shareId, { isStarred: !share.starred });
+        await fetchData();
+      } catch (err) {
+        console.error("Toggle star failed:", err);
+      }
+    },
+    [shares, fetchData],
+  );
+
+  const handleRevokeShare = useCallback(
+    async (shareId) => {
+      try {
+        await revokeShare(shareId);
+        await fetchData();
+      } catch (err) {
+        console.error("Revoke share failed:", err);
+        throw err;
+      }
+    },
+    [fetchData],
+  );
+
+  const handleDownload = useCallback(async (resourceId, fileName) => {
+    try {
+      await downloadFile(resourceId, fileName);
+    } catch (err) {
+      console.error("Download failed:", err);
+    }
   }, []);
 
   return (
     <>
-      <SharedHero linkStates={linkStates} passwordConfig={passwordConfig} />
+      <SharedHero stats={stats} />
+      {error && (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {error}
+        </div>
+      )}
       <SharedFilesSection
-        starred={starred}
-        setStarred={setStarred}
-        linkStates={linkStates}
-        setLinkStates={setLinkStates}
-        passwordConfig={passwordConfig}
-        onPasswordUpdate={handlePasswordUpdate}
-        visibilityStates={visibilityStates}
-        onVisibilityToggle={handleVisibilityToggle}
-        expirationStates={expirationStates}
-        onExpirationUpdate={handleExpirationUpdate}
+        shares={shares}
+        isLoading={isLoading}
+        onRefresh={fetchData}
+        onToggleLink={handleToggleLink}
+        onToggleStar={handleToggleStar}
+        onRevokeShare={handleRevokeShare}
+        onDownload={handleDownload}
       />
       <SharingTips />
     </>

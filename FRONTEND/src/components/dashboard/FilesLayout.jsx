@@ -19,6 +19,10 @@ import { easeSmooth } from "@/lib/motion-presets";
 import { FileRow } from "./FileRow";
 import { ShareModal } from "./ShareModal";
 import { FilePreviewModal } from "./FilePreviewModal";
+import {
+  fetchShareMap,
+  createShare,
+} from "../../../api/shares.js";
 
 const card = "rounded-2xl glass shadow-elegant";
 
@@ -122,6 +126,7 @@ export function FilesLayout({
   const [selectedId, setSelectedId] = useState(null);
   const [activeId, setActiveId] = useState(null);
   const [starred, setStarred] = useState({});
+  const [shareMap, setShareMap] = useState({});
   const [sharingFile, setSharingFile] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
   const [sortBy, setSortBy] = useState("name");
@@ -135,6 +140,19 @@ export function FilesLayout({
     setSelectedId(null);
     setActiveId(null);
   }, [currentDirId]);
+
+  // Load share status for file badges
+  useEffect(() => {
+    fetchShareMap()
+      .then(setShareMap)
+      .catch(() => setShareMap({}));
+  }, [currentDirId]);
+
+  const handleShareUpdated = useCallback((resourceId, share) => {
+    if (share) {
+      setShareMap((prev) => ({ ...prev, [resourceId]: share }));
+    }
+  }, []);
 
   // Filter & sort
   const visibleFiles = useMemo(() => {
@@ -201,23 +219,26 @@ export function FilesLayout({
   );
 
   const handleCopyLink = useCallback(
-    (id) => {
+    async (id) => {
       const file = allItems.find((f) => f.id === id);
-      if (file) {
-        const mockLink = `https://drivya.com/s/${file.id}`;
-        navigator.clipboard
-          .writeText(mockLink)
-          .then(() =>
-            setToastMessage(
-              `Link for "${file.name}" copied to clipboard!`,
-            ),
-          )
-          .catch(() =>
-            setToastMessage(`Failed to copy link for "${file.name}".`),
-          );
+      if (!file || file.isDirectory) return;
+
+      try {
+        let share = shareMap[id];
+        if (!share) {
+          const result = await createShare({ resourceId: id });
+          share = result.share;
+          setShareMap((prev) => ({ ...prev, [id]: share }));
+        }
+
+        const url = share.fullLinkUrl || `https://${share.linkUrl}`;
+        await navigator.clipboard.writeText(url);
+        setToastMessage(`Link for "${file.name}" copied to clipboard!`);
+      } catch {
+        setToastMessage(`Failed to copy link for "${file.name}".`);
       }
     },
-    [allItems],
+    [allItems, shareMap],
   );
 
   const handleRename = useCallback(
@@ -248,7 +269,7 @@ export function FilesLayout({
 
   const handleShare = (id) => {
     const file = allItems.find((f) => f.id === id);
-    if (file) setSharingFile(file);
+    if (file && !file.isDirectory) setSharingFile(file);
   };
 
   const handlePreview = useCallback(
@@ -547,6 +568,9 @@ export function FilesLayout({
               file={{
                 ...file,
                 starred: Boolean(starred[file.id]),
+                shared: Boolean(
+                  shareMap[file.id]?.linkActive && !file.isDirectory,
+                ),
               }}
               index={i}
               selected={selectedId === file.id}
@@ -570,7 +594,7 @@ export function FilesLayout({
           <ShareModal
             file={sharingFile}
             onClose={() => setSharingFile(null)}
-            onShareUpdated={() => {}}
+            onShareUpdated={handleShareUpdated}
           />
         )}
       </AnimatePresence>

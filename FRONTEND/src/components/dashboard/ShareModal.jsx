@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -23,6 +23,14 @@ import { cn } from "@/lib/utils";
 import { detectFileKind } from "@/lib/file-types";
 import { FileTypeIcon } from "@/components/dashboard/FileTypeIcon";
 import { iconBtn, primaryBtn } from "./dashboard-tokens.jsx";
+import {
+  createShare,
+  getShare,
+  updateShare,
+  inviteCollaborator,
+  updateCollaboratorRole,
+  revokeCollaborator,
+} from "../../../api/shares.js";
 
 // Premium Toast Notification
 function Toast({ message, onClose }) {
@@ -62,24 +70,17 @@ const getAvatarGradient = (name = "") => {
 };
 
 export function ShareModal({ file, onClose, onShareUpdated }) {
-  const [activeTab, setActiveTab] = useState("collaborators"); // "collaborators" | "link"
-  const [linkActive, setLinkActive] = useState(() => file.shared ?? false);
+  const [activeTab, setActiveTab] = useState("collaborators");
+  const [shareId, setShareId] = useState(null);
+  const [shareLinkUrl, setShareLinkUrl] = useState("");
+  const [isLoadingShare, setIsLoadingShare] = useState(true);
+  const [linkActive, setLinkActive] = useState(false);
   const [copied, setCopied] = useState(false);
-  // Track current password locally so it updates immediately when saved
-  const [currentPassword, setCurrentPassword] = useState(
-    () => file.passwordValue || (file.password ? "drivya123" : ""),
-  );
+  const [hasPassword, setHasPassword] = useState(false);
 
-  // Visibility: Public (no password needed) vs Restricted
-  const [visibility, setVisibility] = useState(() =>
-    file.password ? "Restricted" : "Public",
-  );
-
-  // Password protection state
-  const [passwordEnabled, setPasswordEnabled] = useState(
-    () => file.password ?? false,
-  );
-  const [password, setPassword] = useState(() => currentPassword);
+  const [visibility, setVisibility] = useState("Public");
+  const [passwordEnabled, setPasswordEnabled] = useState(false);
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [passwordSaved, setPasswordSaved] = useState(false);
 
@@ -89,13 +90,44 @@ export function ShareModal({ file, onClose, onShareUpdated }) {
   const [isInviting, setIsInviting] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [showExpirationDropdown, setShowExpirationDropdown] = useState(false);
+  const [sharedUsers, setSharedUsers] = useState([]);
+  const [isSaving, setIsSaving] = useState(false);
 
-  // Seed with default users to make modification immediately testable
-  const [sharedUsers, setSharedUsers] = useState([
-    { email: "amelia@drivya.com", role: "Owner", name: "Amelia Moreau" },
-    { email: "marketing@drivya.com", role: "Editor", name: "Marketing Team" },
-    { email: "finance@drivya.com", role: "Viewer", name: "Finance Team" },
-  ]);
+  const addToast = (message) => {
+    const id = Date.now();
+    setToasts((prev) => [...prev, { id, message }]);
+  };
+
+  const loadShare = useCallback(async () => {
+    if (!file?.id) return;
+
+    setIsLoadingShare(true);
+    try {
+      const { share } = await createShare({ resourceId: file.id });
+      setShareId(share.id);
+      setShareLinkUrl(share.fullLinkUrl || `https://${share.linkUrl}`);
+      setLinkActive(share.linkActive);
+      setHasPassword(share.password);
+      setPasswordEnabled(share.password);
+      setVisibility(share.visibility);
+
+      if (share.expiresAt) {
+        setExpiration(share.expiresAt);
+      }
+
+      const detail = await getShare(share.id);
+      setSharedUsers(detail.sharedUsers);
+      onShareUpdated?.(file.id, share);
+    } catch (err) {
+      addToast(err.response?.data?.message || "Failed to load share settings.");
+    } finally {
+      setIsLoadingShare(false);
+    }
+  }, [file?.id, onShareUpdated]);
+
+  useEffect(() => {
+    loadShare();
+  }, [loadShare]);
 
   // Esc key & Scroll Lock
   useEffect(() => {
@@ -110,38 +142,55 @@ export function ShareModal({ file, onClose, onShareUpdated }) {
     };
   }, [onClose]);
 
-  const addToast = (message) => {
-    const id = Date.now();
-    setToasts((prev) => [...prev, { id, message }]);
+  const syncShare = async (updates) => {
+    if (!shareId) return null;
+    setIsSaving(true);
+    try {
+      const { share } = await updateShare(shareId, updates);
+      setLinkActive(share.linkActive);
+      setHasPassword(share.password);
+      setPasswordEnabled(share.password);
+      setVisibility(share.visibility);
+      if (share.expiresAt) setExpiration(share.expiresAt);
+      onShareUpdated?.(file.id, share);
+      return share;
+    } catch (err) {
+      addToast(err.response?.data?.message || "Failed to update share.");
+      return null;
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const removeToast = (id) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
-
-  const handleCopyLink = () => {
-    const linkUrl = `drivya.link/${file.id || "temp-share"}`;
-    navigator.clipboard?.writeText?.(`https://${linkUrl}`);
+  const handleCopyLink = async () => {
+    const url = shareLinkUrl || `https://drivya.link/${file.id}`;
+    navigator.clipboard?.writeText?.(url);
     setCopied(true);
     addToast("Link copied to clipboard");
     setTimeout(() => setCopied(false), 2000);
 
-    if (!linkActive) {
-      setLinkActive(true);
-      onShareUpdated?.(file.id, true);
+    if (!linkActive && shareId) {
+      const share = await syncShare({ isActive: true });
+      if (share) {
+        setLinkActive(true);
+        addToast("Share link enabled");
+      }
     }
   };
 
-  const handleToggleLink = () => {
+  const handleToggleLink = async () => {
+    if (!shareId) return;
     const nextState = !linkActive;
-    setLinkActive(nextState);
-    onShareUpdated?.(file.id, nextState);
-    addToast(nextState ? "Share link enabled" : "Share link disabled");
+    const share = await syncShare({ isActive: nextState });
+    if (share) {
+      setLinkActive(nextState);
+      addToast(nextState ? "Share link enabled" : "Share link disabled");
+    }
   };
 
-  const handleSendInvite = (e) => {
+  const handleSendInvite = async (e) => {
     e.preventDefault();
-    if (!inviteEmail.trim()) return;
+    if (!inviteEmail.trim() || !shareId) return;
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(inviteEmail)) {
@@ -150,72 +199,114 @@ export function ShareModal({ file, onClose, onShareUpdated }) {
     }
 
     setIsInviting(true);
-    setTimeout(() => {
-      const email = inviteEmail.trim();
-      setSharedUsers((prev) => [
-        ...prev,
-        { email, role: inviteRole, name: email.split("@")[0] },
-      ]);
-      addToast(`Invited ${email} as ${inviteRole}`);
+    try {
+      await inviteCollaborator(shareId, {
+        email: inviteEmail.trim(),
+        role: inviteRole,
+      });
+      const detail = await getShare(shareId);
+      setSharedUsers(detail.sharedUsers);
+      addToast(`Invited ${inviteEmail.trim()} as ${inviteRole}`);
       setInviteEmail("");
-      setIsInviting(false);
 
       if (!linkActive) {
-        setLinkActive(true);
-        onShareUpdated?.(file.id, true);
+        const share = await syncShare({ isActive: true });
+        if (share) setLinkActive(true);
       }
-    }, 800);
+    } catch (err) {
+      addToast(err.response?.data?.message || "Failed to send invite.");
+    } finally {
+      setIsInviting(false);
+    }
   };
 
-  // Modify user role
-  const handleUpdateUserRole = (email, newRole) => {
-    setSharedUsers((prev) =>
-      prev.map((user) =>
-        user.email === email ? { ...user, role: newRole } : user,
-      ),
-    );
-    addToast(`Role updated to ${newRole} for ${email}`);
+  const handleUpdateUserRole = async (email, newRole) => {
+    const collaborator = sharedUsers.find((u) => u.email === email);
+    if (!collaborator?.id || collaborator.role === "Owner" || !shareId) return;
+
+    try {
+      await updateCollaboratorRole(shareId, collaborator.id, newRole);
+      setSharedUsers((prev) =>
+        prev.map((user) =>
+          user.email === email ? { ...user, role: newRole } : user,
+        ),
+      );
+      addToast(`Role updated to ${newRole} for ${email}`);
+    } catch (err) {
+      addToast(err.response?.data?.message || "Failed to update role.");
+    }
   };
 
-  // Remove invited user
-  const handleRemoveUser = (email) => {
-    setSharedUsers((prev) => prev.filter((user) => user.email !== email));
-    addToast(`Access revoked for ${email}`);
+  const handleRemoveUser = async (email) => {
+    const collaborator = sharedUsers.find((u) => u.email === email);
+    if (!collaborator?.id || collaborator.role === "Owner" || !shareId) return;
+
+    try {
+      await revokeCollaborator(shareId, collaborator.id);
+      setSharedUsers((prev) => prev.filter((user) => user.email !== email));
+      addToast(`Access revoked for ${email}`);
+    } catch (err) {
+      addToast(err.response?.data?.message || "Failed to revoke access.");
+    }
   };
 
-  // Save password function
-  const handleSavePassword = (e) => {
+  const handleSavePassword = async (e) => {
     e.preventDefault();
-    if (!password.trim()) {
+    if (!password.trim() || !shareId) {
       addToast("Please enter a password");
       return;
     }
-    setCurrentPassword(password);
-    setPasswordSaved(true);
-    addToast("Share link password successfully set");
-    setTimeout(() => setPasswordSaved(false), 1500);
-  };
 
-  const handlePasswordToggle = () => {
-    const nextState = !passwordEnabled;
-    setPasswordEnabled(nextState);
-
-    if (!nextState) {
-      setPassword("");
-      setCurrentPassword("");
-      addToast("Password protection disabled");
-    } else {
-      const defaultPassword = currentPassword || "drivya123";
-      setPassword(defaultPassword);
-      setCurrentPassword(defaultPassword);
+    const share = await syncShare({
+      password: password.trim(),
+      visibility: "restricted",
+    });
+    if (share) {
+      setHasPassword(true);
+      setPasswordEnabled(true);
+      setVisibility("Restricted");
       setPasswordSaved(true);
       addToast("Share link password successfully set");
       setTimeout(() => setPasswordSaved(false), 1500);
     }
   };
 
+  const handleVisibilityChange = async (val) => {
+    setVisibility(val);
+    if (!shareId) return;
+
+    if (val === "Public") {
+      const share = await syncShare({
+        visibility: "public",
+        passwordEnabled: false,
+        password: null,
+      });
+      if (share) {
+        setPasswordEnabled(false);
+        setPassword("");
+        addToast("Visibility set to Public");
+      }
+    } else {
+      addToast("Visibility set to Restricted");
+      await syncShare({ visibility: "restricted" });
+    }
+  };
+
+  const handleExpirationChange = async (val) => {
+    setExpiration(val);
+    setShowExpirationDropdown(false);
+    if (!shareId) return;
+
+    const share = await syncShare({ expirationPreset: val });
+    if (share) addToast(`Expiration set to ${val}`);
+  };
+
   const kind = detectFileKind(file.name, file.kind);
-  const shareLinkUrl = `https://drivya.link/${file.id || "temp-share"}`;
+  const shareLinkDisplay = shareLinkUrl || `https://drivya.link/${file.id}`;
+
+  const removeToast = (id) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
 
   return createPortal(
     <>
@@ -260,6 +351,15 @@ export function ShareModal({ file, onClose, onShareUpdated }) {
 
           {/* Scrollable content wrapper */}
           <div className="overflow-y-auto overscroll-contain flex-1 p-5 sm:p-6">
+            {isLoadingShare ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="text-xs text-muted-foreground font-medium">
+                  Loading share settings...
+                </p>
+              </div>
+            ) : (
+              <>
             {/* Header */}
             <div className="flex items-start justify-between gap-3 relative z-10">
               <div className="flex items-center gap-3 sm:gap-3.5 min-w-0">
@@ -590,7 +690,7 @@ export function ShareModal({ file, onClose, onShareUpdated }) {
                           {linkActive && (
                             <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping shrink-0" />
                           )}
-                          <span className="truncate">{shareLinkUrl}</span>
+                          <span className="truncate">{shareLinkDisplay}</span>
                         </div>
 
                         {/* Morphing Copy Button */}
@@ -651,14 +751,7 @@ export function ShareModal({ file, onClose, onShareUpdated }) {
                               <button
                                 key={val}
                                 type="button"
-                                onClick={() => {
-                                  setVisibility(val);
-                                  if (val === "Public") {
-                                    setPasswordEnabled(false);
-                                    setPassword("");
-                                  }
-                                  addToast(`Visibility set to ${val}`);
-                                }}
+                                onClick={() => handleVisibilityChange(val)}
                                 className={cn(
                                   "flex-1 rounded-lg py-2 sm:py-1.5 text-[9px] font-extrabold uppercase tracking-wider cursor-pointer text-center transition-all duration-150",
                                   visibility === val
@@ -711,11 +804,7 @@ export function ShareModal({ file, onClose, onShareUpdated }) {
                                     <button
                                       key={val}
                                       type="button"
-                                      onClick={() => {
-                                        setExpiration(val);
-                                        setShowExpirationDropdown(false);
-                                        addToast(`Expiration set to ${val}`);
-                                      }}
+                                      onClick={() => handleExpirationChange(val)}
                                       className={cn(
                                         "w-full rounded-lg px-2.5 py-2.5 sm:py-2 text-left text-[11px] font-semibold transition-colors cursor-pointer",
                                         expiration === val
@@ -760,9 +849,20 @@ export function ShareModal({ file, onClose, onShareUpdated }) {
                               {/* Switch controller for password */}
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setPasswordEnabled(!passwordEnabled);
-                                  if (passwordEnabled) setPassword("");
+                                onClick={async () => {
+                                  const nextState = !passwordEnabled;
+                                  setPasswordEnabled(nextState);
+                                  if (!nextState && shareId) {
+                                    setPassword("");
+                                    const share = await syncShare({
+                                      passwordEnabled: false,
+                                      password: null,
+                                    });
+                                    if (share) {
+                                      setHasPassword(false);
+                                      addToast("Password protection disabled");
+                                    }
+                                  }
                                 }}
                                 className={cn(
                                   "relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-300 focus:outline-none cursor-pointer border border-transparent",
@@ -795,13 +895,13 @@ export function ShareModal({ file, onClose, onShareUpdated }) {
                                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pl-1 gap-1">
                                     <div className="text-[9px] font-bold text-muted-foreground/80 flex items-center gap-1.5 uppercase tracking-wider">
                                       <KeyRound className="h-3.5 w-3.5 text-amber-500 animate-pulse" />
-                                      {currentPassword
+                                      {hasPassword
                                         ? "Update Security Key"
                                         : "Set Security Key"}
                                     </div>
-                                    {currentPassword && (
+                                    {hasPassword && (
                                       <span className="text-[9px] font-bold text-amber-500/80 uppercase tracking-tight bg-amber-500/5 px-2 py-0.5 rounded-lg border border-amber-500/10">
-                                        Current: {currentPassword}
+                                        Password is set
                                       </span>
                                     )}
                                   </div>
@@ -818,8 +918,8 @@ export function ShareModal({ file, onClose, onShareUpdated }) {
                                           setPassword(e.target.value)
                                         }
                                         placeholder={
-                                          currentPassword
-                                            ? `Current: ${currentPassword}`
+                                          hasPassword
+                                            ? "Enter new password..."
                                             : "Create secure key..."
                                         }
                                         className="h-11 sm:h-10 w-full rounded-xl border border-border/80 bg-background/50 pl-3.5 pr-10 text-xs text-foreground focus:outline-none focus:border-primary/50 transition-all font-mono"
@@ -868,6 +968,8 @@ export function ShareModal({ file, onClose, onShareUpdated }) {
                 )}
               </AnimatePresence>
             </div>
+              </>
+            )}
           </div>
 
           {/* Safe area bottom padding for mobile notch devices */}
