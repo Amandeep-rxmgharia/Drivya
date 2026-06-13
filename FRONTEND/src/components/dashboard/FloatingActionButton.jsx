@@ -188,8 +188,16 @@ function CreateFolderModal({ onClose }) {
 
 /* ───────────────────────── Upload Files Modal ───────────────────────── */
 
-function UploadFilesModal({ onClose }) {
-  const [files, setFiles] = useState([]);
+function UploadFilesModal({ onClose, initialFiles = [] }) {
+  const [files, setFiles] = useState(() => {
+    return Array.from(initialFiles).map((f) => ({
+      id: crypto.randomUUID(),
+      name: f.name,
+      size: f.size,
+      type: f.type,
+      file: f,
+    }));
+  });
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({});
@@ -543,9 +551,11 @@ const fabActions = [
 export function FloatingActionButton() {
   const [isOpen, setIsOpen] = useState(false);
   const [activeModal, setActiveModal] = useState(null); // 'folder' | 'upload' | null
+  const [uploadInitialFiles, setUploadInitialFiles] = useState([]);
 
   useEffect(() => {
-    const handleOpenUpload = () => {
+    const handleOpenUpload = (e) => {
+      setUploadInitialFiles(e.detail?.files || []);
       setActiveModal("upload");
     };
     const handleOpenFolder = () => {
@@ -562,10 +572,14 @@ export function FloatingActionButton() {
 
   const handleAction = (modal) => {
     setIsOpen(false);
+    setUploadInitialFiles([]);
     setActiveModal(modal);
   };
 
-  const closeModal = () => setActiveModal(null);
+  const closeModal = () => {
+    setActiveModal(null);
+    setUploadInitialFiles([]);
+  };
 
   return (
     <>
@@ -684,7 +698,9 @@ export function FloatingActionButton() {
       {/* Modals */}
       <AnimatePresence>
         {activeModal === "folder" && <CreateFolderModal onClose={closeModal} />}
-        {activeModal === "upload" && <UploadFilesModal onClose={closeModal} />}
+        {activeModal === "upload" && (
+          <UploadFilesModal onClose={closeModal} initialFiles={uploadInitialFiles} />
+        )}
       </AnimatePresence>
     </>
   );

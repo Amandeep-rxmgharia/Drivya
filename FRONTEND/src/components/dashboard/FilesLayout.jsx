@@ -736,7 +736,11 @@ function DropZone({ currentDirId, onRefresh }) {
     if (e.dataTransfer.files.length > 0) {
       // Trigger upload via FAB's upload modal or directly
       // For now, dispatch the event that opens the upload modal
-      window.dispatchEvent(new CustomEvent("open-upload-modal"));
+      window.dispatchEvent(
+        new CustomEvent("open-upload-modal", {
+          detail: { files: e.dataTransfer.files },
+        })
+      );
     }
   };
 
