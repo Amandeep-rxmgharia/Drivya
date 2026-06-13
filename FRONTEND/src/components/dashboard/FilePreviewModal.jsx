@@ -21,6 +21,7 @@ import { easeSmooth } from "@/lib/motion-presets";
 import { detectFileKind, getFileTypeStyle } from "@/lib/file-types";
 import { FileTypeIcon } from "./FileTypeIcon";
 import { getFilePreviewUrl } from "../../../api/drive.js";
+import api, { getCurrentUser } from "../../../api/auth.js";
 
 /* ─── Helpers ────────────────────────────────────────────────────── */
 
@@ -251,13 +252,10 @@ function TextPreview({ url }) {
     setLoading(true);
     setError(null);
 
-    fetch(url, { credentials: "include" })
+    api.get(url, { responseType: "text" })
       .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.text();
-      })
-      .then((text) => {
         if (!cancelled) {
+          const text = res.data;
           // Limit to 50KB for display
           const truncated = text.length > 50_000
             ? text.slice(0, 50_000) + "\n\n... [truncated — file too large for preview]"
@@ -268,7 +266,7 @@ function TextPreview({ url }) {
       })
       .catch((err) => {
         if (!cancelled) {
-          setError(err.message);
+          setError(err.message || "Failed to load file");
           setLoading(false);
         }
       });
@@ -382,6 +380,35 @@ export function FilePreviewModal({
 }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const modalRef = useRef(null);
+
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
+  const [authError, setAuthError] = useState(null);
+
+  // Perform auth check before loading the preview URLs natively
+  useEffect(() => {
+    if (!file) return;
+
+    let active = true;
+    setIsAuthChecking(true);
+    setAuthError(null);
+
+    getCurrentUser()
+      .then(() => {
+        if (active) {
+          setIsAuthChecking(false);
+        }
+      })
+      .catch((err) => {
+        if (active) {
+          setAuthError(err);
+          setIsAuthChecking(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [file?.id]);
 
   // Compute current index for prev/next
   const currentIndex = useMemo(() => {
@@ -569,27 +596,35 @@ export function FilePreviewModal({
                 transition={{ duration: 0.2, ease: easeSmooth }}
                 className="flex flex-1 min-h-0"
               >
-                {previewType === "image" && (
-                  <ImagePreview url={previewUrl} fileName={file.name} />
-                )}
-                {previewType === "video" && (
-                  <VideoPreview url={previewUrl} />
-                )}
-                {previewType === "audio" && (
-                  <AudioPreview url={previewUrl} kind={kind} />
-                )}
-                {previewType === "pdf" && (
-                  <PdfPreview url={previewUrl} />
-                )}
-                {previewType === "text" && (
-                  <TextPreview url={previewUrl} />
-                )}
-                {previewType === "unsupported" && (
-                  <UnsupportedPreview
-                    kind={kind}
-                    fileName={file.name}
-                    onDownload={onDownload ? () => onDownload(file.id, file.name) : null}
-                  />
+                {isAuthChecking ? (
+                  <PreviewLoading />
+                ) : authError ? (
+                  <PreviewError message="Authentication expired. Redirecting..." />
+                ) : (
+                  <>
+                    {previewType === "image" && (
+                      <ImagePreview url={previewUrl} fileName={file.name} />
+                    )}
+                    {previewType === "video" && (
+                      <VideoPreview url={previewUrl} />
+                    )}
+                    {previewType === "audio" && (
+                      <AudioPreview url={previewUrl} kind={kind} />
+                    )}
+                    {previewType === "pdf" && (
+                      <PdfPreview url={previewUrl} />
+                    )}
+                    {previewType === "text" && (
+                      <TextPreview url={previewUrl} />
+                    )}
+                    {previewType === "unsupported" && (
+                      <UnsupportedPreview
+                        kind={kind}
+                        fileName={file.name}
+                        onDownload={onDownload ? () => onDownload(file.id, file.name) : null}
+                      />
+                    )}
+                  </>
                 )}
               </motion.div>
             </AnimatePresence>
