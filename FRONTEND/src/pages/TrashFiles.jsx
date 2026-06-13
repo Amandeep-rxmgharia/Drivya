@@ -831,6 +831,7 @@ export default function TrashFiles() {
               }
             })
           );
+          window.dispatchEvent(new CustomEvent("refresh-drive"));
         } catch (err) {
           console.error("Failed to delete permanently:", err);
           setConfirmAction(null);
@@ -866,6 +867,7 @@ export default function TrashFiles() {
               }
             })
           );
+          window.dispatchEvent(new CustomEvent("refresh-drive"));
         } catch (err) {
           console.error("Failed to empty trash:", err);
           setConfirmAction(null);

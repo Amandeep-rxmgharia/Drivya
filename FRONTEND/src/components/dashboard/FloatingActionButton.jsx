@@ -274,9 +274,8 @@ function UploadFilesModal({ onClose, initialFiles = [] }) {
         })
       );
 
-      if (isDrivePage) {
-        window.dispatchEvent(new CustomEvent("refresh-drive"));
-      } else {
+      window.dispatchEvent(new CustomEvent("refresh-drive"));
+      if (!isDrivePage) {
         navigate("/dashboard/drive");
       }
 

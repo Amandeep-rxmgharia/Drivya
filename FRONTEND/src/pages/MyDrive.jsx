@@ -105,12 +105,12 @@ export default function MyDrive() {
     async (dirId) => {
       try {
         await deleteDirApi(dirId);
-        await fetchContents();
+        window.dispatchEvent(new CustomEvent("refresh-drive"));
       } catch (err) {
         console.error("Delete directory failed:", err);
       }
     },
-    [fetchContents],
+    [],
   );
 
   // Rename a directory
