@@ -5,6 +5,7 @@ import {
   previewSharedFile,
   downloadSharedFile,
   checkShareAccess,
+  editSharedFile,
 } from "../controllers/publicShareController.js";
 import {
   publicShareRateLimit,
@@ -45,6 +46,13 @@ router.get(
   resolvePublicShare,
   requireShareAccess,
   downloadSharedFile,
+);
+
+router.put(
+  "/:token/edit",
+  resolvePublicShare,
+  requireShareAccess,
+  editSharedFile,
 );
 
 export default router;

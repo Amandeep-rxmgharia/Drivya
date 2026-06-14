@@ -5,13 +5,16 @@ import {
   incrementShareView,
   incrementShareDownload,
 } from "../services/shareService.js";
-import { getFileStream } from "../services/storageService.js";
+import { getFileStream, updateFileContent as updateDiskContent } from "../services/storageService.js";
 import {
   generateShareAccessToken,
   setShareAccessCookie,
 } from "../config/tokenUtils.js";
 import { AppError } from "../utils/errors.js";
 import { VISIBILITY } from "../constants/shareConstants.js";
+import File from "../models/fileModel.js";
+import Share from "../models/shareModel.js";
+import { invalidateShareTokenCache, invalidateOwnerShareCache } from "../services/cacheService.js";
 
 function handlePublicShareError(err, res, next) {
   if (err instanceof AppError) {
@@ -81,6 +84,7 @@ export async function previewSharedFile(req, res, next) {
       "Content-Disposition": `inline; filename="${encodeURIComponent(file.originalName)}"`,
       "Accept-Ranges": "bytes",
       "Cache-Control": "private, max-age=3600",
+      "Cross-Origin-Resource-Policy": "cross-origin",
     });
 
     if (range) {
@@ -146,4 +150,46 @@ export async function checkShareAccess(req, res) {
     requiresPassword: Boolean(needsPassword),
     permissions: share.permissions,
   });
+}
+
+// ─── Edit Shared File Content ─────────────────────────────────────
+export async function editSharedFile(req, res, next) {
+  try {
+    const { token } = req.params;
+    const share = req.share;
+    const { content } = req.body;
+
+    if (content === undefined) {
+      return res.status(400).json({ message: "Content is required." });
+    }
+
+    if (!share.permissions?.allowEdit) {
+      return res.status(403).json({ message: "Editing is not permitted." });
+    }
+
+    const { file } = await resolveShareFileForPublicAccess(token);
+    await updateDiskContent(file.storagePath, content);
+
+    const newSize = Buffer.byteLength(content);
+
+    // Update File size
+    await File.updateOne({ _id: file._id }, { size: newSize });
+
+    // Update Share snapshot size
+    await Share.updateOne(
+      { _id: share._id },
+      { "resourceSnapshot.size": newSize }
+    );
+
+    // Invalidate caches
+    await invalidateShareTokenCache(token);
+    await invalidateOwnerShareCache(share.ownerId.toString());
+
+    return res.json({
+      message: "Shared file updated successfully.",
+      size: newSize,
+    });
+  } catch (err) {
+    handlePublicShareError(err, res, next);
+  }
 }

@@ -12,6 +12,10 @@ const permissionsSchema = new Schema(
       type: Boolean,
       default: DEFAULT_PERMISSIONS.allowDownload,
     },
+    allowEdit: {
+      type: Boolean,
+      default: DEFAULT_PERMISSIONS.allowEdit,
+    },
   },
   { _id: false },
 );
@@ -147,13 +151,14 @@ shareSchema.methods.isAccessible = function isAccessible() {
 };
 
 shareSchema.methods.requiresPassword = function requiresPassword() {
-  return this.visibility === VISIBILITY.RESTRICTED && Boolean(this.passwordHash);
+  return (
+    this.visibility === VISIBILITY.RESTRICTED && Boolean(this.passwordHash)
+  );
 };
 
 /** Virtual public URL for API responses. */
 shareSchema.virtual("linkUrl").get(function linkUrl() {
-  const base =
-    process.env.PUBLIC_SHARE_BASE_URL || "https://drivya.link";
+  const base = process.env.PUBLIC_SHARE_BASE_URL || "http://localhost:5173";
   return `${base.replace(/\/$/, "")}/${this.token}`;
 });
 

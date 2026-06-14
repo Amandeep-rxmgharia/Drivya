@@ -10,6 +10,7 @@ import {
   emptyTrash,
   permanentDeleteFile,
   restoreAllFiles,
+  editFileContent,
 } from "../controllers/fileController.js";
 import { handleValidationErrors } from "../middlewares/validators.js";
 import { authenticate } from "../middlewares/authMiddleware.js";
@@ -25,6 +26,7 @@ router.post("/upload", uploadMiddleware, uploadFiles);
 router.get("/:id/download", downloadFile);
 router.get("/:id/preview", previewFile);
 router.patch("/:id/rename", renameFile);
+router.put("/:id/content", editFileContent);
 
 // Trash operations
 router.get("/trash", listTrash);

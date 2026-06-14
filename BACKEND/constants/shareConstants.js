@@ -35,6 +35,7 @@ export const EXPIRATION_PRESETS = Object.freeze({
 export const DEFAULT_PERMISSIONS = Object.freeze({
   allowView: true,
   allowDownload: true,
+  allowEdit: false,
 });
 
 /** Cache key prefixes (Redis-ready naming). */

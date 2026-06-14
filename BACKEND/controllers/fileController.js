@@ -2,11 +2,13 @@ import mongoose from "mongoose";
 import File from "../models/fileModel.js";
 import Directory from "../models/directoryModel.js";
 import User from "../models/userModel.js";
+import Share from "../models/shareModel.js";
 import {
   saveFile,
   getFileStream,
   deleteFile as deleteFromDisk,
   deleteFiles as deleteFilesFromDisk,
+  updateFileContent as updateDiskContent,
 } from "../services/storageService.js";
 import { revokeSharesForResource } from "../services/shareService.js";
 import { RESOURCE_TYPES } from "../constants/shareConstants.js";
@@ -418,6 +420,40 @@ export const restoreAllFiles = async (req, res, next) => {
       message: `${result.modifiedCount} file(s) restored successfully.`,
       modifiedCount: result.modifiedCount,
     });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── Edit File Content ───────────────────────────────────────────
+export const editFileContent = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+    const { content } = req.body;
+
+    if (content === undefined) {
+      return res.status(400).json({ message: "Content is required." });
+    }
+
+    const file = await File.findOne({ _id: id, userId, isTrashed: false });
+    if (!file) {
+      return res.status(404).json({ message: "File not found." });
+    }
+
+    await updateDiskContent(file.storagePath, content);
+
+    const newSize = Buffer.byteLength(content);
+    file.size = newSize;
+    await file.save();
+
+    // Sync any active share snapshots
+    await Share.updateMany(
+      { resourceId: file._id, resourceType: RESOURCE_TYPES.FILE },
+      { "resourceSnapshot.size": newSize }
+    );
+
+    return res.json({ message: "File content updated successfully.", file });
   } catch (err) {
     next(err);
   }

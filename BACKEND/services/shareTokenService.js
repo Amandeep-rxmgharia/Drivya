@@ -69,6 +69,6 @@ export function parseExpirationPreset(preset) {
  * @param {string} token
  */
 export function buildShareUrl(token) {
-  const base = process.env.PUBLIC_SHARE_BASE_URL || "https://drivya.link";
+  const base = process.env.PUBLIC_SHARE_BASE_URL || "http://localhost:5173";
   return `${base.replace(/\/$/, "")}/${token}`;
 }

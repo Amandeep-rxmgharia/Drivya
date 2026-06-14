@@ -76,3 +76,13 @@ export async function deleteFile(storagePath) {
 export async function deleteFiles(storagePaths) {
   await Promise.allSettled(storagePaths.map((p) => deleteFile(p)));
 }
+
+/**
+ * Update file contents on disk.
+ * @param {string} storagePath - relative path "{userId}/{storageName}"
+ * @param {Buffer|string} content
+ */
+export async function updateFileContent(storagePath, content) {
+  const absolutePath = path.join(STORAGE_ROOT, storagePath);
+  await fsp.writeFile(absolutePath, content);
+}

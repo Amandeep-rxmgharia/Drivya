@@ -23,6 +23,7 @@ const StarredFiles = lazy(() => import("./pages/StarredFiles"));
 const TrashFiles = lazy(() => import("./pages/TrashFiles"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Payment = lazy(() => import("./pages/Payment"));
+const PublicShare = lazy(() => import("./pages/PublicShare"));
 
 export default function App() {
   const router = createBrowserRouter([
@@ -132,6 +133,22 @@ export default function App() {
               ),
             },
           ],
+        },
+        {
+          path: "/sh/:token",
+          element: (
+            <Suspense fallback={null}>
+              <PublicShare />
+            </Suspense>
+          ),
+        },
+        {
+          path: "/:token",
+          element: (
+            <Suspense fallback={null}>
+              <PublicShare />
+            </Suspense>
+          ),
         },
       ],
     },

@@ -258,7 +258,7 @@ function SharedFilesSection({
   }, [shares, searchQuery, filter, sortBy]);
 
   const handleCopyLink = useCallback((fileId, url) => {
-    const fullUrl = url.startsWith("http") ? url : `https://${url}`;
+    const fullUrl = url.startsWith("http") ? url : `http://${url}`;
     navigator.clipboard?.writeText?.(fullUrl);
     setCopiedId(fileId);
     setTimeout(() => setCopiedId(null), 2000);
@@ -927,7 +927,7 @@ function LinkDetailModal({
   };
 
   const handleCopyLink = () => {
-    const url = file.fullLinkUrl || `https://${file.linkUrl}`;
+    const url = file.fullLinkUrl || `http://${file.linkUrl}`;
     navigator.clipboard?.writeText?.(url);
     setCopied(true);
     addToast("Link copied to clipboard");
@@ -1362,7 +1362,7 @@ function LinkDetailModal({
                         {linkActive && (
                           <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping shrink-0" />
                         )}
-                        <span className="truncate">https://{file.linkUrl}</span>
+                        <span className="truncate">http://{file.linkUrl}</span>
                       </div>
                       <button
                         type="button"

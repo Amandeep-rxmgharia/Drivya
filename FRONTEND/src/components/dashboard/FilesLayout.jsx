@@ -231,7 +231,7 @@ export function FilesLayout({
           setShareMap((prev) => ({ ...prev, [id]: share }));
         }
 
-        const url = share.fullLinkUrl || `https://${share.linkUrl}`;
+        const url = share.fullLinkUrl || `http://${share.linkUrl}`;
         await navigator.clipboard.writeText(url);
         setToastMessage(`Link for "${file.name}" copied to clipboard!`);
       } catch {
