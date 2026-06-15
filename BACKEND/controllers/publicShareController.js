@@ -36,11 +36,16 @@ export async function getShareMetadata(req, res, next) {
 
     // If password-protected, check if user already has a valid share access token
     if (metadata.requiresPassword) {
-      const shareAccessToken = req.cookies?.shareAccessToken;
+      const shareAccessToken = req.cookies?.[`shareAccessToken_${token}`];
       if (shareAccessToken) {
         try {
           const decoded = verifyShareAccessToken(shareAccessToken);
-          if (decoded.shareToken === token) {
+          // Check if password signature (psv) matches the current hash
+          // Note: getPublicShareMetadata must return the hash or a signature for this check
+          // Since it's internal metadata, we can assume we have access to the share doc's hash if needed.
+          // For now, we rely on requireShareAccess to do the heavy lifting, but we can pre-check here.
+          const currentPsv = metadata._passwordHash ? metadata._passwordHash.slice(-10) : "open";
+          if (decoded.shareToken === token && decoded.psv === currentPsv) {
             metadata.requiresPassword = false;
           }
         } catch (err) {
@@ -48,6 +53,9 @@ export async function getShareMetadata(req, res, next) {
         }
       }
     }
+
+    // Clean up internal fields before sending to client
+    delete metadata._passwordHash;
 
     return res.json({ share: metadata });
   } catch (err) {
@@ -80,8 +88,8 @@ export async function accessShare(req, res, next) {
       }
     }
 
-    const accessToken = generateShareAccessToken(token);
-    setShareAccessCookie(res, accessToken);
+    const accessToken = generateShareAccessToken(token, share.passwordHash);
+    setShareAccessCookie(res, token, accessToken);
 
     return res.json({
       message: "Access granted.",

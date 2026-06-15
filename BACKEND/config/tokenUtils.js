@@ -82,9 +82,12 @@ export function clearTokenCookies(res) {
 /**
  * Short-lived token granting access to a password-protected public share.
  * @param {string} shareToken - public share slug
+ * @param {string} passwordHash - current password hash to bind the token
  */
-export function generateShareAccessToken(shareToken) {
-  return jwt.sign({ shareToken, type: "share_access" }, SHARE_SECRET, {
+export function generateShareAccessToken(shareToken, passwordHash = "") {
+  // Use a derivative of the password hash to avoid exposing the actual hash in JWT
+  const psv = passwordHash ? passwordHash.slice(-10) : "open";
+  return jwt.sign({ shareToken, psv, type: "share_access" }, SHARE_SECRET, {
     expiresIn: SHARE_ACCESS_TOKEN_EXPIRY,
   });
 }
@@ -92,7 +95,7 @@ export function generateShareAccessToken(shareToken) {
 /**
  * Verify a share access token.
  * @param {string} token
- * @returns {{ shareToken: string, type: string }}
+ * @returns {{ shareToken: string, psv: string, type: string }}
  */
 export function verifyShareAccessToken(token) {
   const decoded = jwt.verify(token, SHARE_SECRET);
@@ -105,10 +108,10 @@ export function verifyShareAccessToken(token) {
 /**
  * Set share access cookie for public downloads/previews.
  */
-export function setShareAccessCookie(res, token) {
+export function setShareAccessCookie(res, shareToken, token) {
   const isProduction = NODE_ENV === "production";
 
-  res.cookie("shareAccessToken", token, {
+  res.cookie(`shareAccessToken_${shareToken}`, token, {
     httpOnly: true,
     secure: isProduction,
     sameSite: isProduction ? "strict" : "lax",

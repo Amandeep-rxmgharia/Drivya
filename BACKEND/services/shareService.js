@@ -471,7 +471,7 @@ export async function getPublicShareMetadata(token, userId = null) {
 
   const share = await cacheAside(cacheKey, CACHE_TTL.SHARE_METADATA, async () => {
     return Share.findOne({ token })
-      .select("-passwordHash")
+      .select("+passwordHash")
       .lean();
   });
 
@@ -494,6 +494,7 @@ export async function getPublicShareMetadata(token, userId = null) {
     permissions: share.permissions,
     expiresAt: share.expiresAt,
     isActive: share.isActive,
+    _passwordHash: share.passwordHash, // Included for token signature verification
   };
 }
 

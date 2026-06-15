@@ -89,9 +89,10 @@ export async function requireShareAccess(req, res, next) {
 
   if (needsPassword) {
     const accessToken =
-      req.cookies?.shareAccessToken ||
       req.headers.authorization?.replace("Bearer ", "") ||
-      req.query.accessToken;
+      req.query.accessToken ||
+      req.cookies?.[`shareAccessToken_${share.token}`] ||
+      req.cookies?.shareAccessToken;
 
     if (!accessToken) {
       return res.status(401).json({
@@ -104,6 +105,15 @@ export async function requireShareAccess(req, res, next) {
       const decoded = verifyShareAccessToken(accessToken);
       if (decoded.shareToken !== share.token) {
         return res.status(401).json({ message: "Invalid share access token." });
+      }
+
+      // 3. Password Signature Verification (Optimized Invalidation)
+      const currentPsv = share.passwordHash ? share.passwordHash.slice(-10) : "open";
+      if (decoded.psv !== currentPsv) {
+        return res.status(401).json({
+          message: "The owner has updated the share password. Please re-enter the password.",
+          code: "SHARE_PASSWORD_CHANGED",
+        });
       }
     } catch {
       return res.status(401).json({
