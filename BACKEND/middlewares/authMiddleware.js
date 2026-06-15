@@ -32,3 +32,22 @@ export function authenticate(req, res, next) {
     return res.status(401).json({ message: "Invalid token." });
   }
 }
+
+/**
+ * Identify user if token is present, but do not fail if it isn't.
+ */
+export function softAuthenticate(req, res, next) {
+  const token =
+    req.cookies?.accessToken ||
+    req.headers.authorization?.replace("Bearer ", "");
+
+  if (token) {
+    try {
+      const decoded = verifyAccessToken(token);
+      req.user = { id: decoded.id };
+    } catch {
+      // Ignore invalid tokens for soft auth
+    }
+  }
+  next();
+}

@@ -51,10 +51,6 @@ const shareCollaboratorSchema = new Schema(
       type: Date,
       default: null,
     },
-    revokedAt: {
-      type: Date,
-      default: null,
-    },
   },
   {
     strict: "throw",

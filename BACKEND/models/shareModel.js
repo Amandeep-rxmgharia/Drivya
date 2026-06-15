@@ -106,10 +106,6 @@ const shareSchema = new Schema(
       type: resourceSnapshotSchema,
       required: true,
     },
-    revokedAt: {
-      type: Date,
-      default: null,
-    },
   },
   {
     strict: "throw",
@@ -147,7 +143,7 @@ shareSchema.methods.isExpired = function isExpired() {
 };
 
 shareSchema.methods.isAccessible = function isAccessible() {
-  return this.isActive && !this.revokedAt && !this.isExpired();
+  return this.isActive && !this.isExpired();
 };
 
 shareSchema.methods.requiresPassword = function requiresPassword() {

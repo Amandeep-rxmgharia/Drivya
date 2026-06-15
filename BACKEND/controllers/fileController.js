@@ -10,7 +10,7 @@ import {
   deleteFiles as deleteFilesFromDisk,
   updateFileContent as updateDiskContent,
 } from "../services/storageService.js";
-import { revokeSharesForResource } from "../services/shareService.js";
+import { deleteSharesForResource } from "../services/shareService.js";
 import { RESOURCE_TYPES } from "../constants/shareConstants.js";
 import { generateStorageName } from "../middlewares/uploadMiddleware.js";
 
@@ -338,7 +338,7 @@ export const emptyTrash = async (req, res, next) => {
       const fileIds = trashedFiles.map((f) => f._id);
       await Promise.all(
         fileIds.map((fileId) =>
-          revokeSharesForResource(userId, RESOURCE_TYPES.FILE, fileId.toString()),
+          deleteSharesForResource(userId, RESOURCE_TYPES.FILE, fileId.toString()),
         ),
       );
 
@@ -383,7 +383,7 @@ export const permanentDeleteFile = async (req, res, next) => {
         { $inc: { storageUsed: -file.size } },
       ).session(session);
 
-      await revokeSharesForResource(
+      await deleteSharesForResource(
         userId,
         RESOURCE_TYPES.FILE,
         file._id.toString(),

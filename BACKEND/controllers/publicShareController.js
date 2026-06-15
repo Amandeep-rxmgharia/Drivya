@@ -30,7 +30,7 @@ function handlePublicShareError(err, res, next) {
 export async function getShareMetadata(req, res, next) {
   try {
     const { token } = req.params;
-    const metadata = await getPublicShareMetadata(token);
+    const metadata = await getPublicShareMetadata(token, req.user?.id);
 
     return res.json({ share: metadata });
   } catch (err) {

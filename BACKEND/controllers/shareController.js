@@ -4,10 +4,10 @@ import {
   getShareStats,
   getShareById,
   updateShare,
-  revokeShare,
+  deleteShare as deleteShareService,
   inviteCollaborator,
   updateCollaboratorRole,
-  revokeCollaborator,
+  deleteCollaborator as deleteCollaboratorService,
 } from "../services/shareService.js";
 import { AppError } from "../utils/errors.js";
 
@@ -100,7 +100,7 @@ export async function deleteShare(req, res, next) {
   try {
     const ownerId = req.user.id;
     const { id } = req.params;
-    const result = await revokeShare(ownerId, id);
+    const result = await deleteShareService(ownerId, id);
 
     return res.json(result);
   } catch (err) {
@@ -149,7 +149,7 @@ export async function deleteCollaborator(req, res, next) {
   try {
     const ownerId = req.user.id;
     const { id, collaboratorId } = req.params;
-    const result = await revokeCollaborator(ownerId, id, collaboratorId);
+    const result = await deleteCollaboratorService(ownerId, id, collaboratorId);
 
     return res.json(result);
   } catch (err) {

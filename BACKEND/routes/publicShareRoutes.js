@@ -17,13 +17,14 @@ import {
   handleValidationErrors,
   validateSharePassword,
 } from "../middlewares/validators.js";
+import { softAuthenticate } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
 router.use(publicShareRateLimit);
 
 // ─── Public Share Access (no auth required) ───────────────────────
-router.get("/:token", getShareMetadata);
+router.get("/:token", softAuthenticate, getShareMetadata);
 router.get("/:token/check", resolvePublicShare, checkShareAccess);
 
 router.post(
@@ -36,6 +37,7 @@ router.post(
 
 router.get(
   "/:token/preview",
+  softAuthenticate,
   resolvePublicShare,
   requireShareAccess,
   previewSharedFile,
@@ -43,6 +45,7 @@ router.get(
 
 router.get(
   "/:token/download",
+  softAuthenticate,
   resolvePublicShare,
   requireShareAccess,
   downloadSharedFile,
@@ -50,6 +53,7 @@ router.get(
 
 router.put(
   "/:token/edit",
+  softAuthenticate,
   resolvePublicShare,
   requireShareAccess,
   editSharedFile,

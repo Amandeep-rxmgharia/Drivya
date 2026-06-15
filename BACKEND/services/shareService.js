@@ -73,7 +73,6 @@ export async function createOrGetShare(ownerId, { resourceType, resourceId }) {
     ownerId,
     resourceType,
     resourceId,
-    revokedAt: null,
   }).lean();
 
   if (existing) {
@@ -124,7 +123,6 @@ export async function listShares(ownerId, query = {}) {
       {
         $match: {
           shareId: { $in: shareIds },
-          status: { $ne: COLLABORATOR_STATUS.REVOKED },
         },
       },
       { $group: { _id: "$shareId", count: { $sum: 1 } } },
@@ -145,7 +143,7 @@ export async function listShares(ownerId, query = {}) {
 }
 
 function buildShareListFilter(ownerId, query) {
-  const filter = { ownerId, revokedAt: null };
+  const filter = { ownerId };
 
   if (query.filter === "active") {
     filter.isActive = true;
@@ -198,7 +196,7 @@ export async function getShareStats(ownerId) {
     const now = new Date();
 
     const [result] = await Share.aggregate([
-      { $match: { ownerId: new mongoose.Types.ObjectId(ownerId), revokedAt: null } },
+      { $match: { ownerId: new mongoose.Types.ObjectId(ownerId) } },
       {
         $group: {
           _id: null,
@@ -252,14 +250,12 @@ export async function getShareById(ownerId, shareId) {
   const share = await Share.findOne({
     _id: shareId,
     ownerId,
-    revokedAt: null,
   }).lean();
 
   if (!share) throw notFound("Share not found.");
 
   const collaborators = await ShareCollaborator.find({
     shareId,
-    status: { $ne: COLLABORATOR_STATUS.REVOKED },
   })
     .sort({ createdAt: 1 })
     .lean();
@@ -282,7 +278,6 @@ export async function updateShare(ownerId, shareId, updates) {
   const share = await Share.findOne({
     _id: shareId,
     ownerId,
-    revokedAt: null,
   }).select("+passwordHash");
 
   if (!share) throw notFound("Share not found.");
@@ -350,26 +345,19 @@ export async function updateShare(ownerId, shareId, updates) {
 }
 
 /**
- * Revoke (soft delete) a share.
+ * Permanently delete a share.
  */
-export async function revokeShare(ownerId, shareId) {
-  const share = await Share.findOneAndUpdate(
-    { _id: shareId, ownerId, revokedAt: null },
-    { revokedAt: new Date(), isActive: false },
-    { new: true },
-  ).lean();
+export async function deleteShare(ownerId, shareId) {
+  const share = await Share.findOneAndDelete({ _id: shareId, ownerId }).lean();
 
   if (!share) throw notFound("Share not found.");
 
-  await ShareCollaborator.updateMany(
-    { shareId, status: { $ne: COLLABORATOR_STATUS.REVOKED } },
-    { status: COLLABORATOR_STATUS.REVOKED, revokedAt: new Date() },
-  );
+  await ShareCollaborator.deleteMany({ shareId });
 
   await invalidateOwnerShareCache(ownerId.toString());
   await invalidateShareTokenCache(share.token);
 
-  return { message: "Share link revoked." };
+  return { message: "Share link deleted." };
 }
 
 // ─── Collaborators ───────────────────────────────────────────────
@@ -378,7 +366,6 @@ export async function inviteCollaborator(ownerId, shareId, { email, role }) {
   const share = await Share.findOne({
     _id: shareId,
     ownerId,
-    revokedAt: null,
   }).lean();
 
   if (!share) throw notFound("Share not found.");
@@ -397,7 +384,6 @@ export async function inviteCollaborator(ownerId, shareId, { email, role }) {
   const existingInvite = await ShareCollaborator.findOne({
     shareId,
     email: normalizedEmail,
-    status: { $ne: COLLABORATOR_STATUS.REVOKED },
   });
 
   if (existingInvite) {
@@ -434,14 +420,13 @@ export async function updateCollaboratorRole(
   collaboratorId,
   role,
 ) {
-  const share = await Share.findOne({ _id: shareId, ownerId, revokedAt: null });
+  const share = await Share.findOne({ _id: shareId, ownerId });
   if (!share) throw notFound("Share not found.");
 
   const collaborator = await ShareCollaborator.findOneAndUpdate(
     {
       _id: collaboratorId,
       shareId,
-      status: { $ne: COLLABORATOR_STATUS.REVOKED },
     },
     { role },
     { new: true },
@@ -452,31 +437,40 @@ export async function updateCollaboratorRole(
   return formatCollaboratorResponse(collaborator);
 }
 
-export async function revokeCollaborator(ownerId, shareId, collaboratorId) {
-  const share = await Share.findOne({ _id: shareId, ownerId, revokedAt: null });
+export async function deleteCollaborator(ownerId, shareId, collaboratorId) {
+  const share = await Share.findOne({ _id: shareId, ownerId });
   if (!share) throw notFound("Share not found.");
 
-  const collaborator = await ShareCollaborator.findOneAndUpdate(
-    { _id: collaboratorId, shareId },
-    {
-      status: COLLABORATOR_STATUS.REVOKED,
-      revokedAt: new Date(),
-    },
-    { new: true },
-  ).lean();
+  const collaborator = await ShareCollaborator.findOneAndDelete({
+    _id: collaboratorId,
+    shareId,
+  }).lean();
 
   if (!collaborator) throw notFound("Collaborator not found.");
 
-  return { message: "Collaborator access revoked." };
+  return { message: "Collaborator access removed." };
 }
 
 // ─── Public Access ───────────────────────────────────────────────
 
-export async function getPublicShareMetadata(token) {
+export async function isUserAuthorizedForShare(share, userId) {
+  if (!userId) return false;
+  if (share.ownerId.toString() === userId.toString()) return true;
+
+  const collaborator = await ShareCollaborator.findOne({
+    shareId: share._id,
+    userId: userId,
+    status: COLLABORATOR_STATUS.ACCEPTED,
+  }).lean();
+
+  return !!collaborator;
+}
+
+export async function getPublicShareMetadata(token, userId = null) {
   const cacheKey = `${CACHE_KEYS.SHARE_BY_TOKEN}${token}`;
 
   const share = await cacheAside(cacheKey, CACHE_TTL.SHARE_METADATA, async () => {
-    return Share.findOne({ token, revokedAt: null })
+    return Share.findOne({ token })
       .select("-passwordHash")
       .lean();
   });
@@ -484,13 +478,19 @@ export async function getPublicShareMetadata(token) {
   if (!share) throw notFound("Share link not found.");
   if (!isShareAccessible(share)) throw gone("This share link is no longer available.");
 
+  const isAuthorized = await isUserAuthorizedForShare(share, userId);
+  const requiresAuth = share.visibility === VISIBILITY.RESTRICTED && !share.isPasswordProtected;
+
   return {
     token: share.token,
     name: share.resourceSnapshot.name,
     mimeType: share.resourceSnapshot.mimeType,
     size: share.resourceSnapshot.size,
     visibility: share.visibility,
-    requiresPassword: share.visibility === VISIBILITY.RESTRICTED,
+    requiresPassword: share.isPasswordProtected,
+    requiresAuth,
+    isAuthenticated: !!userId,
+    isAuthorized,
     permissions: share.permissions,
     expiresAt: share.expiresAt,
     isActive: share.isActive,
@@ -498,7 +498,7 @@ export async function getPublicShareMetadata(token) {
 }
 
 export async function verifySharePassword(token, password) {
-  const share = await Share.findOne({ token, revokedAt: null }).select(
+  const share = await Share.findOne({ token }).select(
     "+passwordHash",
   );
 
@@ -516,7 +516,7 @@ export async function verifySharePassword(token, password) {
 }
 
 export async function resolveShareFileForPublicAccess(token) {
-  const share = await Share.findOne({ token, revokedAt: null })
+  const share = await Share.findOne({ token })
     .select("+passwordHash")
     .lean();
 
@@ -540,7 +540,7 @@ export async function resolveShareFileForPublicAccess(token) {
 
 export async function incrementShareView(token) {
   await Share.updateOne(
-    { token, revokedAt: null },
+    { token },
     { $inc: { viewCount: 1 }, lastAccessedAt: new Date() },
   );
   await invalidateShareTokenCache(token);
@@ -548,36 +548,29 @@ export async function incrementShareView(token) {
 
 export async function incrementShareDownload(token) {
   await Share.updateOne(
-    { token, revokedAt: null },
+    { token },
     { $inc: { downloadCount: 1 }, lastAccessedAt: new Date() },
   );
   await invalidateShareTokenCache(token);
 }
 
 /**
- * Revoke all shares when a file is permanently deleted.
+ * Delete all shares when a file is permanently deleted.
  * Called from file lifecycle hooks.
  */
-export async function revokeSharesForResource(ownerId, resourceType, resourceId) {
+export async function deleteSharesForResource(ownerId, resourceType, resourceId) {
   const shares = await Share.find({
     ownerId,
     resourceType,
     resourceId,
-    revokedAt: null,
   }).lean();
 
   if (shares.length === 0) return;
 
-  await Share.updateMany(
-    { ownerId, resourceType, resourceId, revokedAt: null },
-    { revokedAt: new Date(), isActive: false },
-  );
+  await Share.deleteMany({ ownerId, resourceType, resourceId });
 
   const shareIds = shares.map((s) => s._id);
-  await ShareCollaborator.updateMany(
-    { shareId: { $in: shareIds } },
-    { status: COLLABORATOR_STATUS.REVOKED, revokedAt: new Date() },
-  );
+  await ShareCollaborator.deleteMany({ shareId: { $in: shareIds } });
 
   await Promise.all(
     shares.map((s) => invalidateShareTokenCache(s.token)),
@@ -588,7 +581,7 @@ export async function revokeSharesForResource(ownerId, resourceType, resourceId)
 // ─── Helpers ─────────────────────────────────────────────────────
 
 function isShareAccessible(share) {
-  if (!share.isActive || share.revokedAt) return false;
+  if (!share.isActive) return false;
   if (share.expiresAt && new Date(share.expiresAt) <= new Date()) return false;
   return true;
 }

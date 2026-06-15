@@ -25,6 +25,7 @@ import {
   Maximize2,
   ZoomIn,
   ZoomOut,
+  UserX,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { easeSmooth } from "@/lib/motion-presets";
@@ -325,6 +326,9 @@ export default function PublicShare() {
 
   // Password authorization state
   const [requiresPassword, setRequiresPassword] = useState(false);
+  const [authRequired, setAuthRequired] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthorized, setIsAuthorized] = useState(false);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [unlockError, setUnlockError] = useState(null);
@@ -353,10 +357,19 @@ export default function PublicShare() {
       }
       const response = await api.get(`/public/shares/${token}`, { headers });
       setMetadata(response.data.share);
-      setRequiresPassword(false);
+      setRequiresPassword(response.data.share.requiresPassword);
+      setAuthRequired(response.data.share.requiresAuth);
+      setIsAuthenticated(response.data.share.isAuthenticated);
+      setIsAuthorized(response.data.share.isAuthorized);
     } catch (err) {
       if (err.response?.status === 401) {
-        setRequiresPassword(true);
+        if (err.response?.data?.code === "AUTH_REQUIRED") {
+          setAuthRequired(true);
+          setIsAuthenticated(false);
+          setIsAuthorized(false);
+        } else {
+          setRequiresPassword(true);
+        }
       } else {
         setError(
           err.response?.data?.message ||
@@ -545,6 +558,74 @@ export default function PublicShare() {
               <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
                 {error}
               </p>
+            </div>
+          </motion.div>
+        ) : authRequired && !isAuthenticated ? (
+          /* ── Authentication Required Screen ── */
+          <motion.div
+            key="auth-required"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="w-full max-w-md rounded-3xl border border-white/10 dark:border-white/5 bg-background/80 dark:bg-card/85 shadow-elegant backdrop-blur-lg p-6 sm:p-8"
+          >
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-primary/25 bg-primary/10 text-primary shadow-glow">
+                <Globe className="h-6 w-6" />
+              </div>
+              <div className="space-y-1.5">
+                <h2 className="font-display text-xl font-bold tracking-tight text-foreground">
+                  Restricted Access
+                </h2>
+                <p className="text-xs text-muted-foreground/80 font-medium tracking-wide uppercase">
+                  Authorized Users Only
+                </p>
+              </div>
+              <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
+                This share link is restricted. Please sign in to verify your access permissions.
+              </p>
+              <button
+                onClick={() => {
+                  window.location.href = `/auth?redirect=${encodeURIComponent(window.location.pathname)}`;
+                }}
+                className="mt-4 w-full h-12 inline-flex items-center justify-center gap-2 rounded-2xl bg-primary text-primary-foreground font-semibold shadow-glow hover:opacity-90 active:scale-98 transition-all cursor-pointer"
+              >
+                Sign in to Access
+              </button>
+            </div>
+          </motion.div>
+        ) : authRequired && isAuthenticated && !isAuthorized ? (
+          /* ── Unauthorized Access Screen ── */
+          <motion.div
+            key="unauthorized"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="w-full max-w-md rounded-3xl border border-white/10 dark:border-white/5 bg-background/80 dark:bg-card/85 shadow-elegant backdrop-blur-lg p-6 sm:p-8"
+          >
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-destructive/25 bg-destructive/10 text-destructive shadow-glow">
+                <UserX className="h-6 w-6" />
+              </div>
+              <div className="space-y-1.5">
+                <h2 className="font-display text-xl font-bold tracking-tight text-foreground">
+                  Permission Denied
+                </h2>
+                <p className="text-xs text-muted-foreground/80 font-medium tracking-wide uppercase">
+                  Access Unauthorized
+                </p>
+              </div>
+              <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
+                You are currently signed in, but you do not have permission to access this shared file. Please contact the owner for access.
+              </p>
+              <div className="mt-4 flex flex-col gap-2 w-full">
+                <p className="text-[11px] text-muted-foreground font-semibold uppercase tracking-widest">
+                  Signed in as
+                </p>
+                <div className="p-3 rounded-xl bg-secondary/20 border border-border/50 text-xs font-medium text-foreground truncate">
+                  Your Account
+                </div>
+              </div>
             </div>
           </motion.div>
         ) : requiresPassword ? (

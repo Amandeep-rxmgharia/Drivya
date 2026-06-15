@@ -5,7 +5,7 @@ import {
 } from "../config/tokenUtils.js";
 import Share from "../models/shareModel.js";
 import { VISIBILITY } from "../constants/shareConstants.js";
-import { isShareAccessible } from "../services/shareService.js";
+import { isShareAccessible, isUserAuthorizedForShare } from "../services/shareService.js";
 
 /**
  * Stricter rate limit for public share endpoints (brute-force protection).
@@ -37,7 +37,7 @@ export async function resolvePublicShare(req, res, next) {
   try {
     const { token } = req.params;
 
-    const share = await Share.findOne({ token, revokedAt: null })
+    const share = await Share.findOne({ token })
       .select("+passwordHash")
       .lean();
 
@@ -59,43 +59,62 @@ export async function resolvePublicShare(req, res, next) {
 }
 
 /**
- * Ensure caller has access to a password-protected share.
- * Accepts shareAccessToken cookie, Authorization header, or ?accessToken query.
+ * Ensure caller has access to a password-protected share or authorized restricted share.
+ * Accepts shareAccessToken cookie, Authorization header, or ?accessToken query for password-protected shares.
+ * For user-restricted shares, it relies on req.user identification.
  */
-export function requireShareAccess(req, res, next) {
+export async function requireShareAccess(req, res, next) {
   const share = req.share;
 
   const needsPassword =
     share.visibility === VISIBILITY.RESTRICTED && share.passwordHash;
 
-  if (!needsPassword) {
-    return next();
-  }
+  // 1. Password Protection Check
+  if (needsPassword) {
+    const accessToken =
+      req.cookies?.shareAccessToken ||
+      req.headers.authorization?.replace("Bearer ", "") ||
+      req.query.accessToken;
 
-  const accessToken =
-    req.cookies?.shareAccessToken ||
-    req.headers.authorization?.replace("Bearer ", "") ||
-    req.query.accessToken;
-
-  if (!accessToken) {
-    return res.status(401).json({
-      message: "Password required to access this share.",
-      code: "SHARE_PASSWORD_REQUIRED",
-    });
-  }
-
-  try {
-    const decoded = verifyShareAccessToken(accessToken);
-    if (decoded.shareToken !== share.token) {
-      return res.status(401).json({ message: "Invalid share access token." });
+    if (!accessToken) {
+      return res.status(401).json({
+        message: "Password required to access this share.",
+        code: "SHARE_PASSWORD_REQUIRED",
+      });
     }
-    next();
-  } catch {
-    return res.status(401).json({
-      message: "Share access token expired or invalid.",
-      code: "SHARE_ACCESS_EXPIRED",
-    });
+
+    try {
+      const decoded = verifyShareAccessToken(accessToken);
+      if (decoded.shareToken !== share.token) {
+        return res.status(401).json({ message: "Invalid share access token." });
+      }
+      return next();
+    } catch {
+      return res.status(401).json({
+        message: "Share access token expired or invalid.",
+        code: "SHARE_ACCESS_EXPIRED",
+      });
+    }
   }
+
+  // 2. Restricted User-based Check (No password, just authorized people)
+  if (share.visibility === VISIBILITY.RESTRICTED) {
+    if (!req.user) {
+      return res.status(401).json({
+        message: "Authentication required to access this restricted share.",
+        code: "AUTH_REQUIRED",
+      });
+    }
+
+    const authorized = await isUserAuthorizedForShare(share, req.user.id);
+    if (!authorized) {
+      return res.status(403).json({
+        message: "You are not authorized to access this restricted share.",
+      });
+    }
+  }
+
+  next();
 }
 
 export { generateShareAccessToken };

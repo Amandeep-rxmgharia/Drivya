@@ -99,7 +99,8 @@ export default function Auth() {
       setLoadingStep("Loading account data...");
       setIsSuccess(true);
       setIsLoading(false);
-      setTimeout(() => navigate("/dashboard"), 600);
+      const redirectTo = searchParams.get("redirect") || "/dashboard";
+      setTimeout(() => navigate(redirectTo), 600);
     } catch (error) {
       const msg =
         error.response?.data?.message ||
@@ -147,7 +148,8 @@ export default function Auth() {
       setLoadingStep("Initializing dashboard...");
       setIsSuccess(true);
       setIsLoading(false);
-      setTimeout(() => navigate("/dashboard"), 600);
+      const redirectTo = searchParams.get("redirect") || "/dashboard";
+      setTimeout(() => navigate(redirectTo), 600);
     } catch (error) {
       const msg =
         error.response?.data?.message ||

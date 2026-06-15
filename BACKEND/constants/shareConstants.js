@@ -20,7 +20,6 @@ export const COLLABORATOR_ROLES = Object.freeze({
 export const COLLABORATOR_STATUS = Object.freeze({
   PENDING: "pending",
   ACCEPTED: "accepted",
-  REVOKED: "revoked",
 });
 
 /** Expiration presets mapped to days (null = never). */
