@@ -479,7 +479,7 @@ export async function getPublicShareMetadata(token, userId = null) {
   if (!isShareAccessible(share)) throw gone("This share link is no longer available.");
 
   const isAuthorized = await isUserAuthorizedForShare(share, userId);
-  const requiresAuth = share.visibility === VISIBILITY.RESTRICTED && !share.isPasswordProtected;
+  const requiresAuth = share.visibility === VISIBILITY.RESTRICTED;
 
   return {
     token: share.token,

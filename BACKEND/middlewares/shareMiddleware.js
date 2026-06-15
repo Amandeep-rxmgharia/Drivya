@@ -66,10 +66,27 @@ export async function resolvePublicShare(req, res, next) {
 export async function requireShareAccess(req, res, next) {
   const share = req.share;
 
+  // 1. Restricted User-based Check
+  if (share.visibility === VISIBILITY.RESTRICTED) {
+    if (!req.user) {
+      return res.status(401).json({
+        message: "Authentication required to access this restricted share.",
+        code: "AUTH_REQUIRED",
+      });
+    }
+
+    const authorized = await isUserAuthorizedForShare(share, req.user.id);
+    if (!authorized) {
+      return res.status(403).json({
+        message: "You are not authorized to access this restricted share.",
+      });
+    }
+  }
+
+  // 2. Password Protection Check
   const needsPassword =
     share.visibility === VISIBILITY.RESTRICTED && share.passwordHash;
 
-  // 1. Password Protection Check
   if (needsPassword) {
     const accessToken =
       req.cookies?.shareAccessToken ||
@@ -88,28 +105,10 @@ export async function requireShareAccess(req, res, next) {
       if (decoded.shareToken !== share.token) {
         return res.status(401).json({ message: "Invalid share access token." });
       }
-      return next();
     } catch {
       return res.status(401).json({
         message: "Share access token expired or invalid.",
         code: "SHARE_ACCESS_EXPIRED",
-      });
-    }
-  }
-
-  // 2. Restricted User-based Check (No password, just authorized people)
-  if (share.visibility === VISIBILITY.RESTRICTED) {
-    if (!req.user) {
-      return res.status(401).json({
-        message: "Authentication required to access this restricted share.",
-        code: "AUTH_REQUIRED",
-      });
-    }
-
-    const authorized = await isUserAuthorizedForShare(share, req.user.id);
-    if (!authorized) {
-      return res.status(403).json({
-        message: "You are not authorized to access this restricted share.",
       });
     }
   }

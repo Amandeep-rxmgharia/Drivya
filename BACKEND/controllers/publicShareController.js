@@ -4,6 +4,7 @@ import {
   resolveShareFileForPublicAccess,
   incrementShareView,
   incrementShareDownload,
+  isUserAuthorizedForShare,
 } from "../services/shareService.js";
 import { getFileStream, updateFileContent as updateDiskContent } from "../services/storageService.js";
 import {
@@ -45,6 +46,23 @@ export async function accessShare(req, res, next) {
     const { password } = req.body;
 
     const share = await verifySharePassword(token, password);
+
+    // If restricted, ensure user is authorized (owner or collaborator)
+    if (share.visibility === VISIBILITY.RESTRICTED) {
+      if (!req.user) {
+        return res.status(401).json({
+          message: "Authentication required to access this restricted share.",
+          code: "AUTH_REQUIRED",
+        });
+      }
+
+      const authorized = await isUserAuthorizedForShare(share, req.user.id);
+      if (!authorized) {
+        return res.status(403).json({
+          message: "You are not authorized to access this restricted share.",
+        });
+      }
+    }
 
     const accessToken = generateShareAccessToken(token);
     setShareAccessCookie(res, accessToken);

@@ -379,7 +379,7 @@ export default function PublicShare() {
     } finally {
       setLoading(false);
     }
-  }, [token, accessToken]);
+  }, [token]);
 
   useEffect(() => {
     fetchMetadata();

@@ -29,6 +29,7 @@ router.get("/:token/check", resolvePublicShare, checkShareAccess);
 
 router.post(
   "/:token/access",
+  softAuthenticate,
   sharePasswordRateLimit,
   validateSharePassword,
   handleValidationErrors,
