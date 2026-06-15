@@ -45,9 +45,20 @@ export function softAuthenticate(req, res, next) {
     try {
       const decoded = verifyAccessToken(token);
       req.user = { id: decoded.id };
-    } catch {
-      // Ignore invalid tokens for soft auth
+      return next();
+    } catch (err) {
+      if (err.name === "TokenExpiredError" && req.cookies?.refreshToken) {
+        return res
+          .status(401)
+          .json({ message: "Token expired.", code: "TOKEN_EXPIRED" });
+      }
+      // Ignore other invalid tokens for soft auth
     }
+  } else if (req.cookies?.refreshToken) {
+    // If no access token but refresh token exists, prompt for refresh
+    return res
+      .status(401)
+      .json({ message: "Token expired.", code: "TOKEN_EXPIRED" });
   }
   next();
 }
