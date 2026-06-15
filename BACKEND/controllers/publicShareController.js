@@ -10,6 +10,7 @@ import { getFileStream, updateFileContent as updateDiskContent } from "../servic
 import {
   generateShareAccessToken,
   setShareAccessCookie,
+  verifyShareAccessToken,
 } from "../config/tokenUtils.js";
 import { AppError } from "../utils/errors.js";
 import { VISIBILITY } from "../constants/shareConstants.js";
@@ -32,6 +33,21 @@ export async function getShareMetadata(req, res, next) {
   try {
     const { token } = req.params;
     const metadata = await getPublicShareMetadata(token, req.user?.id);
+
+    // If password-protected, check if user already has a valid share access token
+    if (metadata.requiresPassword) {
+      const shareAccessToken = req.cookies?.shareAccessToken;
+      if (shareAccessToken) {
+        try {
+          const decoded = verifyShareAccessToken(shareAccessToken);
+          if (decoded.shareToken === token) {
+            metadata.requiresPassword = false;
+          }
+        } catch (err) {
+          // Token invalid or expired, proceed with requiresPassword: true
+        }
+      }
+    }
 
     return res.json({ share: metadata });
   } catch (err) {

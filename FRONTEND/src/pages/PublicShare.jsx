@@ -333,9 +333,7 @@ export default function PublicShare() {
   const [showPassword, setShowPassword] = useState(false);
   const [unlockError, setUnlockError] = useState(null);
   const [unlocking, setUnlocking] = useState(false);
-  const [accessToken, setAccessToken] = useState(() => {
-    return localStorage.getItem(`share_token_${token}`) || "";
-  });
+  const [accessToken, setAccessToken] = useState("");
 
   // Text file preview & edit state
   const [textContent, setTextContent] = useState("");
@@ -432,7 +430,6 @@ export default function PublicShare() {
       });
       const tokenVal = response.data.accessToken;
       setAccessToken(tokenVal);
-      localStorage.setItem(`share_token_${token}`, tokenVal);
       setRequiresPassword(false);
       setMetadata(response.data.share);
     } catch (err) {
