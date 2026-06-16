@@ -23,6 +23,14 @@ const router = express.Router();
 
 router.use(publicShareRateLimit);
 
+// ─── Prevent Browser Caching for Metadata & Status ────────────────
+// This ensures that toggling a share link (enable/disable) is reflected
+// immediately without needing a hard refresh or incognito mode.
+router.use((req, res, next) => {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  next();
+});
+
 // ─── Public Share Access (no auth required) ───────────────────────
 router.get("/:token", softAuthenticate, getShareMetadata);
 router.get("/:token/check", resolvePublicShare, checkShareAccess);
