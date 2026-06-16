@@ -343,7 +343,7 @@ export default function PublicShare() {
   const [editValue, setEditValue] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
-
+  const [signedAccount,setSignedAccount] = useState(null)
   // Fetch metadata on mount or when token/accessToken changes
   const fetchMetadata = useCallback(async () => {
     setLoading(true);
@@ -405,12 +405,14 @@ export default function PublicShare() {
       setTextContent(text);
       setEditValue(text);
     } catch (err) {
+      console.log(err.response?.data);
       setTextError(err.response?.data?.message || "Failed to load file text.");
+      setSignedAccount(JSON.parse(err.response?.data)?.signedAccount)
     } finally {
       setTextLoading(false);
     }
   }, [metadata, token, accessToken]);
-
+console.log(signedAccount);
   useEffect(() => {
     if (metadata) {
       fetchTextContent();
@@ -620,7 +622,7 @@ export default function PublicShare() {
                   Signed in as
                 </p>
                 <div className="p-3 rounded-xl bg-secondary/20 border border-border/50 text-xs font-medium text-foreground truncate">
-                  Your Account
+                  {signedAccount ? signedAccount : ''}
                 </div>
               </div>
             </div>

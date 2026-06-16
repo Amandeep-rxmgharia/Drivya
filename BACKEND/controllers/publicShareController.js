@@ -17,6 +17,7 @@ import { VISIBILITY } from "../constants/shareConstants.js";
 import File from "../models/fileModel.js";
 import Share from "../models/shareModel.js";
 import { invalidateShareTokenCache, invalidateOwnerShareCache } from "../services/cacheService.js";
+import User from "../models/userModel.js";
 
 function handlePublicShareError(err, res, next) {
   if (err instanceof AppError) {
@@ -82,8 +83,10 @@ export async function accessShare(req, res, next) {
 
       const authorized = await isUserAuthorizedForShare(share, req.user.id);
       if (!authorized) {
+        const {email} = await User.findById(req.user.id).select('email').lean()
         return res.status(403).json({
           message: "You are not authorized to access this restricted share.",
+          signedAccount: email
         });
       }
     }

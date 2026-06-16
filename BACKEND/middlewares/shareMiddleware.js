@@ -5,7 +5,11 @@ import {
 } from "../config/tokenUtils.js";
 import Share from "../models/shareModel.js";
 import { VISIBILITY } from "../constants/shareConstants.js";
-import { isShareAccessible, isUserAuthorizedForShare } from "../services/shareService.js";
+import {
+  isShareAccessible,
+  isUserAuthorizedForShare,
+} from "../services/shareService.js";
+import User from "../models/userModel.js";
 
 /**
  * Stricter rate limit for public share endpoints (brute-force protection).
@@ -37,9 +41,7 @@ export async function resolvePublicShare(req, res, next) {
   try {
     const { token } = req.params;
 
-    const share = await Share.findOne({ token })
-      .select("+passwordHash")
-      .lean();
+    const share = await Share.findOne({ token }).select("+passwordHash").lean();
 
     if (!share) {
       return res.status(404).json({ message: "Share link not found." });
@@ -76,9 +78,11 @@ export async function requireShareAccess(req, res, next) {
     }
 
     const authorized = await isUserAuthorizedForShare(share, req.user.id);
+    const { email } = await User.findById(req.user.id).select("email").lean();
     if (!authorized) {
       return res.status(403).json({
         message: "You are not authorized to access this restricted share.",
+        signedAccount: email,
       });
     }
   }
@@ -108,10 +112,13 @@ export async function requireShareAccess(req, res, next) {
       }
 
       // 3. Password Signature Verification (Optimized Invalidation)
-      const currentPsv = share.passwordHash ? share.passwordHash.slice(-10) : "open";
+      const currentPsv = share.passwordHash
+        ? share.passwordHash.slice(-10)
+        : "open";
       if (decoded.psv !== currentPsv) {
         return res.status(401).json({
-          message: "The owner has updated the share password. Please re-enter the password.",
+          message:
+            "The owner has updated the share password. Please re-enter the password.",
           code: "SHARE_PASSWORD_CHANGED",
         });
       }
