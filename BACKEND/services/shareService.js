@@ -190,57 +190,53 @@ function buildShareListSort(sortBy, hasTextSearch = false) {
  * Aggregate stats for the shared files dashboard hero.
  */
 export async function getShareStats(ownerId) {
-  const cacheKey = `${CACHE_KEYS.SHARE_STATS}${ownerId}`;
+  const now = new Date();
 
-  return cacheAside(cacheKey, CACHE_TTL.SHARE_STATS, async () => {
-    const now = new Date();
-
-    const [result] = await Share.aggregate([
-      { $match: { ownerId: new mongoose.Types.ObjectId(ownerId) } },
-      {
-        $group: {
-          _id: null,
-          totalShares: { $sum: 1 },
-          activeLinks: {
-            $sum: {
-              $cond: [
-                {
-                  $and: [
-                    { $eq: ["$isActive", true] },
-                    {
-                      $or: [
-                        { $eq: ["$expiresAt", null] },
-                        { $gt: ["$expiresAt", now] },
-                      ],
-                    },
-                  ],
-                },
-                1,
-                0,
-              ],
-            },
+  const [result] = await Share.aggregate([
+    { $match: { ownerId: new mongoose.Types.ObjectId(ownerId) } },
+    {
+      $group: {
+        _id: null,
+        totalShares: { $sum: 1 },
+        activeLinks: {
+          $sum: {
+            $cond: [
+              {
+                $and: [
+                  { $eq: ["$isActive", true] },
+                  {
+                    $or: [
+                      { $eq: ["$expiresAt", null] },
+                      { $gt: ["$expiresAt", now] },
+                    ],
+                  },
+                ],
+              },
+              1,
+              0,
+            ],
           },
-          totalViews: { $sum: "$viewCount" },
-          totalDownloads: { $sum: "$downloadCount" },
-          protectedCount: {
-            $sum: {
-              $cond: [{ $eq: ["$isPasswordProtected", true] }, 1, 0],
-            },
+        },
+        totalViews: { $sum: "$viewCount" },
+        totalDownloads: { $sum: "$downloadCount" },
+        protectedCount: {
+          $sum: {
+            $cond: [{ $eq: ["$isPasswordProtected", true] }, 1, 0],
           },
         },
       },
-    ]);
+    },
+  ]);
 
-    return (
-      result || {
-        totalShares: 0,
-        activeLinks: 0,
-        totalViews: 0,
-        totalDownloads: 0,
-        protectedCount: 0,
-      }
-    );
-  });
+  return (
+    result || {
+      totalShares: 0,
+      activeLinks: 0,
+      totalViews: 0,
+      totalDownloads: 0,
+      protectedCount: 0,
+    }
+  );
 }
 
 /**
@@ -481,6 +477,11 @@ export async function getPublicShareMetadata(token, userId = null) {
   const isAuthorized = await isUserAuthorizedForShare(share, userId);
   const requiresAuth = share.visibility === VISIBILITY.RESTRICTED;
 
+  // Fetch view and download counts directly from DB outside cache-aside to keep them fresh
+  const freshCounts = await Share.findOne({ token })
+    .select("viewCount downloadCount")
+    .lean();
+
   return {
     token: share.token,
     name: share.resourceSnapshot.name,
@@ -495,6 +496,8 @@ export async function getPublicShareMetadata(token, userId = null) {
     expiresAt: share.expiresAt,
     isActive: share.isActive,
     _passwordHash: share.passwordHash, // Included for token signature verification
+    viewCount: freshCounts?.viewCount || 0,
+    downloadCount: freshCounts?.downloadCount || 0,
   };
 }
 
@@ -543,24 +546,26 @@ export async function incrementShareView(token) {
   const share = await Share.findOneAndUpdate(
     { token },
     { $inc: { viewCount: 1 }, lastAccessedAt: new Date() },
-    { projection: { ownerId: 1 } },
+    { new: true, projection: { ownerId: 1, viewCount: 1 } },
   );
   await invalidateShareTokenCache(token);
   if (share?.ownerId) {
     await invalidateOwnerShareCache(share.ownerId.toString());
   }
+  return share?.viewCount || 0;
 }
 
 export async function incrementShareDownload(token) {
   const share = await Share.findOneAndUpdate(
     { token },
     { $inc: { downloadCount: 1 }, lastAccessedAt: new Date() },
-    { projection: { ownerId: 1 } },
+    { new: true, projection: { ownerId: 1, downloadCount: 1 } },
   );
   await invalidateShareTokenCache(token);
   if (share?.ownerId) {
     await invalidateOwnerShareCache(share.ownerId.toString());
   }
+  return share?.downloadCount || 0;
 }
 
 /**

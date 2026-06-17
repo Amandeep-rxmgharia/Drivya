@@ -412,7 +412,6 @@ export default function PublicShare() {
       setTextLoading(false);
     }
   }, [metadata, token, accessToken]);
-console.log(signedAccount);
   useEffect(() => {
     if (metadata) {
       fetchTextContent();
@@ -433,7 +432,16 @@ console.log(signedAccount);
       const tokenVal = response.data.accessToken;
       setAccessToken(tokenVal);
       setRequiresPassword(false);
-      setMetadata(response.data.share);
+
+      // Re-fetch the full metadata to populate file details & counts
+      const metaRes = await api.get(`/public/shares/${token}`, {
+        headers: { Authorization: `Bearer ${tokenVal}` }
+      });
+      setMetadata(metaRes.data.share);
+      setRequiresPassword(metaRes.data.share.requiresPassword);
+      setAuthRequired(metaRes.data.share.requiresAuth);
+      setIsAuthenticated(metaRes.data.share.isAuthenticated);
+      setIsAuthorized(metaRes.data.share.isAuthorized);
     } catch (err) {
       setUnlockError(err.response?.data?.message || "Incorrect password.");
     } finally {
