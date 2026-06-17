@@ -540,19 +540,27 @@ export async function resolveShareFileForPublicAccess(token) {
 }
 
 export async function incrementShareView(token) {
-  await Share.updateOne(
+  const share = await Share.findOneAndUpdate(
     { token },
     { $inc: { viewCount: 1 }, lastAccessedAt: new Date() },
+    { projection: { ownerId: 1 } },
   );
   await invalidateShareTokenCache(token);
+  if (share?.ownerId) {
+    await invalidateOwnerShareCache(share.ownerId.toString());
+  }
 }
 
 export async function incrementShareDownload(token) {
-  await Share.updateOne(
+  const share = await Share.findOneAndUpdate(
     { token },
     { $inc: { downloadCount: 1 }, lastAccessedAt: new Date() },
+    { projection: { ownerId: 1 } },
   );
   await invalidateShareTokenCache(token);
+  if (share?.ownerId) {
+    await invalidateOwnerShareCache(share.ownerId.toString());
+  }
 }
 
 /**

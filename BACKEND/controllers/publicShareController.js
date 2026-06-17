@@ -16,7 +16,12 @@ import { AppError } from "../utils/errors.js";
 import { VISIBILITY } from "../constants/shareConstants.js";
 import File from "../models/fileModel.js";
 import Share from "../models/shareModel.js";
-import { invalidateShareTokenCache, invalidateOwnerShareCache } from "../services/cacheService.js";
+import {
+  invalidateShareTokenCache,
+  invalidateOwnerShareCache,
+  cacheGet,
+  cacheSet,
+} from "../services/cacheService.js";
 import User from "../models/userModel.js";
 
 function handlePublicShareError(err, res, next) {
@@ -35,16 +40,36 @@ export async function getShareMetadata(req, res, next) {
     const { token } = req.params;
     const metadata = await getPublicShareMetadata(token, req.user?.id);
 
+    // ─── Track unique view (session cookie + short IP lock) ──────
+    // Placed here instead of the preview endpoint because this route
+    // always goes through axios (withCredentials: true), so the
+    // Set-Cookie header is reliably processed by the browser.
+    // Preview URLs are often loaded via <img>/<video> tags where
+    // browsers silently discard cross-origin Set-Cookie headers.
+    const viewedCookieName = `viewed_${token}`;
+    const hasViewed = req.cookies?.[viewedCookieName];
+    if (!hasViewed) {
+      const ip = req.ip || req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+      const ua = req.headers["user-agent"] || "";
+      const lockKey = `view_lock:${token}:${ip}:${ua}`;
+      const locked = await cacheGet(lockKey);
+      if (!locked) {
+        await cacheSet(lockKey, "1", 60); // 60s dedup window
+        await incrementShareView(token);
+        res.cookie(viewedCookieName, "1", {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+        });
+      }
+    }
+
     // If password-protected, check if user already has a valid share access token
     if (metadata.requiresPassword) {
       const shareAccessToken = req.cookies?.[`shareAccessToken_${token}`];
       if (shareAccessToken) {
         try {
           const decoded = verifyShareAccessToken(shareAccessToken);
-          // Check if password signature (psv) matches the current hash
-          // Note: getPublicShareMetadata must return the hash or a signature for this check
-          // Since it's internal metadata, we can assume we have access to the share doc's hash if needed.
-          // For now, we rely on requireShareAccess to do the heavy lifting, but we can pre-check here.
           const currentPsv = metadata._passwordHash ? metadata._passwordHash.slice(-10) : "open";
           if (decoded.shareToken === token && decoded.psv === currentPsv) {
             metadata.requiresPassword = false;
@@ -119,7 +144,11 @@ export async function previewSharedFile(req, res, next) {
     }
 
     const { file } = await resolveShareFileForPublicAccess(token);
-    await incrementShareView(token);
+
+    // NOTE: View count is tracked in getShareMetadata (the metadata
+    // endpoint), NOT here. This endpoint streams the binary file and
+    // may be called many times per page load (Range requests for
+    // video/audio seeking, browser retries, etc.).
 
     const fileSize = file.size;
     const range = req.headers.range;
@@ -171,7 +200,23 @@ export async function downloadSharedFile(req, res, next) {
     }
 
     const { file } = await resolveShareFileForPublicAccess(token);
-    await incrementShareDownload(token);
+
+    // Optimize download count increment: skip if session cookie exists or cache lock is active
+    const hasDownloaded = req.cookies[`downloaded_${token}`];
+    const ip = req.ip || req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+    const userAgent = req.headers["user-agent"] || "";
+    const cacheKey = `download_lock:${token}:${ip}:${userAgent}`;
+    const isDownloadLocked = await cacheGet(cacheKey);
+
+    if (!hasDownloaded && !isDownloadLocked) {
+      await cacheSet(cacheKey, "1", 60); // 60 seconds lock for parallel download requests/retries
+      await incrementShareDownload(token);
+      res.cookie(`downloaded_${token}`, "1", {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+      });
+    }
 
     res.set({
       "Content-Type": file.mimeType,
