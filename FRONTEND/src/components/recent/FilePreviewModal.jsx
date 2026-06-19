@@ -175,6 +175,11 @@ export function FilePreviewModal({
                     <Pencil className="h-3 w-3" /> Renamed
                   </span>
                 )}
+                {file.actions.includes("trashed") && (
+                  <span className="inline-flex items-center gap-1 rounded-md border border-rose-500/20 bg-rose-500/8 px-2 py-0.5 text-[10px] font-medium text-rose-600 dark:text-rose-400 animate-fade-in">
+                    <Trash2 className="h-3 w-3" /> Trashed
+                  </span>
+                )}
               </>
             ) : (
               <>
@@ -185,6 +190,10 @@ export function FilePreviewModal({
                 ) : file.type === "downloaded" ? (
                   <span className="inline-flex items-center gap-1 rounded-md border border-indigo-500/20 bg-indigo-500/8 px-2 py-0.5 text-[10px] font-medium text-indigo-600 dark:text-indigo-400">
                     <Download className="h-3 w-3" /> Downloaded
+                  </span>
+                ) : file.type === "trashed" ? (
+                  <span className="inline-flex items-center gap-1 rounded-md border border-rose-500/20 bg-rose-500/8 px-2 py-0.5 text-[10px] font-medium text-rose-600 dark:text-rose-400">
+                    <Trash2 className="h-3 w-3" /> Trashed
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 rounded-md border border-sky-500/20 bg-sky-500/8 px-2 py-0.5 text-[10px] font-medium text-sky-600 dark:text-sky-400">

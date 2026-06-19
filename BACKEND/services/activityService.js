@@ -263,8 +263,26 @@ function mapActionToType(action) {
       return "downloaded";
     case ACTIVITY_ACTIONS.UPLOADED:
       return "uploaded";
+    case ACTIVITY_ACTIONS.RENAMED:
+      return "renamed";
+    case ACTIVITY_ACTIONS.TRASHED:
+      return "trashed";
     default:
       return "opened";
+  }
+}
+
+/**
+ * Permanently delete all activity records for specific resource IDs and invalidate stats cache.
+ *
+ * @param {string[]|ObjectId[]} resourceIds
+ * @param {string} userId
+ */
+export async function deleteActivitiesForResources(resourceIds, userId) {
+  if (!resourceIds || resourceIds.length === 0) return;
+  await Activity.deleteMany({ resourceId: { $in: resourceIds } });
+  if (userId) {
+    await cacheDel(`${ACTIVITY_CACHE_KEYS.STATS}${userId}`);
   }
 }
 

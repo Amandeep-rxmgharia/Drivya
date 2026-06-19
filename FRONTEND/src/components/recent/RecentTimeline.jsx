@@ -119,6 +119,15 @@ function ActivityBadge({ type, actions }) {
     );
   }
 
+  if (actionList.includes("trashed")) {
+    badges.push(
+      <span key="trashed" className="inline-flex items-center gap-1 rounded-md border border-rose-500/20 bg-rose-500/8 px-1.5 py-0.5 text-[10px] font-medium text-rose-600 dark:text-rose-400 animate-fade-in">
+        <Trash2 className="h-3 w-3" />
+        Trashed
+      </span>
+    );
+  }
+
   return badges.length > 0 ? <>{badges}</> : null;
 }
 

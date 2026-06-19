@@ -3,7 +3,7 @@ import Directory from "../models/directoryModel.js";
 import File from "../models/fileModel.js";
 import User from "../models/userModel.js";
 import { deleteFiles } from "../services/storageService.js";
-import { recordActivity } from "../services/activityService.js";
+import { recordActivity, deleteActivitiesForResources } from "../services/activityService.js";
 import { ACTIVITY_ACTIONS } from "../constants/activityConstants.js";
 import { RESOURCE_TYPES } from "../constants/shareConstants.js";
 
@@ -259,6 +259,10 @@ export const deleteDirectory = async (req, res, next) => {
       await Directory.deleteMany({
         _id: { $in: allDirIds },
       }).session(session);
+
+      // Sync activities cleanup
+      const deletedResourceIds = [...allDirIds, ...filesToDelete.map((f) => f._id)];
+      await deleteActivitiesForResources(deletedResourceIds, userId);
 
       // Update user storage
       if (totalSize > 0) {

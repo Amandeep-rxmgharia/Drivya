@@ -13,7 +13,7 @@ import {
 import { deleteSharesForResource } from "../services/shareService.js";
 import { RESOURCE_TYPES } from "../constants/shareConstants.js";
 import { generateStorageName } from "../middlewares/uploadMiddleware.js";
-import { recordActivity } from "../services/activityService.js";
+import { recordActivity, deleteActivitiesForResources } from "../services/activityService.js";
 import { ACTIVITY_ACTIONS } from "../constants/activityConstants.js";
 
 // ─── Upload Files ────────────────────────────────────────────────
@@ -426,6 +426,7 @@ export const emptyTrash = async (req, res, next) => {
       ).session(session);
 
       const fileIds = trashedFiles.map((f) => f._id);
+      await deleteActivitiesForResources(fileIds, userId);
       await Promise.all(
         fileIds.map((fileId) =>
           deleteSharesForResource(userId, RESOURCE_TYPES.FILE, fileId.toString()),
@@ -478,6 +479,8 @@ export const permanentDeleteFile = async (req, res, next) => {
         RESOURCE_TYPES.FILE,
         file._id.toString(),
       );
+
+      await deleteActivitiesForResources([file._id], userId);
 
       // Disk cleanup
       deleteFromDisk(file.storagePath).catch((err) =>
