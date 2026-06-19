@@ -166,11 +166,16 @@ export async function listActivities({
   const clampedLimit = Math.min(Math.max(1, limit), 100);
 
   // ── Build aggregation pipeline ──
-  const pipeline = [
-    // Stage 1: match user's activities
-    { $match: { userId: userOid } },
+  const matchStage = { userId: userOid };
+  if (action) {
+    matchStage.action = action;
+  }
 
-    // Stage 2: sort newest first (uses { userId, createdAt } index)
+  const pipeline = [
+    // Stage 1: match user's activities (and action if provided for O(1) index scan)
+    { $match: matchStage },
+
+    // Stage 2: sort newest first (uses { userId, createdAt } or { userId, action, createdAt } index)
     { $sort: { createdAt: -1 } },
 
     // Stage 3: cap scan to most recent 1000 activities for perf
@@ -196,12 +201,7 @@ export async function listActivities({
     { $sort: { latestCreatedAt: -1 } },
   ];
 
-  // Stage 6: action filter — only show resources that have this action
-  if (action) {
-    pipeline.push({ $match: { actions: action } });
-  }
-
-  // Stage 7: cursor-based pagination (ISO date string)
+  // Stage 6: cursor-based pagination (ISO date string)
   if (cursor) {
     pipeline.push({
       $match: { latestCreatedAt: { $lt: new Date(cursor) } },
@@ -210,7 +210,7 @@ export async function listActivities({
     pipeline.push({ $skip: (page - 1) * clampedLimit });
   }
 
-  // Stage 8: fetch one extra to detect next page
+  // Stage 7: fetch one extra to detect next page
   pipeline.push({ $limit: clampedLimit + 1 });
 
   const results = await Activity.aggregate(pipeline);
@@ -257,9 +257,10 @@ export async function listActivities({
 function mapActionToType(action) {
   switch (action) {
     case ACTIVITY_ACTIONS.OPENED:
-    case ACTIVITY_ACTIONS.DOWNLOADED:
     case ACTIVITY_ACTIONS.EDITED:
       return "opened";
+    case ACTIVITY_ACTIONS.DOWNLOADED:
+      return "downloaded";
     case ACTIVITY_ACTIONS.UPLOADED:
       return "uploaded";
     default:
@@ -285,21 +286,21 @@ export async function getActivityStats(userId) {
     const todayStart = new Date(now);
     todayStart.setHours(0, 0, 0, 0);
 
-    // Start of 7 days ago
-    const weekStart = new Date(now);
-    weekStart.setDate(weekStart.getDate() - 7);
-    weekStart.setHours(0, 0, 0, 0);
+    // Start of 14 days ago for percentage comparisons
+    const fortnightStart = new Date(now);
+    fortnightStart.setDate(fortnightStart.getDate() - 14);
+    fortnightStart.setHours(0, 0, 0, 0);
 
     const userOid = new mongoose.Types.ObjectId(userId);
 
     const [stats] = await Activity.aggregate([
-      { $match: { userId: userOid, createdAt: { $gte: weekStart } } },
+      { $match: { userId: userOid, createdAt: { $gte: fortnightStart } } },
       {
         $facet: {
           openedToday: [
             {
               $match: {
-                action: ACTIVITY_ACTIONS.OPENED,
+                action: { $in: [ACTIVITY_ACTIONS.OPENED, ACTIVITY_ACTIONS.EDITED] },
                 createdAt: { $gte: todayStart },
               },
             },
@@ -314,12 +315,29 @@ export async function getActivityStats(userId) {
             },
             { $count: "count" },
           ],
-          thisWeek: [{ $count: "count" }],
+          downloadedToday: [
+            {
+              $match: {
+                action: ACTIVITY_ACTIONS.DOWNLOADED,
+                createdAt: { $gte: todayStart },
+              },
+            },
+            { $count: "count" },
+          ],
+          thisWeek: [
+            {
+              $match: {
+                createdAt: { $gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) }
+              }
+            },
+            { $count: "count" }
+          ],
           dailyBreakdown: [
             {
               $group: {
                 _id: {
-                  $dateToString: { format: "%Y-%m-%d", date: "$createdAt" },
+                  date: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+                  action: "$action"
                 },
                 count: { $sum: 1 },
               },
@@ -329,14 +347,120 @@ export async function getActivityStats(userId) {
       },
     ]);
 
-    const openedToday = stats.openedToday[0]?.count || 0;
-    const uploadedToday = stats.uploadedToday[0]?.count || 0;
-    const thisWeek = stats.thisWeek[0]?.count || 0;
+    const openedToday = stats?.openedToday[0]?.count || 0;
+    const uploadedToday = stats?.uploadedToday[0]?.count || 0;
+    const downloadedToday = stats?.downloadedToday[0]?.count || 0;
+    const thisWeek = stats?.thisWeek[0]?.count || 0;
 
-    // Avg per day over the last 7 days (counting only days with activity)
-    const activeDays = stats.dailyBreakdown.length || 1;
+    // Generate date strings for last 7 days and prev 7 days in YYYY-MM-DD
+    const last7Days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      last7Days.push(`${yyyy}-${mm}-${dd}`);
+    }
+
+    const prev7Days = [];
+    for (let i = 13; i >= 7; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      prev7Days.push(`${yyyy}-${mm}-${dd}`);
+    }
+
+    const dailyBreakdown = stats?.dailyBreakdown || [];
+
+    const getCountForDateAndAction = (dateStr, action) => {
+      if (action === ACTIVITY_ACTIONS.OPENED) {
+        // sum both opened and edited
+        const openedMatch = dailyBreakdown.find(
+          (b) => b._id.date === dateStr && b._id.action === ACTIVITY_ACTIONS.OPENED
+        );
+        const editedMatch = dailyBreakdown.find(
+          (b) => b._id.date === dateStr && b._id.action === ACTIVITY_ACTIONS.EDITED
+        );
+        return (openedMatch?.count || 0) + (editedMatch?.count || 0);
+      }
+      const match = dailyBreakdown.find(
+        (b) => b._id.date === dateStr && b._id.action === action
+      );
+      return match?.count || 0;
+    };
+
+    const getValuesForRange = (range, action) => {
+      return range.map((dateStr) => getCountForDateAndAction(dateStr, action));
+    };
+
+    const uploadsValues = getValuesForRange(last7Days, ACTIVITY_ACTIONS.UPLOADED);
+    const openedValues = getValuesForRange(last7Days, ACTIVITY_ACTIONS.OPENED);
+    const downloadsValues = getValuesForRange(last7Days, ACTIVITY_ACTIONS.DOWNLOADED);
+
+    const sum = (arr) => arr.reduce((a, b) => a + b, 0);
+    const currentUploads = sum(uploadsValues);
+    const currentOpened = sum(openedValues);
+    const currentDownloads = sum(downloadsValues);
+
+    const prevUploadsValues = getValuesForRange(prev7Days, ACTIVITY_ACTIONS.UPLOADED);
+    const prevOpenedValues = getValuesForRange(prev7Days, ACTIVITY_ACTIONS.OPENED);
+    const prevDownloadsValues = getValuesForRange(prev7Days, ACTIVITY_ACTIONS.DOWNLOADED);
+
+    const prevUploads = sum(prevUploadsValues);
+    const prevOpened = sum(prevOpenedValues);
+    const prevDownloads = sum(prevDownloadsValues);
+
+    const getChangePercent = (current, prev) => {
+      if (prev === 0) {
+        return current > 0 ? "↑ 100%" : "0%";
+      }
+      const pct = ((current - prev) / prev) * 100;
+      const sign = pct >= 0 ? "↑" : "↓";
+      return `${sign} ${Math.round(Math.abs(pct))}%`;
+    };
+
+    // Calculate avg per day over the last 7 days (counting only days with activity in last 7 days)
+    const activeDaysSet = new Set();
+    dailyBreakdown.forEach((b) => {
+      if (last7Days.includes(b._id.date)) {
+        activeDaysSet.add(b._id.date);
+      }
+    });
+    const activeDays = activeDaysSet.size || 1;
     const avgPerDay = +(thisWeek / Math.max(activeDays, 1)).toFixed(1);
 
-    return { openedToday, uploadedToday, thisWeek, avgPerDay };
+    return {
+      openedToday,
+      uploadedToday,
+      downloadedToday,
+      thisWeek,
+      avgPerDay,
+      weeklyData: {
+        uploads: {
+          label: "Uploads",
+          title: "Weekly Uploads",
+          change: getChangePercent(currentUploads, prevUploads),
+          rawValues: uploadsValues,
+          suffix: "uploads",
+        },
+        opened: {
+          label: "Opened",
+          title: "Weekly Opens",
+          change: getChangePercent(currentOpened, prevOpened),
+          rawValues: openedValues,
+          suffix: "files",
+        },
+        downloads: {
+          label: "Downloads",
+          title: "Weekly Downloads",
+          change: getChangePercent(currentDownloads, prevDownloads),
+          rawValues: downloadsValues,
+          suffix: "files",
+        },
+      },
+    };
   });
 }

@@ -79,7 +79,7 @@ function ActivityBadge({ type, actions }) {
   // Render from `actions` array (merged view) or fallback to single `type`
   const actionList = actions && actions.length > 0
     ? actions
-    : type ? [type === "uploaded" ? "uploaded" : "opened"] : [];
+    : type ? [type] : [];
 
   const badges = [];
 
@@ -92,11 +92,20 @@ function ActivityBadge({ type, actions }) {
     );
   }
 
-  if (actionList.includes("opened") || actionList.includes("downloaded") || actionList.includes("edited")) {
+  if (actionList.includes("opened") || actionList.includes("edited")) {
     badges.push(
       <span key="opened" className="inline-flex items-center gap-1 rounded-md border border-sky-500/20 bg-sky-500/8 px-1.5 py-0.5 text-[10px] font-medium text-sky-600 dark:text-sky-400">
         <Eye className="h-3 w-3" />
         Opened
+      </span>
+    );
+  }
+
+  if (actionList.includes("downloaded")) {
+    badges.push(
+      <span key="downloaded" className="inline-flex items-center gap-1 rounded-md border border-indigo-500/20 bg-indigo-500/8 px-1.5 py-0.5 text-[10px] font-medium text-indigo-600 dark:text-indigo-400 animate-fade-in">
+        <Download className="h-3 w-3" />
+        Downloaded
       </span>
     );
   }

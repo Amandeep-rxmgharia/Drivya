@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { easeSmooth } from "@/lib/motion-presets";
 import { RecentFilesView } from "@/components/recent/RecentFilesView";
-import { listActivities } from "../../api/activities.js";
+import { listActivities, getActivityStats } from "../../api/activities.js";
 import { cn } from "@/lib/utils";
 import {
   card,
@@ -249,20 +249,27 @@ const WEEKLY_DATA = {
   },
 };
 
-const DAY_NAMES = [
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
-  "Sunday",
-];
-
 function AnalyticsCard() {
   const [metric, setMetric] = useState("uploads");
   const [hoveredIdx, setHoveredIdx] = useState(null);
   const chartRef = useRef(null);
+  const [statsData, setStatsData] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    getActivityStats()
+      .then((res) => {
+        if (active && res?.stats?.weeklyData) {
+          setStatsData(res.stats.weeklyData);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load activity stats:", err);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     const handleOutsideClick = (e) => {
@@ -280,9 +287,48 @@ function AnalyticsCard() {
     };
   }, []);
 
-  const activeData = WEEKLY_DATA[metric];
+  const activeWeeklyData = statsData || WEEKLY_DATA;
+  const activeData = activeWeeklyData[metric];
+
+  const labels = useMemo(() => {
+    if (!statsData) {
+      return ["M", "T", "W", "T", "F", "S", "S"];
+    }
+    const days = [];
+    const date = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(date);
+      d.setDate(d.getDate() - i);
+      const dayStr = d.toLocaleDateString("en-US", { weekday: "narrow" });
+      days.push(dayStr);
+    }
+    return days;
+  }, [statsData]);
+
+  const dayNames = useMemo(() => {
+    if (!statsData) {
+      return [
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday",
+      ];
+    }
+    const names = [];
+    const date = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(date);
+      d.setDate(d.getDate() - i);
+      const nameStr = d.toLocaleDateString("en-US", { weekday: "long" });
+      names.push(nameStr);
+    }
+    return names;
+  }, [statsData]);
+
   const maxVal = Math.max(...activeData.rawValues);
-  const labels = ["M", "T", "W", "T", "F", "S", "S"];
 
   const totalValue = activeData.rawValues.reduce((sum, val) => sum + val, 0);
   const totalText = `${totalValue} ${activeData.suffix}`;
@@ -291,38 +337,39 @@ function AnalyticsCard() {
   const chartHeight = 110;
   const chartWidth = 500;
   const paddingX = 20;
-  const paddingY = 0; // Set to 0 for exact alignment with axis ticks
 
   // Map 7 values to coordinate points
   const points = activeData.rawValues.map((v, i) => {
-    // 7 points mean i goes from 0 to 6, so divide by 6 for even spacing
     const x = paddingX + (i / 6) * (chartWidth - paddingX * 2);
-    // Avoid division by zero if maxVal is 0
     const ratio = maxVal > 0 ? v / maxVal : 0;
     const y = chartHeight - ratio * chartHeight;
-    return { x, y, value: v, label: labels[i], dayName: DAY_NAMES[i] };
+    return { x, y, value: v, label: labels[i], dayName: dayNames[i] };
   });
 
-  // Construct SVG Path for the curved line
-  const linePath = points.reduce((path, p, i) => {
-    if (i === 0) return `M ${p.x} ${p.y}`;
-    return `${path} L ${p.x} ${p.y}`;
-  }, "");
+  const linePath = useMemo(() => {
+    if (points.length === 0) return "";
+    let path = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 0; i < points.length - 1; i++) {
+      const p0 = points[i];
+      const p1 = points[i + 1];
+      const cp1x = p0.x + (p1.x - p0.x) / 3;
+      const cp1y = p0.y;
+      const cp2x = p0.x + (2 * (p1.x - p0.x)) / 3;
+      const cp2y = p1.y;
+      path += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p1.x} ${p1.y}`;
+    }
+    return path;
+  }, [points]);
 
-  // Construct closed path for the filled gradient area under the line
   const areaPath =
     points.length > 0
       ? `${linePath} L ${points[points.length - 1].x} ${chartHeight} L ${points[0].x} ${chartHeight} Z`
       : "";
 
-  // Helper values for Y-axis coordinates
-  const yAxisTicks = [maxVal, Math.round(maxVal / 2), 0];
-
   return (
     <div
       className={`${card} p-6 animate-fade-in relative overflow-hidden group/card`}
     >
-      {/* Ambient background glow using theme primary color */}
       <div className="absolute -top-24 -left-24 h-48 w-48 rounded-full blur-3xl opacity-15 bg-primary pointer-events-none transition-all duration-500" />
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between relative z-10">
@@ -335,7 +382,7 @@ function AnalyticsCard() {
             {hoveredIdx !== null ? (
               <span className="animate-fade-in text-base sm:text-lg font-medium text-foreground/90">
                 {activeData.rawValues[hoveredIdx]} {metric} on{" "}
-                {DAY_NAMES[hoveredIdx]}
+                {dayNames[hoveredIdx]}
               </span>
             ) : (
               <span className="flex items-center gap-2">
@@ -348,9 +395,8 @@ function AnalyticsCard() {
           </div>
         </div>
 
-        {/* Metric Selector Tabs (Uses theme primary button state) */}
         <div className="flex rounded-xl border border-border/80 bg-secondary/30 p-0.5 self-start sm:self-center">
-          {Object.keys(WEEKLY_DATA).map((key) => {
+          {Object.keys(activeWeeklyData).map((key) => {
             const isSelected = metric === key;
             return (
               <button
@@ -375,31 +421,26 @@ function AnalyticsCard() {
                       : "bg-muted-foreground/40",
                   )}
                 />
-                {WEEKLY_DATA[key].label}
+                {activeWeeklyData[key].label}
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* Chart Canvas */}
       <div
         ref={chartRef}
         className="relative mt-10 h-44 grid grid-cols-[2.5rem_1fr] items-start z-10"
       >
-        {/* Y-Axis Value Labels */}
         <div className="h-[110px] flex flex-col justify-between text-[10px] font-semibold tracking-wider font-mono text-muted-foreground/50 pr-2.5 text-right pointer-events-none select-none">
-          {yAxisTicks.map((tick, i) => (
+          {[maxVal, Math.round(maxVal / 2), 0].map((tick, i) => (
             <span key={i} className="leading-none">
               {tick}
             </span>
           ))}
         </div>
 
-        {/* Graph Display Area */}
         <div className="h-full flex flex-col relative">
-
-          {/* Interactive Line Graph SVG */}
           <div className="relative h-[110px] w-full">
             <svg
               viewBox={`0 0 ${chartWidth} ${chartHeight}`}
@@ -409,7 +450,6 @@ function AnalyticsCard() {
               className="overflow-visible"
             >
               <defs>
-                {/* Theme-compliant Area gradient */}
                 <linearGradient
                   id="chart-area-grad"
                   x1="0"
@@ -429,7 +469,6 @@ function AnalyticsCard() {
                   />
                 </linearGradient>
 
-                {/* Theme-compliant Line stroke gradient */}
                 <linearGradient
                   id="chart-line-grad"
                   x1="0"
@@ -500,7 +539,6 @@ function AnalyticsCard() {
               </div>
             )}
 
-            {/* Float Tooltip over nearest point using relative absolute mapping */}
             {hoveredIdx !== null && (
               <div
                 style={{
@@ -515,7 +553,6 @@ function AnalyticsCard() {
               </div>
             )}
 
-            {/* Invisible interactive hover grid hitboxes */}
             <div className="absolute inset-0 flex">
               {points.map((p, i) => (
                 <div
@@ -539,7 +576,6 @@ function AnalyticsCard() {
             </div>
           </div>
 
-          {/* Day Label Axis aligned perfectly under columns */}
           <div className="relative h-6 mt-4 border-t border-border/30 pt-2 pointer-events-none select-none">
             {labels.map((lbl, idx) => {
               const xPos =

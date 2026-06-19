@@ -8,6 +8,7 @@ import {
   Loader2,
   Search,
   Upload,
+  Download,
   FileStack,
   AlertCircle,
 } from "lucide-react";
@@ -22,6 +23,7 @@ const FILTER_TABS = [
   { id: "all", label: "All", icon: FileStack },
   { id: "opened", label: "Opened", icon: Eye },
   { id: "uploaded", label: "Uploaded", icon: Upload },
+  { id: "downloaded", label: "Downloaded", icon: Download },
 ];
 
 /**

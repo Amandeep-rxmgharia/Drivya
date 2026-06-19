@@ -160,9 +160,14 @@ export function FilePreviewModal({
                     <Upload className="h-3 w-3" /> Uploaded
                   </span>
                 )}
-                {(file.actions.includes("opened") || file.actions.includes("downloaded") || file.actions.includes("edited")) && (
+                {(file.actions.includes("opened") || file.actions.includes("edited")) && (
                   <span className="inline-flex items-center gap-1 rounded-md border border-sky-500/20 bg-sky-500/8 px-2 py-0.5 text-[10px] font-medium text-sky-600 dark:text-sky-400">
                     <Eye className="h-3 w-3" /> Opened
+                  </span>
+                )}
+                {file.actions.includes("downloaded") && (
+                  <span className="inline-flex items-center gap-1 rounded-md border border-indigo-500/20 bg-indigo-500/8 px-2 py-0.5 text-[10px] font-medium text-indigo-600 dark:text-indigo-400 animate-fade-in">
+                    <Download className="h-3 w-3" /> Downloaded
                   </span>
                 )}
                 {file.actions.includes("renamed") && (
@@ -176,6 +181,10 @@ export function FilePreviewModal({
                 {file.type === "uploaded" ? (
                   <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/20 bg-emerald-500/8 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
                     <Upload className="h-3 w-3" /> Uploaded
+                  </span>
+                ) : file.type === "downloaded" ? (
+                  <span className="inline-flex items-center gap-1 rounded-md border border-indigo-500/20 bg-indigo-500/8 px-2 py-0.5 text-[10px] font-medium text-indigo-600 dark:text-indigo-400">
+                    <Download className="h-3 w-3" /> Downloaded
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 rounded-md border border-sky-500/20 bg-sky-500/8 px-2 py-0.5 text-[10px] font-medium text-sky-600 dark:text-sky-400">
