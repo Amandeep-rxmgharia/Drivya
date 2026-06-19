@@ -13,6 +13,8 @@ import {
 import { deleteSharesForResource } from "../services/shareService.js";
 import { RESOURCE_TYPES } from "../constants/shareConstants.js";
 import { generateStorageName } from "../middlewares/uploadMiddleware.js";
+import { recordActivity } from "../services/activityService.js";
+import { ACTIVITY_ACTIONS } from "../constants/activityConstants.js";
 
 // ─── Upload Files ────────────────────────────────────────────────
 export const uploadFiles = async (req, res, next) => {
@@ -120,6 +122,22 @@ export const uploadFiles = async (req, res, next) => {
       ).session(session);
     });
 
+    // Record upload activity for each file (fire-and-forget)
+    for (const file of savedFiles) {
+      recordActivity({
+        userId,
+        action: ACTIVITY_ACTIONS.UPLOADED,
+        resourceType: RESOURCE_TYPES.FILE,
+        resourceId: file._id,
+        resourceSnapshot: {
+          name: file.originalName,
+          mimeType: file.mimeType,
+          size: file.size,
+        },
+        parentDirId: directoryId,
+      }).catch((err) => console.error("Activity[upload]:", err.message));
+    }
+
     return res.status(201).json({
       message: `${savedFiles.length} file(s) uploaded successfully.`,
       files: savedFiles,
@@ -143,6 +161,20 @@ export const downloadFile = async (req, res, next) => {
     }
 
     const stream = getFileStream(file.storagePath);
+
+    // Record download activity (fire-and-forget, deduplicated)
+    recordActivity({
+      userId,
+      action: ACTIVITY_ACTIONS.DOWNLOADED,
+      resourceType: RESOURCE_TYPES.FILE,
+      resourceId: file._id,
+      resourceSnapshot: {
+        name: file.originalName,
+        mimeType: file.mimeType,
+        size: file.size,
+      },
+      parentDirId: file.directoryId,
+    }).catch((err) => console.error("Activity[download]:", err.message));
 
     res.set({
       "Content-Type": file.mimeType,
@@ -169,6 +201,20 @@ export const previewFile = async (req, res, next) => {
 
     const fileSize = file.size;
     const range = req.headers.range;
+
+    // Record preview/opened activity (fire-and-forget, deduplicated within 1h)
+    recordActivity({
+      userId,
+      action: ACTIVITY_ACTIONS.OPENED,
+      resourceType: RESOURCE_TYPES.FILE,
+      resourceId: file._id,
+      resourceSnapshot: {
+        name: file.originalName,
+        mimeType: file.mimeType,
+        size: file.size,
+      },
+      parentDirId: file.directoryId,
+    }).catch((err) => console.error("Activity[preview]:", err.message));
 
     // Common headers
     res.set({
@@ -241,8 +287,24 @@ export const renameFile = async (req, res, next) => {
       });
     }
 
+    const oldName = file.originalName;
     file.originalName = trimmedName;
     await file.save();
+
+    // Record rename activity (fire-and-forget)
+    recordActivity({
+      userId,
+      action: ACTIVITY_ACTIONS.RENAMED,
+      resourceType: RESOURCE_TYPES.FILE,
+      resourceId: file._id,
+      resourceSnapshot: {
+        name: trimmedName,
+        mimeType: file.mimeType,
+        size: file.size,
+      },
+      parentDirId: file.directoryId,
+      metadata: { oldName, newName: trimmedName },
+    }).catch((err) => console.error("Activity[rename]:", err.message));
 
     return res.json({ message: "File renamed successfully.", file });
   } catch (err) {
@@ -266,6 +328,20 @@ export const trashFile = async (req, res, next) => {
       return res.status(404).json({ message: "File not found." });
     }
 
+    // Record trash activity (fire-and-forget)
+    recordActivity({
+      userId,
+      action: ACTIVITY_ACTIONS.TRASHED,
+      resourceType: RESOURCE_TYPES.FILE,
+      resourceId: file._id,
+      resourceSnapshot: {
+        name: file.originalName,
+        mimeType: file.mimeType,
+        size: file.size,
+      },
+      parentDirId: file.directoryId,
+    }).catch((err) => console.error("Activity[trash]:", err.message));
+
     return res.json({ message: "File moved to trash.", file });
   } catch (err) {
     next(err);
@@ -287,6 +363,20 @@ export const restoreFile = async (req, res, next) => {
     if (!file) {
       return res.status(404).json({ message: "Trashed file not found." });
     }
+
+    // Record restore activity (fire-and-forget)
+    recordActivity({
+      userId,
+      action: ACTIVITY_ACTIONS.RESTORED,
+      resourceType: RESOURCE_TYPES.FILE,
+      resourceId: file._id,
+      resourceSnapshot: {
+        name: file.originalName,
+        mimeType: file.mimeType,
+        size: file.size,
+      },
+      parentDirId: file.directoryId,
+    }).catch((err) => console.error("Activity[restore]:", err.message));
 
     return res.json({ message: "File restored.", file });
   } catch (err) {
@@ -452,6 +542,20 @@ export const editFileContent = async (req, res, next) => {
       { resourceId: file._id, resourceType: RESOURCE_TYPES.FILE },
       { "resourceSnapshot.size": newSize }
     );
+
+    // Record edit activity (fire-and-forget)
+    recordActivity({
+      userId,
+      action: ACTIVITY_ACTIONS.EDITED,
+      resourceType: RESOURCE_TYPES.FILE,
+      resourceId: file._id,
+      resourceSnapshot: {
+        name: file.originalName,
+        mimeType: file.mimeType,
+        size: newSize,
+      },
+      parentDirId: file.directoryId,
+    }).catch((err) => console.error("Activity[edit]:", err.message));
 
     return res.json({ message: "File content updated successfully.", file });
   } catch (err) {

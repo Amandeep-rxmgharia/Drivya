@@ -24,6 +24,16 @@ import { FileTypeIcon } from "@/components/dashboard/FileTypeIcon";
 
 const rowEase = "duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]";
 
+/** Format bytes into human-readable size string. */
+function formatSize(size) {
+  if (typeof size === "string") return size;
+  if (size == null) return "—";
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  if (size < 1024 * 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(size / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
 /* ───────────────────────── Upload Status Badge ───────────────────────── */
 
 function UploadStatusBadge({ status, progress }) {
@@ -65,23 +75,42 @@ function UploadStatusBadge({ status, progress }) {
 
 /* ───────────────────────── Activity type indicator ───────────────────────── */
 
-function ActivityBadge({ type }) {
-  // if (type === "uploaded") {
-  //   return (
-  //     <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/20 bg-emerald-500/8 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
-  //       <Upload className="h-3 w-3" />
-  //       Uploaded
-  //     </span>
-  //   );
-  // }
-  if (type === "opened") {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-md border border-sky-500/20 bg-sky-500/8 px-1.5 py-0.5 text-[10px] font-medium text-sky-600 dark:text-sky-400">
+function ActivityBadge({ type, actions }) {
+  // Render from `actions` array (merged view) or fallback to single `type`
+  const actionList = actions && actions.length > 0
+    ? actions
+    : type ? [type === "uploaded" ? "uploaded" : "opened"] : [];
+
+  const badges = [];
+
+  if (actionList.includes("uploaded")) {
+    badges.push(
+      <span key="uploaded" className="inline-flex items-center gap-1 rounded-md border border-emerald-500/20 bg-emerald-500/8 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+        <Upload className="h-3 w-3" />
+        Uploaded
+      </span>
+    );
+  }
+
+  if (actionList.includes("opened") || actionList.includes("downloaded") || actionList.includes("edited")) {
+    badges.push(
+      <span key="opened" className="inline-flex items-center gap-1 rounded-md border border-sky-500/20 bg-sky-500/8 px-1.5 py-0.5 text-[10px] font-medium text-sky-600 dark:text-sky-400">
         <Eye className="h-3 w-3" />
         Opened
       </span>
     );
   }
+
+  if (actionList.includes("renamed")) {
+    badges.push(
+      <span key="renamed" className="inline-flex items-center gap-1 rounded-md border border-orange-500/20 bg-orange-500/8 px-1.5 py-0.5 text-[10px] font-medium text-orange-600 dark:text-orange-400">
+        <Pencil className="h-3 w-3" />
+        Renamed
+      </span>
+    );
+  }
+
+  return badges.length > 0 ? <>{badges}</> : null;
 }
 
 /* ───────────────────────── File Actions Toolbar ───────────────────────── */
@@ -226,7 +255,7 @@ function RecentFileRow({ file, view, formatTime, onPreview, onStar, onShare }) {
               {file.name}
             </h4>
             <div className="flex flex-wrap items-center gap-1.5">
-              <ActivityBadge type={file.type} />
+              <ActivityBadge type={file.type} actions={file.actions} />
               {file.uploadStatus && (
                 <UploadStatusBadge
                   status={file.uploadStatus}
@@ -238,7 +267,7 @@ function RecentFileRow({ file, view, formatTime, onPreview, onStar, onShare }) {
               <UploadProgressBar progress={file.uploadProgress} />
             )}
             <p className="text-[11px] text-muted-foreground tabular-nums">
-              {file.size} · {formatTime(file.lastOpened)}
+              {formatSize(file.size)} · {formatTime(file.lastOpened)}
             </p>
           </div>
 
@@ -300,7 +329,7 @@ function RecentFileRow({ file, view, formatTime, onPreview, onStar, onShare }) {
                   <h4 className="truncate text-sm font-semibold text-foreground sm:text-[15px]">
                     {file.name}
                   </h4>
-                  <ActivityBadge type={file.type} />
+                  <ActivityBadge type={file.type} actions={file.actions} />
                   {file.uploadStatus && (
                     <UploadStatusBadge
                       status={file.uploadStatus}
@@ -319,7 +348,7 @@ function RecentFileRow({ file, view, formatTime, onPreview, onStar, onShare }) {
                   )}
                 </div>
                 <p className="text-[11px] text-muted-foreground md:hidden">
-                  {formatTime(file.lastOpened)} · {file.size}
+                  {formatTime(file.lastOpened)} · {formatSize(file.size)}
                 </p>
                 {isUploading && (
                   <UploadProgressBar progress={file.uploadProgress} />
@@ -334,7 +363,7 @@ function RecentFileRow({ file, view, formatTime, onPreview, onStar, onShare }) {
 
             {/* Size column */}
             <div className="hidden md:flex md:items-center md:justify-start text-right text-sm font-medium tabular-nums text-foreground/80">
-              {file.size}
+              {formatSize(file.size)}
             </div>
           </div>
 

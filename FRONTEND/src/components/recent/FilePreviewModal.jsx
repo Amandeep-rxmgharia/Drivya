@@ -27,6 +27,16 @@ import { detectFileKind, getFileTypeStyle } from "@/lib/file-types";
 import { FileTypeIcon } from "@/components/dashboard/FileTypeIcon";
 import { iconBtn } from "@/components/dashboard/dashboard-tokens";
 
+/** Format bytes into human-readable size string. */
+function formatSize(size) {
+  if (typeof size === "string") return size;
+  if (size == null) return "—";
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  if (size < 1024 * 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(size / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
 /* ───────────────────────── Preview Placeholder ───────────────────────── */
 
 function PreviewPlaceholder({ kind }) {
@@ -127,7 +137,7 @@ export function FilePreviewModal({
                   {file.name}
                 </h2>
                 <p className="text-[11px] text-muted-foreground mt-0.5">
-                  {file.size} · {kindLabel}
+                  {formatSize(file.size)} · {kindLabel}
                 </p>
               </div>
             </div>
@@ -142,14 +152,37 @@ export function FilePreviewModal({
 
           {/* Status badges */}
           <div className="flex flex-wrap items-center gap-2">
-            {file.type === "uploaded" ? (
-              <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/20 bg-emerald-500/8 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
-                <Upload className="h-3 w-3" /> Uploaded
-              </span>
+            {/* Action badges from merged activities */}
+            {file.actions && file.actions.length > 0 ? (
+              <>
+                {file.actions.includes("uploaded") && (
+                  <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/20 bg-emerald-500/8 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                    <Upload className="h-3 w-3" /> Uploaded
+                  </span>
+                )}
+                {(file.actions.includes("opened") || file.actions.includes("downloaded") || file.actions.includes("edited")) && (
+                  <span className="inline-flex items-center gap-1 rounded-md border border-sky-500/20 bg-sky-500/8 px-2 py-0.5 text-[10px] font-medium text-sky-600 dark:text-sky-400">
+                    <Eye className="h-3 w-3" /> Opened
+                  </span>
+                )}
+                {file.actions.includes("renamed") && (
+                  <span className="inline-flex items-center gap-1 rounded-md border border-orange-500/20 bg-orange-500/8 px-2 py-0.5 text-[10px] font-medium text-orange-600 dark:text-orange-400">
+                    <Pencil className="h-3 w-3" /> Renamed
+                  </span>
+                )}
+              </>
             ) : (
-              <span className="inline-flex items-center gap-1 rounded-md border border-sky-500/20 bg-sky-500/8 px-2 py-0.5 text-[10px] font-medium text-sky-600 dark:text-sky-400">
-                <Eye className="h-3 w-3" /> Opened
-              </span>
+              <>
+                {file.type === "uploaded" ? (
+                  <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/20 bg-emerald-500/8 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                    <Upload className="h-3 w-3" /> Uploaded
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-md border border-sky-500/20 bg-sky-500/8 px-2 py-0.5 text-[10px] font-medium text-sky-600 dark:text-sky-400">
+                    <Eye className="h-3 w-3" /> Opened
+                  </span>
+                )}
+              </>
             )}
             {file.uploadStatus === "complete" && (
               <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400">
@@ -220,7 +253,10 @@ export function FilePreviewModal({
                 <Calendar className="h-4 w-4 text-muted-foreground" /> Date
               </span>
               <span className="text-xs font-medium text-foreground/80 bg-secondary/50 px-2 py-0.5 rounded-md">
-                {file.lastOpened.toLocaleDateString("en-US", {
+                {(file.lastOpened instanceof Date
+                  ? file.lastOpened
+                  : new Date(file.lastOpened)
+                ).toLocaleDateString("en-US", {
                   month: "short",
                   day: "numeric",
                   year: "numeric",
@@ -235,7 +271,7 @@ export function FilePreviewModal({
                 <User className="h-4 w-4 text-muted-foreground" /> Owner
               </span>
               <span className="text-xs font-medium text-foreground/80 bg-secondary/50 px-2 py-0.5 rounded-md">
-                {file.owner}
+                {file.owner || "You"}
               </span>
             </div>
 
@@ -246,7 +282,7 @@ export function FilePreviewModal({
                 <HardDrive className="h-4 w-4 text-muted-foreground" /> Size
               </span>
               <span className="text-xs font-medium text-foreground/80 bg-secondary/50 px-2 py-0.5 rounded-md">
-                {file.size}
+                {formatSize(file.size)}
               </span>
             </div>
 

@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { easeSmooth } from "@/lib/motion-presets";
 import { RecentFilesView } from "@/components/recent/RecentFilesView";
-import { RECENT_FILES } from "@/lib/mock-data";
+import { listActivities } from "../../api/activities.js";
 import { cn } from "@/lib/utils";
 import {
   card,
@@ -577,7 +577,7 @@ export default function Home() {
 
       <div className="lg:col-span-2 space-y-6">
         <AnalyticsCard />
-        <RecentFilesView initialFiles={RECENT_FILES} titleId="recent-files-heading" />
+        <RecentFilesView fetchFn={listActivities} titleId="recent-files-heading" limit={10} />
       </div>
 
       <div className="flex items-center justify-between text-xs text-muted-foreground/80 pt-2">

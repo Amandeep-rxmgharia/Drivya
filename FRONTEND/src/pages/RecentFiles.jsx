@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Eye,
+  Loader2,
   TrendingUp,
   Upload,
   Zap,
@@ -12,22 +13,38 @@ import {
   chip,
 } from "@/components/dashboard/dashboard-tokens";
 import { RecentFilesView } from "@/components/recent/RecentFilesView";
-import { RECENT_FILES } from "@/lib/mock-data";
+import { listActivities, getActivityStats } from "../../api/activities.js";
 
-/* ───────────────────────── Mock data ───────────────────────── */
+/* ───────────────────────── Stats Row ───────────────────────── */
 
-/* ───────────────────────── Main Page ───────────────────────── */
-
-function StatsRow() {
+function StatsRow({ stats, loading }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      <StatMini icon={Eye} label="Opened today" value="12" />
-      <StatMini icon={Upload} label="Uploaded today" value="5" />
-      <StatMini icon={TrendingUp} label="This week" value="48" />
-      <StatMini icon={Zap} label="Avg. per day" value="8.4" accent />
+      <StatMini
+        icon={Eye}
+        label="Opened today"
+        value={loading ? "—" : String(stats?.openedToday ?? 0)}
+      />
+      <StatMini
+        icon={Upload}
+        label="Uploaded today"
+        value={loading ? "—" : String(stats?.uploadedToday ?? 0)}
+      />
+      <StatMini
+        icon={TrendingUp}
+        label="This week"
+        value={loading ? "—" : String(stats?.thisWeek ?? 0)}
+      />
+      <StatMini
+        icon={Zap}
+        label="Avg. per day"
+        value={loading ? "—" : String(stats?.avgPerDay ?? 0)}
+        accent
+      />
     </div>
   );
 }
+
 function StatMini({ icon: Icon, label, value, accent }) {
   return (
     <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-secondary/30 px-4 py-3">
@@ -52,7 +69,44 @@ function StatMini({ icon: Icon, label, value, accent }) {
     </div>
   );
 }
+
+/* ───────────────────────── Main Page ───────────────────────── */
+
 export default function RecentFiles() {
+  const [stats, setStats] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [totalCount, setTotalCount] = useState(0);
+
+  // Fetch stats on mount
+  useEffect(() => {
+    let cancelled = false;
+    setStatsLoading(true);
+    getActivityStats()
+      .then((data) => {
+        if (!cancelled) {
+          setStats(data.stats);
+          setStatsLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to fetch activity stats:", err);
+        if (!cancelled) setStatsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Track total count from the first fetch
+  const handleFetch = async (params) => {
+    const result = await listActivities(params);
+    // On initial load (no cursor), update total count estimate
+    if (!params.cursor) {
+      setTotalCount(result.items.length + (result.pagination?.hasNextPage ? "+" : ""));
+    }
+    return result;
+  };
+
   return (
     <>
       {/* Page header */}
@@ -73,21 +127,26 @@ export default function RecentFiles() {
               Recent <span className="text-gradient">Activity</span>
             </h1>
             <p className="mt-3 text-muted-foreground leading-relaxed max-w-lg">
-              Files you've opened and uploaded recently. You have{" "}
-              <span className="font-semibold text-foreground">
-                {RECENT_FILES.length} recent files
-              </span>{" "}
-              across your activity history.
+              Files you've opened and uploaded recently.{" "}
+              {stats && (
+                <span className="font-semibold text-foreground">
+                  {stats.thisWeek} actions this week
+                </span>
+              )}
             </p>
           </div>
 
           {/* stat row */}
-          <StatsRow />
+          <StatsRow stats={stats} loading={statsLoading} />
         </div>
       </section>
 
-      {/* Main content card */}
-      <RecentFilesView initialFiles={RECENT_FILES} titleId="recent-heading" />
+      {/* Main content card — powered by real API */}
+      <RecentFilesView
+        fetchFn={handleFetch}
+        titleId="recent-heading"
+        limit={20}
+      />
     </>
   );
 }

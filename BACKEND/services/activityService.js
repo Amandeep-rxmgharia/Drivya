@@ -1,0 +1,342 @@
+import mongoose from "mongoose";
+import Activity from "../models/activityModel.js";
+import {
+  ACTIVITY_ACTIONS,
+  ACTIVITY_DEDUP_WINDOW_SECS,
+  ACTIVITY_CACHE_KEYS,
+  ACTIVITY_CACHE_TTL,
+} from "../constants/activityConstants.js";
+import { cacheAside, cacheDel } from "./cacheService.js";
+
+// ─── Helpers ──────────────────────────────────────────────────────
+
+/**
+ * Derive a file "kind" string from mimeType + extension.
+ * Matches the frontend's `detectFileKind` categories.
+ */
+export function deriveKind(name, mimeType) {
+  if (!name) return null;
+
+  const ext = name.includes(".") ? name.split(".").pop().toLowerCase() : "";
+
+  // Folder-like (no extension, no mimeType) — caller passes kind explicitly
+  if (!ext && !mimeType) return "folder";
+
+  // By mime prefix
+  if (mimeType) {
+    if (mimeType.startsWith("image/")) return "image";
+    if (mimeType.startsWith("video/")) return "video";
+    if (mimeType.startsWith("audio/")) return "audio";
+    if (mimeType === "application/pdf") return "pdf";
+  }
+
+  // By extension
+  const extMap = {
+    pdf: "pdf",
+    doc: "document", docx: "document", odt: "document", rtf: "document",
+    xls: "document", xlsx: "document", csv: "document", ods: "document",
+    ppt: "document", pptx: "document", key: "document", odp: "document",
+    txt: "document", md: "document",
+    zip: "archive", rar: "archive", "7z": "archive", tar: "archive", gz: "archive",
+    js: "code", ts: "code", jsx: "code", tsx: "code", py: "code",
+    java: "code", c: "code", cpp: "code", go: "code", rs: "code",
+    html: "code", css: "code", json: "code", xml: "code", yaml: "code", yml: "code",
+    fig: "image", sketch: "image", psd: "image", ai: "image",
+    mp3: "audio", wav: "audio", ogg: "audio", flac: "audio", aac: "audio",
+    mp4: "video", mov: "video", avi: "video", mkv: "video", webm: "video",
+  };
+
+  return extMap[ext] || "document";
+}
+
+// ─── Record Activity ─────────────────────────────────────────────
+
+/**
+ * Record a user activity. For "opened" actions, deduplicates within
+ * ACTIVITY_DEDUP_WINDOW_SECS by bumping the existing record's timestamp.
+ *
+ * Call WITHOUT await from controllers (fire-and-forget):
+ *   recordActivity({ ... }).catch(err => console.error("Activity:", err.message));
+ *
+ * @param {Object} opts
+ * @param {string} opts.userId
+ * @param {string} opts.action       - one of ACTIVITY_ACTIONS
+ * @param {string} opts.resourceType - "file" | "directory"
+ * @param {string} opts.resourceId
+ * @param {Object} opts.resourceSnapshot - { name, mimeType?, size?, kind? }
+ * @param {string} [opts.parentDirId]
+ * @param {Object} [opts.metadata]   - extra data (e.g. { oldName, newName })
+ */
+export async function recordActivity({
+  userId,
+  action,
+  resourceType,
+  resourceId,
+  resourceSnapshot,
+  parentDirId = null,
+  metadata = null,
+}) {
+  // Compute kind if not provided
+  if (!resourceSnapshot.kind) {
+    resourceSnapshot.kind = deriveKind(
+      resourceSnapshot.name,
+      resourceSnapshot.mimeType,
+    );
+  }
+
+  // Deduplicate "opened" and "downloaded" — bump timestamp if recent
+  const dedupActions = new Set([
+    ACTIVITY_ACTIONS.OPENED,
+    ACTIVITY_ACTIONS.DOWNLOADED,
+  ]);
+
+  if (dedupActions.has(action)) {
+    const cutoff = new Date(Date.now() - ACTIVITY_DEDUP_WINDOW_SECS * 1000);
+
+    const bumped = await Activity.findOneAndUpdate(
+      {
+        userId,
+        action,
+        resourceType,
+        resourceId,
+        createdAt: { $gte: cutoff },
+      },
+      {
+        $set: {
+          resourceSnapshot,
+          parentDirId,
+          updatedAt: new Date(),
+        },
+        // Also bump createdAt so it floats to the top of the list
+        $currentDate: { createdAt: true },
+      },
+      { sort: { createdAt: -1 } },
+    );
+
+    if (bumped) {
+      // Invalidate stats cache on activity change
+      await cacheDel(`${ACTIVITY_CACHE_KEYS.STATS}${userId}`);
+      return bumped;
+    }
+  }
+
+  const doc = await Activity.create({
+    userId,
+    action,
+    resourceType,
+    resourceId,
+    resourceSnapshot,
+    parentDirId,
+    metadata,
+  });
+
+  // Invalidate stats cache
+  await cacheDel(`${ACTIVITY_CACHE_KEYS.STATS}${userId}`);
+
+  return doc;
+}
+
+// ─── List Activities ─────────────────────────────────────────────
+
+/**
+ * Retrieve paginated activities for a user, **merged by resource**.
+ *
+ * Each resource appears only once. The response includes:
+ *   - `actions`: all unique action strings for that resource (e.g. ["uploaded","opened"])
+ *   - `lastOpened`: the most recent activity timestamp (updates on reopen)
+ *
+ * Cursor-based pagination uses the ISO string of `latestCreatedAt`.
+ *
+ * @param {Object} opts
+ * @param {string} opts.userId
+ * @param {string} [opts.action]  - filter: only show resources with this action
+ * @param {number} [opts.limit=20]
+ * @param {string} [opts.cursor]  - ISO date string from previous page
+ * @param {number} [opts.page=1]  - offset-based fallback
+ * @returns {{ items: Object[], nextCursor: string|null, pagination: Object }}
+ */
+export async function listActivities({
+  userId,
+  action,
+  limit = 20,
+  cursor,
+  page = 1,
+}) {
+  const userOid = new mongoose.Types.ObjectId(userId);
+  const clampedLimit = Math.min(Math.max(1, limit), 100);
+
+  // ── Build aggregation pipeline ──
+  const pipeline = [
+    // Stage 1: match user's activities
+    { $match: { userId: userOid } },
+
+    // Stage 2: sort newest first (uses { userId, createdAt } index)
+    { $sort: { createdAt: -1 } },
+
+    // Stage 3: cap scan to most recent 1000 activities for perf
+    { $limit: 1000 },
+
+    // Stage 4: group by resource — merge all actions, keep latest data
+    {
+      $group: {
+        _id: { resourceType: "$resourceType", resourceId: "$resourceId" },
+        latestCreatedAt: { $first: "$createdAt" },
+        latestActivityId: { $first: "$_id" },
+        action: { $first: "$action" },           // most recent action
+        actions: { $addToSet: "$action" },         // ALL unique actions
+        resourceType: { $first: "$resourceType" },
+        resourceId: { $first: "$resourceId" },
+        resourceSnapshot: { $first: "$resourceSnapshot" },
+        parentDirId: { $first: "$parentDirId" },
+        metadata: { $first: "$metadata" },
+      },
+    },
+
+    // Stage 5: sort groups by latest activity
+    { $sort: { latestCreatedAt: -1 } },
+  ];
+
+  // Stage 6: action filter — only show resources that have this action
+  if (action) {
+    pipeline.push({ $match: { actions: action } });
+  }
+
+  // Stage 7: cursor-based pagination (ISO date string)
+  if (cursor) {
+    pipeline.push({
+      $match: { latestCreatedAt: { $lt: new Date(cursor) } },
+    });
+  } else if (page > 1) {
+    pipeline.push({ $skip: (page - 1) * clampedLimit });
+  }
+
+  // Stage 8: fetch one extra to detect next page
+  pipeline.push({ $limit: clampedLimit + 1 });
+
+  const results = await Activity.aggregate(pipeline);
+
+  const hasNextPage = results.length > clampedLimit;
+  const items = hasNextPage ? results.slice(0, clampedLimit) : results;
+  const nextCursor = hasNextPage
+    ? items[items.length - 1].latestCreatedAt.toISOString()
+    : null;
+
+  // Transform to frontend shape
+  const transformed = items.map((item) => ({
+    id: item.latestActivityId.toString(),
+    name: item.resourceSnapshot.name,
+    size: item.resourceSnapshot.size,
+    lastOpened: item.latestCreatedAt,
+    type: mapActionToType(item.action),
+    actions: item.actions,                        // NEW: all actions for multi-badge
+    kind: item.resourceSnapshot.kind,
+    mimeType: item.resourceSnapshot.mimeType,
+    // Backend metadata
+    activityId: item.latestActivityId.toString(),
+    action: item.action,
+    resourceType: item.resourceType,
+    resourceId: item.resourceId.toString(),
+    parentDirId: item.parentDirId?.toString() || null,
+    metadata: item.metadata,
+  }));
+
+  return {
+    items: transformed,
+    nextCursor,
+    pagination: {
+      limit: clampedLimit,
+      hasNextPage,
+      ...(cursor ? {} : { page }),
+    },
+  };
+}
+
+/**
+ * Map internal action types to the frontend's "opened" / "uploaded" display type.
+ */
+function mapActionToType(action) {
+  switch (action) {
+    case ACTIVITY_ACTIONS.OPENED:
+    case ACTIVITY_ACTIONS.DOWNLOADED:
+    case ACTIVITY_ACTIONS.EDITED:
+      return "opened";
+    case ACTIVITY_ACTIONS.UPLOADED:
+      return "uploaded";
+    default:
+      return "opened";
+  }
+}
+
+// ─── Activity Stats ──────────────────────────────────────────────
+
+/**
+ * Get activity statistics for a user. Cached for ACTIVITY_CACHE_TTL.STATS seconds.
+ *
+ * Returns:
+ *   { openedToday, uploadedToday, thisWeek, avgPerDay }
+ */
+export async function getActivityStats(userId) {
+  const cacheKey = `${ACTIVITY_CACHE_KEYS.STATS}${userId}`;
+
+  return cacheAside(cacheKey, ACTIVITY_CACHE_TTL.STATS, async () => {
+    const now = new Date();
+
+    // Start of today (midnight local → UTC approximation)
+    const todayStart = new Date(now);
+    todayStart.setHours(0, 0, 0, 0);
+
+    // Start of 7 days ago
+    const weekStart = new Date(now);
+    weekStart.setDate(weekStart.getDate() - 7);
+    weekStart.setHours(0, 0, 0, 0);
+
+    const userOid = new mongoose.Types.ObjectId(userId);
+
+    const [stats] = await Activity.aggregate([
+      { $match: { userId: userOid, createdAt: { $gte: weekStart } } },
+      {
+        $facet: {
+          openedToday: [
+            {
+              $match: {
+                action: ACTIVITY_ACTIONS.OPENED,
+                createdAt: { $gte: todayStart },
+              },
+            },
+            { $count: "count" },
+          ],
+          uploadedToday: [
+            {
+              $match: {
+                action: ACTIVITY_ACTIONS.UPLOADED,
+                createdAt: { $gte: todayStart },
+              },
+            },
+            { $count: "count" },
+          ],
+          thisWeek: [{ $count: "count" }],
+          dailyBreakdown: [
+            {
+              $group: {
+                _id: {
+                  $dateToString: { format: "%Y-%m-%d", date: "$createdAt" },
+                },
+                count: { $sum: 1 },
+              },
+            },
+          ],
+        },
+      },
+    ]);
+
+    const openedToday = stats.openedToday[0]?.count || 0;
+    const uploadedToday = stats.uploadedToday[0]?.count || 0;
+    const thisWeek = stats.thisWeek[0]?.count || 0;
+
+    // Avg per day over the last 7 days (counting only days with activity)
+    const activeDays = stats.dailyBreakdown.length || 1;
+    const avgPerDay = +(thisWeek / Math.max(activeDays, 1)).toFixed(1);
+
+    return { openedToday, uploadedToday, thisWeek, avgPerDay };
+  });
+}

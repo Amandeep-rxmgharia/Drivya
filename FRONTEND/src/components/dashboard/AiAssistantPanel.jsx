@@ -26,7 +26,7 @@ import { iconBtn } from "@/components/dashboard/dashboard-tokens";
 
 // Import mock files from RecentFiles
 // import { RECENT_FILES } from "@/pages/RecentFiles";
-import { RECENT_FILES } from "@/lib/mock-data";
+import { listActivities } from "../../../api/activities.js";
 
 /* ───────────────────────── Helpers ───────────────────────── */
 
@@ -103,8 +103,20 @@ export function AiAssistantPanel({
   const [copiedId, setCopiedId] = useState(null);
   const [organizeSuccess, setOrganizeSuccess] = useState(false);
   const [organizing, setOrganizing] = useState(false);
+  const [recentFiles, setRecentFiles] = useState([]);
 
   const chatContainerRef = useRef(null);
+
+  // Fetch real activity data for AI search/summarize
+  useEffect(() => {
+    let cancelled = false;
+    listActivities({ limit: 50 })
+      .then((data) => {
+        if (!cancelled) setRecentFiles(data.items || []);
+      })
+      .catch((err) => console.error("AI panel: failed to fetch activities", err));
+    return () => { cancelled = true; };
+  }, []);
 
   // Auto-scroll to bottom of chat container
   useEffect(() => {
@@ -244,12 +256,11 @@ export function AiAssistantPanel({
         .trim();
       let matched = [];
       if (searchKeyword.length === 0) {
-        matched = RECENT_FILES.slice(0, 5);
+        matched = recentFiles.slice(0, 5);
       } else {
-        matched = RECENT_FILES.filter(
+        matched = recentFiles.filter(
           (f) =>
             f.name.toLowerCase().includes(searchKeyword) ||
-            f.owner.toLowerCase().includes(searchKeyword) ||
             (f.kind && f.kind.toLowerCase().includes(searchKeyword)),
         );
       }
@@ -286,7 +297,7 @@ export function AiAssistantPanel({
       }
 
       // Check if user named a file
-      const foundFile = RECENT_FILES.find((f) =>
+      const foundFile = recentFiles.find((f) =>
         lower.includes(f.name.toLowerCase().split(".")[0]),
       );
       if (foundFile) {
@@ -655,7 +666,7 @@ Next-generation file management portal. Ensuring end-to-end security compliance,
                                         {file.name}
                                       </div>
                                       <div className="text-[10px] text-muted-foreground mt-0.5 font-sans">
-                                        {file.size} · {file.owner}
+                                        {typeof file.size === "number" ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : file.size}{file.owner ? ` · ${file.owner}` : ""}
                                       </div>
                                     </div>
                                   </div>

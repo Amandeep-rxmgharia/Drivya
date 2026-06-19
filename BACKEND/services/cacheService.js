@@ -109,3 +109,11 @@ export async function invalidateOwnerShareCache(ownerId) {
 export async function invalidateShareTokenCache(token) {
   await cacheDel(`share:token:${token}`);
 }
+
+/**
+ * Invalidate activity stats cache for a user.
+ * @param {string} userId
+ */
+export async function invalidateActivityStatsCache(userId) {
+  await cacheDel(`activity:stats:${userId}`);
+}

@@ -1,13 +1,15 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Clock,
   Eye,
   LayoutGrid,
   List,
+  Loader2,
   Search,
   Upload,
   FileStack,
+  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { card, chip } from "@/components/dashboard/dashboard-tokens";
@@ -22,13 +24,100 @@ const FILTER_TABS = [
   { id: "uploaded", label: "Uploaded", icon: Upload },
 ];
 
-export function RecentFilesView({ initialFiles, titleId = "recent-files-heading" }) {
-  const [files, setFiles] = useState(initialFiles);
+/**
+ * RecentFilesView — displays recent activity files in a timeline layout.
+ *
+ * Props:
+ *   initialFiles  – static file array (legacy/fallback, used if fetchFn is not provided)
+ *   fetchFn        – async (filter) => { items, nextCursor, pagination }
+ *   titleId        – aria label id
+ *   limit          – per-page limit (default 20)
+ */
+export function RecentFilesView({
+  initialFiles,
+  fetchFn,
+  titleId = "recent-files-heading",
+  limit = 20,
+}) {
+  const [files, setFiles] = useState(initialFiles || []);
   const [activeFilter, setActiveFilter] = useState("all");
   const [view, setView] = useState("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [previewFileId, setPreviewFileId] = useState(null);
   const [sharingFile, setSharingFile] = useState(null);
+
+  // Async state
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [nextCursor, setNextCursor] = useState(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const fetchIdRef = useRef(0);
+
+  // Fetch activities from API
+  const fetchActivities = useCallback(
+    async (filter, cursor = null) => {
+      if (!fetchFn) return;
+
+      const id = ++fetchIdRef.current;
+
+      if (cursor) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+        setError(null);
+      }
+
+      try {
+        const actionParam = filter === "all" ? undefined : filter;
+        const result = await fetchFn({
+          action: actionParam,
+          limit,
+          cursor: cursor || undefined,
+        });
+
+        // Stale request guard
+        if (id !== fetchIdRef.current) return;
+
+        if (cursor) {
+          // Append to existing
+          setFiles((prev) => [...prev, ...result.items]);
+        } else {
+          setFiles(result.items);
+        }
+        setNextCursor(result.nextCursor);
+        setHasMore(result.pagination?.hasNextPage || false);
+      } catch (err) {
+        if (id !== fetchIdRef.current) return;
+        console.error("Failed to fetch activities:", err);
+        setError("Failed to load recent activity. Please try again.");
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    },
+    [fetchFn, limit],
+  );
+
+  // Fetch on mount and when filter changes
+  useEffect(() => {
+    if (fetchFn) {
+      fetchActivities(activeFilter);
+    }
+  }, [activeFilter, fetchActivities]);
+
+  // Update from initialFiles if no fetchFn
+  useEffect(() => {
+    if (!fetchFn && initialFiles) {
+      setFiles(initialFiles);
+    }
+  }, [initialFiles, fetchFn]);
+
+  const handleLoadMore = () => {
+    if (nextCursor && hasMore && !loadingMore) {
+      fetchActivities(activeFilter, nextCursor);
+    }
+  };
 
   const previewFile = useMemo(() => {
     return files.find((f) => f.id === previewFileId) || null;
@@ -53,22 +142,24 @@ export function RecentFilesView({ initialFiles, titleId = "recent-files-heading"
   const filteredFiles = useMemo(() => {
     let list = [...files];
 
-    // filter by type
-    if (activeFilter !== "all") {
+    // When using API, filtering by type is done server-side
+    // Only apply client-side filter for static/initialFiles mode
+    if (!fetchFn && activeFilter !== "all") {
       list = list.filter((f) => f.type === activeFilter);
     }
 
-    // filter by search
+    // Search is always client-side
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       list = list.filter(
         (f) =>
-          f.name.toLowerCase().includes(q) || f.owner.toLowerCase().includes(q),
+          f.name.toLowerCase().includes(q) ||
+          (f.owner && f.owner.toLowerCase().includes(q)),
       );
     }
 
     return list;
-  }, [files, activeFilter, searchQuery]);
+  }, [files, activeFilter, searchQuery, fetchFn]);
 
   // Group by time period
   const grouped = useMemo(() => {
@@ -76,14 +167,23 @@ export function RecentFilesView({ initialFiles, titleId = "recent-files-heading"
     const order = ["Today", "Yesterday", "This Week", "Earlier"];
 
     filteredFiles.forEach((file) => {
-      const group = getTimeGroup(file.lastOpened);
+      const dateVal = file.lastOpened
+        ? file.lastOpened instanceof Date
+          ? file.lastOpened
+          : new Date(file.lastOpened)
+        : new Date();
+      const group = getTimeGroup(dateVal);
       if (!groups[group]) groups[group] = [];
       groups[group].push(file);
     });
 
     // Sort files within each group by lastOpened descending
     Object.values(groups).forEach((arr) =>
-      arr.sort((a, b) => b.lastOpened - a.lastOpened),
+      arr.sort((a, b) => {
+        const da = a.lastOpened instanceof Date ? a.lastOpened : new Date(a.lastOpened);
+        const db = b.lastOpened instanceof Date ? b.lastOpened : new Date(b.lastOpened);
+        return db - da;
+      }),
     );
 
     return order
@@ -94,6 +194,12 @@ export function RecentFilesView({ initialFiles, titleId = "recent-files-heading"
   const uploadingCount = files.filter(
     (f) => f.uploadStatus === "uploading",
   ).length;
+
+  // Format time — handle both Date objects and ISO strings
+  const formatTime = (date) => {
+    const d = date instanceof Date ? date : new Date(date);
+    return formatRelativeTime(d);
+  };
 
   return (
     <>
@@ -197,9 +303,43 @@ export function RecentFilesView({ initialFiles, titleId = "recent-files-heading"
           </div>
         </header>
 
-        {/* Timeline groups */}
+        {/* Content */}
         <div className="divide-y divide-border/60">
-          {grouped.length === 0 ? (
+          {/* Loading state */}
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-border bg-secondary/50">
+                <Loader2 className="h-6 w-6 text-primary animate-spin" />
+              </div>
+              <h3 className="mt-4 font-display text-base font-semibold text-foreground">
+                Loading activity...
+              </h3>
+              <p className="mt-1.5 text-sm text-muted-foreground max-w-xs">
+                Fetching your recent files and actions.
+              </p>
+            </div>
+          ) : error ? (
+            /* Error state */
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-destructive/20 bg-destructive/10">
+                <AlertCircle className="h-6 w-6 text-destructive" />
+              </div>
+              <h3 className="mt-4 font-display text-base font-semibold text-foreground">
+                Something went wrong
+              </h3>
+              <p className="mt-1.5 text-sm text-muted-foreground max-w-xs">
+                {error}
+              </p>
+              <button
+                type="button"
+                onClick={() => fetchActivities(activeFilter)}
+                className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground shadow-sm hover:opacity-90 transition-opacity"
+              >
+                Try again
+              </button>
+            </div>
+          ) : grouped.length === 0 ? (
+            /* Empty state */
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-border bg-secondary/50">
                 <Clock className="h-6 w-6 text-muted-foreground" />
@@ -213,19 +353,42 @@ export function RecentFilesView({ initialFiles, titleId = "recent-files-heading"
               </p>
             </div>
           ) : (
-            grouped.map((group, gi) => (
-              <RecentTimeline
-                key={group.label}
-                label={group.label}
-                files={group.files}
-                view={view}
-                index={gi}
-                formatTime={formatRelativeTime}
-                onPreview={(file) => setPreviewFileId(file.id)}
-                onStar={handleToggleStar}
-                onShare={handleShare}
-              />
-            ))
+            <>
+              {grouped.map((group, gi) => (
+                <RecentTimeline
+                  key={group.label}
+                  label={group.label}
+                  files={group.files}
+                  view={view}
+                  index={gi}
+                  formatTime={formatTime}
+                  onPreview={(file) => setPreviewFileId(file.id)}
+                  onStar={handleToggleStar}
+                  onShare={handleShare}
+                />
+              ))}
+
+              {/* Load more button */}
+              {hasMore && (
+                <div className="flex justify-center py-6">
+                  <button
+                    type="button"
+                    onClick={handleLoadMore}
+                    disabled={loadingMore}
+                    className="inline-flex items-center gap-2 rounded-xl border border-border bg-secondary/30 px-5 py-2.5 text-xs font-semibold text-foreground hover:bg-secondary/50 transition-colors disabled:opacity-50"
+                  >
+                    {loadingMore ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Loading...
+                      </>
+                    ) : (
+                      "Load more"
+                    )}
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </section>
@@ -236,7 +399,7 @@ export function RecentFilesView({ initialFiles, titleId = "recent-files-heading"
           <FilePreviewModal
             file={previewFile}
             onClose={() => setPreviewFileId(null)}
-            formatTime={formatRelativeTime}
+            formatTime={formatTime}
             onStar={handleToggleStar}
             onShare={handleShare}
           />
