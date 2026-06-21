@@ -19,9 +19,6 @@ export const ACTIVITY_FILTERS = Object.freeze(
 export const ACTIVITY_TTL_DAYS =
   parseInt(process.env.ACTIVITY_TTL_DAYS, 10) || 90;
 
-/** Dedup window: same resource + action within this many seconds = bump, not insert. */
-export const ACTIVITY_DEDUP_WINDOW_SECS = 3600; // 1 hour
-
 /** Cache key prefixes (Redis-ready naming). */
 export const ACTIVITY_CACHE_KEYS = Object.freeze({
   STATS: "activity:stats:",

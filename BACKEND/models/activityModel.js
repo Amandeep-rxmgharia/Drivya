@@ -64,9 +64,11 @@ activitySchema.index({ userId: 1, createdAt: -1 });
 // Filtered listing by action type (covers ?action=opened / ?action=uploaded)
 activitySchema.index({ userId: 1, action: 1, createdAt: -1 });
 
-// Dedup lookup: find latest activity for a specific resource + action
+// Unique constraint: one activity document per (user, resource, action).
+// This powers the upsert in recordActivity and prevents duplicate documents.
 activitySchema.index(
-  { userId: 1, resourceType: 1, resourceId: 1, action: 1, createdAt: -1 },
+  { userId: 1, resourceType: 1, resourceId: 1, action: 1 },
+  { unique: true },
 );
 
 // TTL auto-cleanup: purge activities older than the configured retention period

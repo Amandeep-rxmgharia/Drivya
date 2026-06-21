@@ -2,7 +2,6 @@ import mongoose from "mongoose";
 import Activity from "../models/activityModel.js";
 import {
   ACTIVITY_ACTIONS,
-  ACTIVITY_DEDUP_WINDOW_SECS,
   ACTIVITY_CACHE_KEYS,
   ACTIVITY_CACHE_TTL,
 } from "../constants/activityConstants.js";
@@ -52,8 +51,10 @@ export function deriveKind(name, mimeType) {
 // ─── Record Activity ─────────────────────────────────────────────
 
 /**
- * Record a user activity. For "opened" actions, deduplicates within
- * ACTIVITY_DEDUP_WINDOW_SECS by bumping the existing record's timestamp.
+ * Record a user activity. Uses upsert so that each
+ * (userId, resourceType, resourceId, action) combination produces
+ * exactly ONE document. Repeating the same action on the same
+ * resource simply bumps its timestamp to the current time.
  *
  * Call WITHOUT await from controllers (fire-and-forget):
  *   recordActivity({ ... }).catch(err => console.error("Activity:", err.message));
@@ -84,51 +85,22 @@ export async function recordActivity({
     );
   }
 
-  // Deduplicate "opened" and "downloaded" — bump timestamp if recent
-  const dedupActions = new Set([
-    ACTIVITY_ACTIONS.OPENED,
-    ACTIVITY_ACTIONS.DOWNLOADED,
-  ]);
-
-  if (dedupActions.has(action)) {
-    const cutoff = new Date(Date.now() - ACTIVITY_DEDUP_WINDOW_SECS * 1000);
-
-    const bumped = await Activity.findOneAndUpdate(
-      {
-        userId,
-        action,
-        resourceType,
-        resourceId,
-        createdAt: { $gte: cutoff },
+  // Upsert: one document per (userId, resourceType, resourceId, action).
+  // If a document already exists for this combo, Mongoose's `timestamps`
+  // option auto-bumps `updatedAt`. The listing pipeline sorts by
+  // `updatedAt` so the item floats to the top of the activity list.
+  const doc = await Activity.findOneAndUpdate(
+    { userId, action, resourceType, resourceId },
+    {
+      $set: {
+        resourceSnapshot,
+        parentDirId,
+        metadata,
       },
-      {
-        $set: {
-          resourceSnapshot,
-          parentDirId,
-          updatedAt: new Date(),
-        },
-        // Also bump createdAt so it floats to the top of the list
-        $currentDate: { createdAt: true },
-      },
-      { sort: { createdAt: -1 } },
-    );
-
-    if (bumped) {
-      // Invalidate stats cache on activity change
-      await cacheDel(`${ACTIVITY_CACHE_KEYS.STATS}${userId}`);
-      return bumped;
-    }
-  }
-
-  const doc = await Activity.create({
-    userId,
-    action,
-    resourceType,
-    resourceId,
-    resourceSnapshot,
-    parentDirId,
-    metadata,
-  });
+      $setOnInsert: { userId, action, resourceType, resourceId },
+    },
+    { upsert: true, new: true },
+  );
 
   // Invalidate stats cache
   await cacheDel(`${ACTIVITY_CACHE_KEYS.STATS}${userId}`);
@@ -181,8 +153,8 @@ export async function listActivities({
     // Stage 1: match user's activities (and action if provided for O(1) index scan, excluding root dir opens)
     { $match: matchStage },
 
-    // Stage 2: sort newest first (uses { userId, createdAt } or { userId, action, createdAt } index)
-    { $sort: { createdAt: -1 } },
+    // Stage 2: sort newest first by updatedAt (bumped on every upsert)
+    { $sort: { updatedAt: -1 } },
 
     // Stage 3: cap scan to most recent 1000 activities for perf
     { $limit: 1000 },
@@ -191,7 +163,7 @@ export async function listActivities({
     {
       $group: {
         _id: { resourceType: "$resourceType", resourceId: "$resourceId" },
-        latestCreatedAt: { $first: "$createdAt" },
+        latestUpdatedAt: { $first: "$updatedAt" },
         latestActivityId: { $first: "$_id" },
         action: { $first: "$action" },           // most recent action
         actions: { $addToSet: "$action" },         // ALL unique actions
@@ -200,18 +172,18 @@ export async function listActivities({
         resourceSnapshot: { $first: "$resourceSnapshot" },
         parentDirId: { $first: "$parentDirId" },
         metadata: { $first: "$metadata" },
-        history: { $push: { action: "$action", createdAt: "$createdAt" } },
+        history: { $push: { action: "$action", updatedAt: "$updatedAt" } },
       },
     },
 
     // Stage 5: sort groups by latest activity
-    { $sort: { latestCreatedAt: -1 } },
+    { $sort: { latestUpdatedAt: -1 } },
   ];
 
   // Stage 6: cursor-based pagination (ISO date string)
   if (cursor) {
     pipeline.push({
-      $match: { latestCreatedAt: { $lt: new Date(cursor) } },
+      $match: { latestUpdatedAt: { $lt: new Date(cursor) } },
     });
   } else if (page > 1) {
     pipeline.push({ $skip: (page - 1) * clampedLimit });
@@ -225,7 +197,7 @@ export async function listActivities({
   const hasNextPage = results.length > clampedLimit;
   const items = hasNextPage ? results.slice(0, clampedLimit) : results;
   const nextCursor = hasNextPage
-    ? items[items.length - 1].latestCreatedAt.toISOString()
+    ? items[items.length - 1].latestUpdatedAt.toISOString()
     : null;
 
   // Transform to frontend shape
@@ -234,8 +206,8 @@ export async function listActivities({
     if (item.history) {
       for (const h of item.history) {
         const type = mapActionToType(h.action);
-        if (!actionMap[type] || new Date(h.createdAt) > new Date(actionMap[type])) {
-          actionMap[type] = h.createdAt;
+        if (!actionMap[type] || new Date(h.updatedAt) > new Date(actionMap[type])) {
+          actionMap[type] = h.updatedAt;
         }
       }
     }
@@ -253,7 +225,7 @@ export async function listActivities({
       id: item.latestActivityId.toString(),
       name: item.resourceSnapshot.name,
       size: item.resourceSnapshot.size,
-      lastOpened: item.latestCreatedAt,
+      lastOpened: item.latestUpdatedAt,
       type: mapActionToType(item.action),
       actions: actionsMapped,
       actionHistory,
