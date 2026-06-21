@@ -51,6 +51,7 @@ export function normalizeShare(share) {
       share.visibility === "restricted" ? "Restricted" : "Public",
     isExpired: Boolean(share.isExpired),
     collaboratorCount: share.collaboratorCount ?? 0,
+    permissions: share.permissions,
     _raw: share,
   };
 }

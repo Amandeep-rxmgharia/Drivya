@@ -894,6 +894,12 @@ function LinkDetailModal({
   const [passwordSaved, setPasswordSaved] = useState(false);
   const [showExpirationDropdown, setShowExpirationDropdown] = useState(false);
   const [expiration, setExpiration] = useState(file.expiresAt || "Never");
+  const [allowDownload, setAllowDownload] = useState(
+    file.permissions?.allowDownload ?? true,
+  );
+  const [allowEdit, setAllowEdit] = useState(
+    file.permissions?.allowEdit ?? false,
+  );
 
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("Viewer");
@@ -956,6 +962,10 @@ function LinkDetailModal({
       setPasswordEnabled(share.password);
       setHasPassword(share.password);
       if (share.expiresAt) setExpiration(share.expiresAt);
+      if (share.permissions) {
+        setAllowDownload(share.permissions.allowDownload ?? true);
+        setAllowEdit(share.permissions.allowEdit ?? false);
+      }
       onRefresh?.();
       return share;
     } catch (err) {
@@ -986,6 +996,22 @@ function LinkDetailModal({
     const nextState = !isStarred;
     setIsStarred(nextState);
     addToast(nextState ? "Starred file link" : "Unstarred file link");
+  };
+
+  const handleToggleDownload = async () => {
+    const nextVal = !allowDownload;
+    const share = await syncShare({ permissions: { allowDownload: nextVal } });
+    if (share) {
+      addToast(nextVal ? "Downloads enabled" : "Downloads disabled");
+    }
+  };
+
+  const handleToggleEdit = async () => {
+    const nextVal = !allowEdit;
+    const share = await syncShare({ permissions: { allowEdit: nextVal } });
+    if (share) {
+      addToast(nextVal ? "Editing enabled" : "Editing disabled");
+    }
   };
 
   const handleSendInvite = async (e) => {
@@ -1594,6 +1620,66 @@ function LinkDetailModal({
                             </motion.div>
                           )}
                         </AnimatePresence>
+                      </div>
+                    </div>
+
+                    {/* Permissions Switch */}
+                    <div className="h-px bg-border/40" />
+
+                    <div className="flex flex-col gap-3.5 text-xs">
+                      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 font-sans">
+                        <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground/80" />{" "}
+                        Link Permissions
+                      </span>
+
+                      <div className="space-y-3 pt-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-foreground font-medium">
+                            Allow Downloads
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handleToggleDownload}
+                            className={cn(
+                              "relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-300 focus:outline-none cursor-pointer border border-transparent",
+                              allowDownload
+                                ? "bg-primary border-primary/20"
+                                : "bg-secondary border-border/60",
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                "inline-block h-3 w-3 transform rounded-full bg-white transition-transform shadow-sm",
+                                allowDownload ? "translate-x-5" : "translate-x-1",
+                              )}
+                            />
+                          </button>
+                        </div>
+
+                        {kind === "text" && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-foreground font-medium">
+                              Allow Public Editing
+                            </span>
+                            <button
+                              type="button"
+                              onClick={handleToggleEdit}
+                              className={cn(
+                                "relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-300 focus:outline-none cursor-pointer border border-transparent",
+                                allowEdit
+                                  ? "bg-primary border-primary/20"
+                                  : "bg-secondary border-border/60",
+                              )}
+                            >
+                              <span
+                                className={cn(
+                                  "inline-block h-3 w-3 transform rounded-full bg-white transition-transform shadow-sm",
+                                  allowEdit ? "translate-x-5" : "translate-x-1",
+                                )}
+                              />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
 
