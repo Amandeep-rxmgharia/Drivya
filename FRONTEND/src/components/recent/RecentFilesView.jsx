@@ -210,7 +210,7 @@ export function RecentFilesView({
   return (
     <>
       <section
-        className={cn(card, "overflow-hidden animate-fade-in")}
+        className={cn(card, "animate-fade-in")}
         aria-labelledby={titleId}
       >
         {/* Toolbar */}

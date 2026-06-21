@@ -42,18 +42,20 @@ export const listDirectory = async (req, res, next) => {
         .lean(),
     ]);
 
-    // Record directory opened activity (fire-and-forget, deduplicated within 1h)
-    recordActivity({
-      userId,
-      action: ACTIVITY_ACTIONS.OPENED,
-      resourceType: RESOURCE_TYPES.DIRECTORY,
-      resourceId: parentDir._id,
-      resourceSnapshot: {
-        name: parentDir.name,
-        kind: "folder",
-      },
-      parentDirId: parentDir.parentDirId,
-    }).catch((err) => console.error("Activity[dir-open]:", err.message));
+    // Record directory opened activity if it's not the root directory (fire-and-forget, deduplicated within 1h)
+    if (parentDir.parentDirId !== null) {
+      recordActivity({
+        userId,
+        action: ACTIVITY_ACTIONS.OPENED,
+        resourceType: RESOURCE_TYPES.DIRECTORY,
+        resourceId: parentDir._id,
+        resourceSnapshot: {
+          name: parentDir.name,
+          kind: "folder",
+        },
+        parentDirId: parentDir.parentDirId,
+      }).catch((err) => console.error("Activity[dir-open]:", err.message));
+    }
 
     return res.json({
       currentDir: parentDir,

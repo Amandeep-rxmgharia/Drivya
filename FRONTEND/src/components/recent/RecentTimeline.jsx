@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import {
   CalendarDays,
   ChevronDown,
@@ -129,6 +129,129 @@ function ActivityBadge({ type, actions }) {
   }
 
   return badges.length > 0 ? <>{badges}</> : null;
+}
+
+/* ───────────────────────── Activity Badges Dropdown ───────────────────────── */
+
+function ActivityBadgesDropdown({ file, formatTime }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  const history = file.actionHistory || [];
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen]);
+
+  if (history.length <= 1) {
+    return <ActivityBadge type={file.type} actions={file.actions} />;
+  }
+
+  // Find the latest action
+  const latestAction = history[0];
+  const count = history.length;
+
+  const iconMap = {
+    uploaded: Upload,
+    opened: Eye,
+    edited: Eye,
+    downloaded: Download,
+    renamed: Pencil,
+    trashed: Trash2,
+  };
+
+  const colorMap = {
+    uploaded: "border-emerald-500/20 bg-emerald-500/8 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15 dark:hover:bg-emerald-500/15",
+    opened: "border-sky-500/20 bg-sky-500/8 text-sky-600 dark:text-sky-400 hover:bg-sky-500/15 dark:hover:bg-sky-500/15",
+    edited: "border-sky-500/20 bg-sky-500/8 text-sky-600 dark:text-sky-400 hover:bg-sky-500/15 dark:hover:bg-sky-500/15",
+    downloaded: "border-indigo-500/20 bg-indigo-500/8 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/15 dark:hover:bg-indigo-500/15",
+    renamed: "border-orange-500/20 bg-orange-500/8 text-orange-600 dark:text-orange-400 hover:bg-orange-500/15 dark:hover:bg-orange-500/15",
+    trashed: "border-rose-500/20 bg-rose-500/8 text-rose-600 dark:text-rose-400 hover:bg-rose-500/15 dark:hover:bg-rose-500/15",
+  };
+
+  const labelMap = {
+    uploaded: "Uploaded",
+    opened: "Opened",
+    edited: "Edited",
+    downloaded: "Downloaded",
+    renamed: "Renamed",
+    trashed: "Trashed",
+  };
+
+  const LatestIcon = iconMap[latestAction.type] || Eye;
+  const latestClass = colorMap[latestAction.type] || colorMap.opened;
+  const latestLabel = labelMap[latestAction.type] || labelMap.opened;
+
+  return (
+    <div className="relative inline-block" ref={dropdownRef}>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsOpen(!isOpen);
+        }}
+        className={cn(
+          "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium border transition-all duration-200 select-none shadow-sm cursor-pointer",
+          latestClass
+        )}
+      >
+        <LatestIcon className="h-3 w-3" />
+        <span>{latestLabel}</span>
+        <span className="opacity-80 font-bold px-1 py-0.25 bg-foreground/5 rounded text-[9px]">+{count - 1}</span>
+        <ChevronDown className={cn("h-3 w-3 transition-transform duration-200 opacity-60", isOpen && "rotate-180")} />
+      </button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: -8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: -8 }}
+            transition={{ duration: 0.15, ease: easeSmooth }}
+            className="absolute left-0 bottom-full mb-2 w-56 rounded-xl border border-border/80 bg-popover/90 backdrop-blur-md shadow-elegant p-2.5 z-50 text-left"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/75 px-1.5 pb-1.5 mb-1.5 border-b border-border/40 flex items-center justify-between">
+              <span>Activity History</span>
+              <Clock className="h-2.5 w-2.5 text-muted-foreground/50" />
+            </div>
+            <div className="space-y-1">
+              {history.map((act, idx) => {
+                const ActIcon = iconMap[act.type] || Eye;
+                const actClass = colorMap[act.type] || colorMap.opened;
+                const actLabel = labelMap[act.type] || labelMap.opened;
+
+                return (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between gap-3 p-1.5 rounded-lg hover:bg-secondary/40 transition-colors"
+                  >
+                    <span className={cn(
+                      "inline-flex items-center gap-1 rounded px-1 py-0.5 text-[9px] font-semibold border",
+                      actClass.split(" hover:")[0]
+                    )}>
+                      <ActIcon className="h-2.5 w-2.5" />
+                      {actLabel}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground font-medium tabular-nums truncate">
+                      {formatTime(act.timestamp)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 }
 
 /* ───────────────────────── File Actions Toolbar ───────────────────────── */
@@ -273,7 +396,7 @@ function RecentFileRow({ file, view, formatTime, onPreview, onStar, onShare }) {
               {file.name}
             </h4>
             <div className="flex flex-wrap items-center gap-1.5">
-              <ActivityBadge type={file.type} actions={file.actions} />
+              <ActivityBadgesDropdown file={file} formatTime={formatTime} />
               {file.uploadStatus && (
                 <UploadStatusBadge
                   status={file.uploadStatus}
@@ -347,7 +470,7 @@ function RecentFileRow({ file, view, formatTime, onPreview, onStar, onShare }) {
                   <h4 className="truncate text-sm font-semibold text-foreground sm:text-[15px]">
                     {file.name}
                   </h4>
-                  <ActivityBadge type={file.type} actions={file.actions} />
+                  <ActivityBadgesDropdown file={file} formatTime={formatTime} />
                   {file.uploadStatus && (
                     <UploadStatusBadge
                       status={file.uploadStatus}

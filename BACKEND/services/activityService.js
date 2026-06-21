@@ -166,13 +166,19 @@ export async function listActivities({
   const clampedLimit = Math.min(Math.max(1, limit), 100);
 
   // ── Build aggregation pipeline ──
-  const matchStage = { userId: userOid };
+  const matchStage = {
+    userId: userOid,
+    $or: [
+      { resourceType: { $ne: "directory" } },
+      { parentDirId: { $ne: null } }
+    ]
+  };
   if (action) {
     matchStage.action = action;
   }
 
   const pipeline = [
-    // Stage 1: match user's activities (and action if provided for O(1) index scan)
+    // Stage 1: match user's activities (and action if provided for O(1) index scan, excluding root dir opens)
     { $match: matchStage },
 
     // Stage 2: sort newest first (uses { userId, createdAt } or { userId, action, createdAt } index)
@@ -194,6 +200,7 @@ export async function listActivities({
         resourceSnapshot: { $first: "$resourceSnapshot" },
         parentDirId: { $first: "$parentDirId" },
         metadata: { $first: "$metadata" },
+        history: { $push: { action: "$action", createdAt: "$createdAt" } },
       },
     },
 
@@ -222,23 +229,45 @@ export async function listActivities({
     : null;
 
   // Transform to frontend shape
-  const transformed = items.map((item) => ({
-    id: item.latestActivityId.toString(),
-    name: item.resourceSnapshot.name,
-    size: item.resourceSnapshot.size,
-    lastOpened: item.latestCreatedAt,
-    type: mapActionToType(item.action),
-    actions: item.actions,                        // NEW: all actions for multi-badge
-    kind: item.resourceSnapshot.kind,
-    mimeType: item.resourceSnapshot.mimeType,
-    // Backend metadata
-    activityId: item.latestActivityId.toString(),
-    action: item.action,
-    resourceType: item.resourceType,
-    resourceId: item.resourceId.toString(),
-    parentDirId: item.parentDirId?.toString() || null,
-    metadata: item.metadata,
-  }));
+  const transformed = items.map((item) => {
+    const actionMap = {};
+    if (item.history) {
+      for (const h of item.history) {
+        const type = mapActionToType(h.action);
+        if (!actionMap[type] || new Date(h.createdAt) > new Date(actionMap[type])) {
+          actionMap[type] = h.createdAt;
+        }
+      }
+    }
+
+    const actionHistory = Object.entries(actionMap)
+      .map(([type, timestamp]) => ({
+        type,
+        timestamp,
+      }))
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    const actionsMapped = Array.from(new Set(item.actions.map(mapActionToType)));
+
+    return {
+      id: item.latestActivityId.toString(),
+      name: item.resourceSnapshot.name,
+      size: item.resourceSnapshot.size,
+      lastOpened: item.latestCreatedAt,
+      type: mapActionToType(item.action),
+      actions: actionsMapped,
+      actionHistory,
+      kind: item.resourceSnapshot.kind,
+      mimeType: item.resourceSnapshot.mimeType,
+      // Backend metadata
+      activityId: item.latestActivityId.toString(),
+      action: item.action,
+      resourceType: item.resourceType,
+      resourceId: item.resourceId.toString(),
+      parentDirId: item.parentDirId?.toString() || null,
+      metadata: item.metadata,
+    };
+  });
 
   return {
     items: transformed,
