@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import {
   Calendar,
   Clock,
@@ -11,6 +11,7 @@ import {
   HardDrive,
   Loader2,
   Pencil,
+  RotateCcw,
   Share2,
   Star,
   Sparkles,
@@ -26,7 +27,8 @@ import { easeSmooth } from "@/lib/motion-presets";
 import { detectFileKind, getFileTypeStyle } from "@/lib/file-types";
 import { FileTypeIcon } from "@/components/dashboard/FileTypeIcon";
 import { iconBtn } from "@/components/dashboard/dashboard-tokens";
-import { getFilePreviewUrl } from "../../../api/drive.js";
+import { getFilePreviewUrl, downloadFile } from "../../../api/drive.js";
+import { FilePreviewModal as DashboardFilePreviewModal } from "../dashboard/FilePreviewModal.jsx";
 import api from "../../../api/auth.js";
 
 /** Format bytes into human-readable size string. */
@@ -200,6 +202,7 @@ export function FilePreviewModal({
   onStar,
   onShare,
 }) {
+  const [showFullPreview, setShowFullPreview] = useState(false);
   // Escape key handler
   useEffect(() => {
     if (!file) return;
@@ -315,6 +318,11 @@ export function FilePreviewModal({
                     <Trash2 className="h-3 w-3" /> Trashed
                   </span>
                 )}
+                {file.actions.includes("restored") && (
+                  <span className="inline-flex items-center gap-1 rounded-md border border-teal-500/20 bg-teal-500/8 px-2 py-0.5 text-[10px] font-medium text-teal-600 dark:text-teal-400 animate-fade-in">
+                    <RotateCcw className="h-3 w-3" /> Restored
+                  </span>
+                )}
               </>
             ) : (
               <>
@@ -329,6 +337,14 @@ export function FilePreviewModal({
                 ) : file.type === "trashed" ? (
                   <span className="inline-flex items-center gap-1 rounded-md border border-rose-500/20 bg-rose-500/8 px-2 py-0.5 text-[10px] font-medium text-rose-600 dark:text-rose-400">
                     <Trash2 className="h-3 w-3" /> Trashed
+                  </span>
+                ) : file.type === "renamed" ? (
+                  <span className="inline-flex items-center gap-1 rounded-md border border-orange-500/20 bg-orange-500/8 px-2 py-0.5 text-[10px] font-medium text-orange-600 dark:text-orange-400">
+                    <Pencil className="h-3 w-3" /> Renamed
+                  </span>
+                ) : file.type === "restored" ? (
+                  <span className="inline-flex items-center gap-1 rounded-md border border-teal-500/20 bg-teal-500/8 px-2 py-0.5 text-[10px] font-medium text-teal-600 dark:text-teal-400 animate-fade-in">
+                    <RotateCcw className="h-3 w-3" /> Restored
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 rounded-md border border-sky-500/20 bg-sky-500/8 px-2 py-0.5 text-[10px] font-medium text-sky-600 dark:text-sky-400">
@@ -473,13 +489,20 @@ export function FilePreviewModal({
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                className="inline-flex h-11 sm:h-10 items-center justify-center gap-2 rounded-xl border border-primary/20 bg-primary/5 text-sm font-medium text-primary hover:bg-primary/10 transition-colors"
+                onClick={() => setShowFullPreview(true)}
+                className="inline-flex h-11 sm:h-10 items-center justify-center gap-2 rounded-xl border border-primary/20 bg-primary/5 text-sm font-medium text-primary hover:bg-primary/10 transition-colors cursor-pointer"
               >
                 <ExternalLink className="h-4 w-4" /> Open
               </button>
               <button
                 type="button"
-                className="inline-flex h-11 sm:h-10 items-center justify-center gap-2 rounded-xl border border-border bg-secondary/40 text-sm font-medium text-foreground/80 hover:bg-secondary/70 transition-colors"
+                onClick={() => {
+                  const targetId = file.resourceId || file.id;
+                  if (targetId) {
+                    downloadFile(targetId, file.name);
+                  }
+                }}
+                className="inline-flex h-11 sm:h-10 items-center justify-center gap-2 rounded-xl border border-border bg-secondary/40 text-sm font-medium text-foreground/80 hover:bg-secondary/70 transition-colors cursor-pointer"
               >
                 <Download className="h-4 w-4" /> Download
               </button>
@@ -489,7 +512,7 @@ export function FilePreviewModal({
                 type="button"
                 onClick={() => onStar?.(file.id)}
                 className={cn(
-                  "inline-flex h-11 sm:h-10 items-center justify-center gap-2 rounded-xl border text-sm font-medium transition-colors",
+                  "inline-flex h-11 sm:h-10 items-center justify-center gap-2 rounded-xl border text-sm font-medium transition-colors cursor-pointer",
                   file.starred
                     ? "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300"
                     : "border-border bg-secondary/40 text-foreground/80 hover:bg-secondary/70",
@@ -503,23 +526,9 @@ export function FilePreviewModal({
               <button
                 type="button"
                 onClick={() => onShare?.(file)}
-                className="inline-flex h-11 sm:h-10 items-center justify-center gap-2 rounded-xl border border-border bg-secondary/40 text-sm font-medium text-foreground/80 hover:bg-secondary/70 transition-colors"
+                className="inline-flex h-11 sm:h-10 items-center justify-center gap-2 rounded-xl border border-border bg-secondary/40 text-sm font-medium text-foreground/80 hover:bg-secondary/70 transition-colors cursor-pointer"
               >
                 <Share2 className="h-4 w-4" /> Share
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                className="inline-flex h-11 sm:h-10 items-center justify-center gap-2 rounded-xl border border-border bg-secondary/40 text-sm font-medium text-foreground/80 hover:bg-secondary/70 transition-colors"
-              >
-                <Pencil className="h-4 w-4" /> Rename
-              </button>
-              <button
-                type="button"
-                className="inline-flex h-11 sm:h-10 items-center justify-center gap-2 rounded-xl border border-destructive/20 bg-destructive/5 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
-              >
-                <Trash2 className="h-4 w-4" /> Delete
               </button>
             </div>
           </div>
@@ -528,6 +537,19 @@ export function FilePreviewModal({
           <div className="h-4 md:h-0" />
         </div>
       </motion.div>
+
+      <AnimatePresence>
+        {showFullPreview && (
+          <DashboardFilePreviewModal
+            file={{
+              ...file,
+              id: file.resourceId || file.id,
+            }}
+            onClose={() => setShowFullPreview(false)}
+            onDownload={downloadFile}
+          />
+        )}
+      </AnimatePresence>
     </>,
     document.body,
   );
