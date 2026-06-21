@@ -13,6 +13,7 @@ import {
   Trash2,
   FileStack,
   AlertCircle,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { card, chip } from "@/components/dashboard/dashboard-tokens";
@@ -51,6 +52,26 @@ export function RecentFilesView({
   const [searchQuery, setSearchQuery] = useState("");
   const [previewFileId, setPreviewFileId] = useState(null);
   const [sharingFile, setSharingFile] = useState(null);
+
+  const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
+  const filterDropdownRef = useRef(null);
+
+  useEffect(() => {
+    if (!filterDropdownOpen) return;
+    const handleClickOutside = (event) => {
+      if (
+        filterDropdownRef.current &&
+        !filterDropdownRef.current.contains(event.target)
+      ) {
+        setFilterDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [filterDropdownOpen]);
+
+  const activeTab = FILTER_TABS.find((t) => t.id === activeFilter) || FILTER_TABS[0];
+  const ActiveTabIcon = activeTab.icon;
 
   // Async state
   const [loading, setLoading] = useState(false);
@@ -218,8 +239,54 @@ export function RecentFilesView({
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             {/* Filter tabs */}
             <div className="flex items-center gap-3">
+              {/* Mobile/Tablet view: Dropdown */}
+              <div className="relative lg:hidden" ref={filterDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setFilterDropdownOpen(!filterDropdownOpen)}
+                  className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-secondary/40 px-3.5 text-xs font-semibold text-foreground hover:bg-secondary transition-colors cursor-pointer"
+                  aria-expanded={filterDropdownOpen}
+                >
+                  <ActiveTabIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span>{activeTab?.label || "All"}</span>
+                  <ChevronDown
+                    className={cn(
+                      "h-3.5 w-3.5 transition-transform text-muted-foreground",
+                      filterDropdownOpen && "rotate-180"
+                    )}
+                  />
+                </button>
+                {filterDropdownOpen && (
+                  <div className="absolute left-0 z-30 mt-2 min-w-[160px] rounded-xl border border-border bg-popover p-1 shadow-elegant animate-fade-in">
+                    {FILTER_TABS.map((tab) => {
+                      const TabIcon = tab.icon;
+                      return (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          onClick={() => {
+                            setActiveFilter(tab.id);
+                            setFilterDropdownOpen(false);
+                          }}
+                          className={cn(
+                            "w-full rounded-lg px-3 py-2 text-left text-sm transition-colors flex items-center gap-2 cursor-pointer",
+                            activeFilter === tab.id
+                              ? "bg-primary text-primary-foreground font-medium"
+                              : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                          )}
+                        >
+                          <TabIcon className="h-3.5 w-3.5 shrink-0" />
+                          <span>{tab.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Desktop view: Tabs */}
               <div
-                className="flex rounded-xl border border-border bg-secondary/40 p-0.5"
+                className="hidden lg:flex rounded-xl border border-border bg-secondary/40 p-0.5"
                 role="tablist"
               >
                 {FILTER_TABS.map((tab) => (
@@ -230,7 +297,7 @@ export function RecentFilesView({
                     aria-selected={activeFilter === tab.id}
                     onClick={() => setActiveFilter(tab.id)}
                     className={cn(
-                      "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-200",
+                      "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-200 cursor-pointer",
                       activeFilter === tab.id
                         ? "bg-primary text-primary-foreground shadow-sm"
                         : "text-muted-foreground hover:bg-secondary hover:text-foreground",

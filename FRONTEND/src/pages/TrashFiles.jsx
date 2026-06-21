@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, memo } from "react";
+import { useState, useMemo, useCallback, useEffect, memo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
 import {
@@ -714,6 +714,26 @@ export default function TrashFiles() {
   const [sortOpen, setSortOpen] = useState(false);
   const [view, setView] = useState("grid");
 
+  const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
+  const filterDropdownRef = useRef(null);
+
+  useEffect(() => {
+    if (!filterDropdownOpen) return;
+    const handleClickOutside = (event) => {
+      if (
+        filterDropdownRef.current &&
+        !filterDropdownRef.current.contains(event.target)
+      ) {
+        setFilterDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [filterDropdownOpen]);
+
+  const activeTab = FILTER_TABS.find((t) => t.id === activeFilter) || FILTER_TABS[0];
+  const ActiveTabIcon = activeTab.icon;
+
   // Preview state
   const [previewFile, setPreviewFile] = useState(null);
 
@@ -995,34 +1015,82 @@ export default function TrashFiles() {
         <header className="border-b border-border px-4 py-3 sm:px-5 sm:py-4">
           <div className="flex flex-col gap-3 sm:gap-4">
             {/* Top row: filter tabs */}
-            <div className="-mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto scrollbar-hide">
-              <div
-                className="flex rounded-xl border border-border bg-secondary/40 p-0.5 w-max sm:w-auto"
-                role="tablist"
-              >
-                {FILTER_TABS.map((tab) => (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={activeFilter === tab.id}
-                    onClick={() => setActiveFilter(tab.id)}
+            <div className="flex items-center justify-between gap-3 w-full">
+              {/* Mobile/Tablet view: Dropdown */}
+              <div className="relative lg:hidden" ref={filterDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setFilterDropdownOpen(!filterDropdownOpen)}
+                  className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-secondary/40 px-3.5 text-xs font-semibold text-foreground hover:bg-secondary transition-colors cursor-pointer"
+                  aria-expanded={filterDropdownOpen}
+                >
+                  <ActiveTabIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span>{activeTab?.label || "All"}</span>
+                  <ChevronDown
                     className={cn(
-                      "inline-flex items-center gap-1 sm:gap-1.5 rounded-lg px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs font-medium transition-all duration-200 whitespace-nowrap cursor-pointer",
-                      activeFilter === tab.id
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                      "h-3.5 w-3.5 transition-transform text-muted-foreground",
+                      filterDropdownOpen && "rotate-180"
                     )}
-                  >
-                    <tab.icon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                    <span className="hidden xs:inline sm:inline">
-                      {tab.label}
-                    </span>
-                    <span className="xs:hidden sm:hidden">
-                      {tab.id === "all" ? "All" : tab.label.slice(0, 3)}
-                    </span>
-                  </button>
-                ))}
+                  />
+                </button>
+                {filterDropdownOpen && (
+                  <div className="absolute left-0 z-30 mt-2 min-w-[160px] rounded-xl border border-border bg-popover p-1 shadow-elegant animate-fade-in">
+                    {FILTER_TABS.map((tab) => {
+                      const TabIcon = tab.icon;
+                      return (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          onClick={() => {
+                            setActiveFilter(tab.id);
+                            setFilterDropdownOpen(false);
+                          }}
+                          className={cn(
+                            "w-full rounded-lg px-3 py-2 text-left text-sm transition-colors flex items-center gap-2 cursor-pointer",
+                            activeFilter === tab.id
+                              ? "bg-primary text-primary-foreground font-medium"
+                              : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                          )}
+                        >
+                          <TabIcon className="h-3.5 w-3.5 shrink-0" />
+                          <span>{tab.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Desktop view: Tabs */}
+              <div className="hidden lg:block -mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto scrollbar-hide w-full">
+                <div
+                  className="flex rounded-xl border border-border bg-secondary/40 p-0.5 w-max sm:w-auto"
+                  role="tablist"
+                >
+                  {FILTER_TABS.map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={activeFilter === tab.id}
+                      onClick={() => setActiveFilter(tab.id)}
+                      className={cn(
+                        "inline-flex items-center gap-1 sm:gap-1.5 rounded-lg px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs font-medium transition-all duration-200 whitespace-nowrap cursor-pointer",
+                        activeFilter === tab.id
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                      )}
+                    >
+                      <tab.icon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                      <span className="hidden xs:inline sm:inline">
+                        {tab.label}
+                      </span>
+                      <span className="xs:hidden sm:hidden">
+                        {tab.id === "all" ? "All" : tab.label.slice(0, 3)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
