@@ -152,21 +152,24 @@ export function RecentFilesView({
     return files.find((f) => f.id === previewFileId) || null;
   }, [files, previewFileId]);
 
-  const handleToggleStar = (id) => {
+  const handleToggleStar = useCallback((id) => {
     setFiles((prevFiles) =>
       prevFiles.map((f) => (f.id === id ? { ...f, starred: !f.starred } : f)),
     );
-  };
+  }, []);
 
-  const handleShare = (file) => {
+  const handleShare = useCallback((file) => {
     setSharingFile(file);
-  };
+  }, []);
 
-  const handleShareUpdated = (id, isShared) => {
+  const handleShareUpdated = useCallback((id, share) => {
+    const isShared = share ? Boolean(share.linkActive) : false;
     setFiles((prevFiles) =>
-      prevFiles.map((f) => (f.id === id ? { ...f, shared: isShared } : f)),
+      prevFiles.map((f) =>
+        f.resourceId === id || f.id === id ? { ...f, shared: isShared } : f
+      ),
     );
-  };
+  }, []);
 
   const filteredFiles = useMemo(() => {
     let list = [...files];
@@ -495,7 +498,10 @@ export function RecentFilesView({
       <AnimatePresence>
         {sharingFile && (
           <ShareModal
-            file={files.find((f) => f.id === sharingFile.id) || sharingFile}
+            file={{
+              ...(files.find((f) => f.id === sharingFile.id) || sharingFile),
+              id: sharingFile.resourceId || sharingFile.id,
+            }}
             onClose={() => setSharingFile(null)}
             onShareUpdated={handleShareUpdated}
           />

@@ -321,13 +321,13 @@ function FileActions({ file, visible, compact, onPreview, onStar, onShare }) {
       {/* <button type="button" className={btn} title="Download">
         <Download className="h-3.5 w-3.5" />
       </button> */}
-      <button
+      {/* <button
         type="button"
         className={cn(btn, "hover:text-destructive")}
         title="Delete"
       >
         <Trash2 className="h-3.5 w-3.5" />
-      </button>
+      </button> */}
       {/* {!compact && (
         <button type="button" className={btn} title="Details" onClick={() => onPreview?.(file)}>
           <MoreHorizontal className="h-3.5 w-3.5" />
@@ -361,6 +361,7 @@ function RecentFileRow({ file, view, formatTime, onPreview, onStar, onShare }) {
   const [hovered, setHovered] = useState(false);
   const { ref: revealRef, isVisible } = useScrollReveal();
   const kind = detectFileKind(file.name, file.kind);
+  console.log(kind);
   const isGrid = view === "grid";
   const isUploading = file.uploadStatus === "uploading";
 
