@@ -32,6 +32,7 @@ import {
   ToggleRight,
   Trash2,
   X,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { easeSmooth } from "@/lib/motion-presets";
@@ -237,6 +238,7 @@ function SharedFilesSection({
   const [view, setView] = useState("grid");
   const [copiedId, setCopiedId] = useState(null);
   const [modalFile, setModalFile] = useState(null);
+  const [deleteConfirmFile, setDeleteConfirmFile] = useState(null);
 
   const filteredFiles = useMemo(() => {
     let list = [...shares];
@@ -474,6 +476,8 @@ function SharedFilesSection({
               onToggleLink={handleToggleLink}
               onStar={toggleStar}
               onOpenModal={handleOpenModal}
+              onDownload={onDownload}
+              onDeleteClick={(id, name) => setDeleteConfirmFile({ id, name })}
             />
           ))
         )}
@@ -491,6 +495,20 @@ function SharedFilesSection({
             onDownload={onDownload}
             onRefresh={onRefresh}
             onClose={() => setModalFile(null)}
+          />
+        )}
+        {deleteConfirmFile && (
+          <DeleteConfirmModal
+            fileName={deleteConfirmFile.name}
+            onConfirm={async () => {
+              try {
+                await onRevokeShare?.(deleteConfirmFile.id);
+                setDeleteConfirmFile(null);
+              } catch (err) {
+                console.error("Failed to revoke share:", err);
+              }
+            }}
+            onClose={() => setDeleteConfirmFile(null)}
           />
         )}
       </AnimatePresence>
@@ -513,6 +531,8 @@ const SharedFileCard = memo(function SharedFileCard({
   onToggleLink,
   onStar,
   onOpenModal,
+  onDownload,
+  onDeleteClick,
 }) {
   const [hovered, setHovered] = useState(false);
   const { ref: revealRef, isVisible } = useScrollReveal();
@@ -559,11 +579,15 @@ const SharedFileCard = memo(function SharedFileCard({
               <FileTypeIcon kind={kind} />
               <FileActions
                 fileId={file.id}
+                resourceId={file.resourceId}
+                fileName={file.name}
                 starred={isStarred}
                 visible={hovered}
                 compact
                 onStar={onStar}
                 onOpenModal={() => onOpenModal(file)}
+                onDownload={onDownload}
+                onDeleteClick={onDeleteClick}
               />
             </div>
 
@@ -697,10 +721,14 @@ const SharedFileCard = memo(function SharedFileCard({
             <div className="flex items-center justify-between gap-3 md:justify-end md:w-36 md:pr-1">
               <FileActions
                 fileId={file.id}
+                resourceId={file.resourceId}
+                fileName={file.name}
                 starred={isStarred}
                 visible={hovered}
                 onStar={onStar}
                 onOpenModal={() => onOpenModal(file)}
+                onDownload={onDownload}
+                onDeleteClick={onDeleteClick}
               />
             </div>
           </div>
@@ -714,11 +742,15 @@ const SharedFileCard = memo(function SharedFileCard({
 
 function FileActions({
   fileId,
+  resourceId,
+  fileName,
   starred,
   visible,
   compact,
   onStar,
   onOpenModal,
+  onDownload,
+  onDeleteClick,
 }) {
   const stop = (e) => e.stopPropagation();
   const btn =
@@ -748,13 +780,19 @@ function FileActions({
       >
         <Star className={cn("h-3.5 w-3.5", starred && "fill-current")} />
       </button>
-      <button type="button" className={btn} title="Download">
+      <button
+        type="button"
+        className={btn}
+        title="Download"
+        onClick={() => onDownload?.(resourceId, fileName)}
+      >
         <Download className="h-3.5 w-3.5" />
       </button>
       <button
         type="button"
         className={cn(btn, "hover:text-destructive")}
         title="Delete"
+        onClick={() => onDeleteClick?.(fileId, fileName)}
       >
         <Trash2 className="h-3.5 w-3.5" />
       </button>
@@ -1824,6 +1862,96 @@ function PasswordBadge({ enabled }) {
     <span className="inline-flex items-center gap-1 rounded-md border border-zinc-500/20 bg-zinc-500/10 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600 dark:text-zinc-400">
       <KeyRound className="h-2.5 w-2.5" /> No Password
     </span>
+  );
+}
+
+/* ───────────────────────── Delete Confirm Modal ───────────────────────── */
+
+function DeleteConfirmModal({ fileName, onConfirm, onClose }) {
+  // Lock body scroll
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, []);
+
+  // Escape key handler
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  return createPortal(
+    <>
+      {/* Backdrop */}
+      <motion.div
+        key="delete-backdrop"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
+        className="fixed inset-0 z-[150] bg-background/40 backdrop-blur-sm pointer-events-auto"
+        onClick={onClose}
+      />
+
+      {/* Flex container wrapper for centering */}
+      <div className="fixed inset-0 z-[151] flex items-center justify-center pointer-events-none p-4">
+        {/* Modal container */}
+        <motion.div
+          key="delete-modal"
+          initial={{ opacity: 0, scale: 0.95, y: 8 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 8 }}
+          transition={{ type: "spring", stiffness: 400, damping: 28 }}
+          className={cn(
+            "relative w-full max-w-md pointer-events-auto p-6 space-y-6",
+            "bg-background/95 border border-destructive/20 shadow-elegant",
+            "rounded-2xl backdrop-blur-md",
+          )}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header & Icon */}
+          <div className="flex items-start gap-4">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-destructive/10 border border-destructive/20 text-destructive">
+              <AlertTriangle className="h-5 w-5 animate-pulse" />
+            </div>
+            <div className="space-y-1.5 min-w-0 flex-1">
+              <h3 className="font-display text-base font-bold text-foreground leading-none">
+                Delete Shared Link?
+              </h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Are you sure you want to delete the shared link for{" "}
+                <strong className="text-foreground truncate block mt-1 font-semibold">{fileName}?</strong>
+                This will permanently revoke access for everyone who has it.
+              </p>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center justify-end gap-2.5">
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex h-9.5 items-center justify-center rounded-xl border border-border bg-secondary/30 hover:bg-secondary/70 px-4 text-xs font-semibold text-foreground/80 transition-all cursor-pointer active:scale-95"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              className="inline-flex h-9.5 items-center justify-center rounded-xl bg-destructive text-destructive-foreground hover:opacity-90 px-4.5 text-xs font-bold shadow-sm transition-all cursor-pointer active:scale-95"
+            >
+              Delete Link
+            </button>
+          </div>
+        </motion.div>
+      </div>
+    </>,
+    document.body,
   );
 }
 

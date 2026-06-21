@@ -137,7 +137,6 @@ export function FileRow({
       <button
         type="button"
         onClick={() => !isRenaming && onSelect?.(file.id)}
-        onDoubleClick={() => !isRenaming && !file.isDirectory && onPreview?.(file)}
         className={cn(
           "relative w-full text-left rounded-xl border outline-none",
           "bg-card border-border shadow-sm dark:bg-card/50 dark:backdrop-blur-sm dark:shadow-none",
@@ -702,7 +701,7 @@ function PortaledDropdown({
     <motion.div
       ref={dropdownRef}
       initial={{ opacity: 0, scale: 0.92, y: -4 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
+      animate={{ opacity: pos.top ? 1 : 0, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.92, y: -4 }}
       transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
       style={{ position: "fixed", top: pos.top, left: pos.left }}

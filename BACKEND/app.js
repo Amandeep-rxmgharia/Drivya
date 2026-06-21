@@ -23,15 +23,25 @@ await ensureStorageRoot();
 
 const app = express();
 
-// ─── Security Headers ────────────────────────────────────────
-app.use(helmet());
-
-// ─── CORS — explicit origin, credentials allowed ─────────────
+// ─── CORS Origins ────────────────────────────────────────────
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:5174",
   CORS_ORIGIN
 ];
+
+// ─── Security Headers ────────────────────────────────────────
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+        "frame-ancestors": ["'self'", ...allowedOrigins],
+      },
+    },
+    frameguard: false,
+  })
+);
 
 app.use(
   cors({

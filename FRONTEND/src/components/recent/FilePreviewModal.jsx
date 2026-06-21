@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "motion/react";
 import {
@@ -26,6 +26,8 @@ import { easeSmooth } from "@/lib/motion-presets";
 import { detectFileKind, getFileTypeStyle } from "@/lib/file-types";
 import { FileTypeIcon } from "@/components/dashboard/FileTypeIcon";
 import { iconBtn } from "@/components/dashboard/dashboard-tokens";
+import { getFilePreviewUrl } from "../../../api/drive.js";
+import api from "../../../api/auth.js";
 
 /** Format bytes into human-readable size string. */
 function formatSize(size) {
@@ -37,9 +39,142 @@ function formatSize(size) {
   return `${(size / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
-/* ───────────────────────── Preview Placeholder ───────────────────────── */
+/* ───────────────────────── Preview Placeholder & Live Preview ───────────────────────── */
 
-function PreviewPlaceholder({ kind }) {
+const PREVIEWABLE_IMAGE_EXTS = new Set([
+  "png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico",
+]);
+const PREVIEWABLE_VIDEO_EXTS = new Set(["mp4", "webm", "mov", "ogg"]);
+const PREVIEWABLE_AUDIO_EXTS = new Set(["mp3", "wav", "ogg", "flac", "aac", "m4a"]);
+const PREVIEWABLE_PDF_EXTS = new Set(["pdf"]);
+const PREVIEWABLE_TEXT_EXTS = new Set([
+  "txt", "md", "json", "js", "jsx", "ts", "tsx", "py", "rb", "go",
+  "rs", "java", "c", "cpp", "h", "css", "scss", "html", "xml",
+  "yaml", "yml", "sql", "sh", "bash", "csv", "log", "env",
+  "toml", "ini", "cfg", "conf", "vue", "svelte",
+]);
+
+function getPreviewType(fileName) {
+  const ext = fileName?.split(".").pop()?.toLowerCase() || "";
+  if (PREVIEWABLE_IMAGE_EXTS.has(ext)) return "image";
+  if (PREVIEWABLE_VIDEO_EXTS.has(ext)) return "video";
+  if (PREVIEWABLE_AUDIO_EXTS.has(ext)) return "audio";
+  if (PREVIEWABLE_PDF_EXTS.has(ext)) return "pdf";
+  if (PREVIEWABLE_TEXT_EXTS.has(ext)) return "text";
+  return "unsupported";
+}
+
+function PreviewPlaceholder({ file, kind }) {
+  const [textLoading, setTextLoading] = useState(false);
+  const [textContent, setTextContent] = useState("");
+  const [textError, setTextError] = useState(null);
+
+  const fileId = file?.resourceId || file?.id;
+  const previewType = fileId ? getPreviewType(file.name) : "unsupported";
+  const previewUrl = fileId ? getFilePreviewUrl(fileId) : "";
+
+  useEffect(() => {
+    if (previewType !== "text" || !previewUrl) return;
+
+    let active = true;
+    setTextLoading(true);
+    setTextError(null);
+
+    api.get(previewUrl, { responseType: "text" })
+      .then((res) => {
+        if (!active) return;
+        const text = res.data;
+        const truncated = text.length > 20_000
+          ? text.slice(0, 20_000) + "\n\n... [truncated — file too large]"
+          : text;
+        setTextContent(truncated);
+        setTextLoading(false);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setTextError(err.message || "Failed to load text content");
+        setTextLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [previewType, previewUrl]);
+
+  if (previewType === "image" && previewUrl) {
+    return (
+      <div className="w-full h-56 sm:h-64 rounded-xl border border-border bg-secondary/15 overflow-hidden flex items-center justify-center relative">
+        <img
+          src={previewUrl}
+          alt={file.name}
+          crossOrigin="use-credentials"
+          className="max-w-full max-h-full object-contain"
+        />
+      </div>
+    );
+  }
+
+  if (previewType === "video" && previewUrl) {
+    return (
+      <div className="w-full h-56 sm:h-64 rounded-xl border border-border bg-black overflow-hidden flex items-center justify-center">
+        <video
+          src={previewUrl}
+          crossOrigin="use-credentials"
+          controls
+          className="max-w-full max-h-full"
+        />
+      </div>
+    );
+  }
+
+  if (previewType === "audio" && previewUrl) {
+    return (
+      <div className="w-full rounded-xl border border-border bg-secondary/10 p-4 flex flex-col items-center justify-center gap-3">
+        <FileTypeIcon kind={kind} size="lg" />
+        <audio
+          src={previewUrl}
+          crossOrigin="use-credentials"
+          controls
+          className="w-full max-w-xs"
+        />
+      </div>
+    );
+  }
+
+  if (previewType === "pdf" && previewUrl) {
+    return (
+      <div className="w-full h-72 sm:h-80 rounded-xl overflow-hidden border border-border">
+        <iframe
+          src={previewUrl}
+          title="PDF Preview"
+          className="w-full h-full bg-white"
+        />
+      </div>
+    );
+  }
+
+  if (previewType === "text" && previewUrl) {
+    return (
+      <div className="w-full h-64 sm:h-72 rounded-xl border border-border bg-card/50 overflow-hidden flex flex-col">
+        {textLoading ? (
+          <div className="flex-1 flex flex-col items-center justify-center p-6 gap-2">
+            <Loader2 className="h-6 w-6 text-primary animate-spin" />
+            <span className="text-xs text-muted-foreground">Loading file contents...</span>
+          </div>
+        ) : textError ? (
+          <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-xs text-destructive">
+            {textError}
+          </div>
+        ) : (
+          <pre className="flex-1 overflow-auto p-4 font-mono text-[11px] leading-[1.6] text-foreground/90 whitespace-pre">
+            {textContent || "[Empty file]"}
+          </pre>
+        )}
+      </div>
+    );
+  }
+
+  // Default fallback style (Unsupported / Folder)
   const { icon: Icon, iconColor, tile } = getFileTypeStyle(kind);
 
   return (
@@ -225,7 +360,7 @@ export function FilePreviewModal({
           </div>
 
           {/* Preview area */}
-          <PreviewPlaceholder kind={kind} />
+          <PreviewPlaceholder file={file} kind={kind} />
 
           {/* Upload progress if active */}
           {isUploading && (
