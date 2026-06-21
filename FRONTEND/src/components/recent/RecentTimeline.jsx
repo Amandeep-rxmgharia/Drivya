@@ -16,6 +16,7 @@ import {
   Upload,
   CheckCircle2,
   XCircle,
+  RotateCcw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { easeSmooth } from "@/lib/motion-presets";
@@ -128,6 +129,15 @@ function ActivityBadge({ type, actions }) {
     );
   }
 
+  if (actionList.includes("restored")) {
+    badges.push(
+      <span key="restored" className="inline-flex items-center gap-1 rounded-md border border-teal-500/20 bg-teal-500/8 px-1.5 py-0.5 text-[10px] font-medium text-teal-600 dark:text-teal-400 animate-fade-in">
+        <RotateCcw className="h-3 w-3" />
+        Restored
+      </span>
+    );
+  }
+
   return badges.length > 0 ? <>{badges}</> : null;
 }
 
@@ -165,6 +175,7 @@ function ActivityBadgesDropdown({ file, formatTime }) {
     downloaded: Download,
     renamed: Pencil,
     trashed: Trash2,
+    restored: RotateCcw,
   };
 
   const colorMap = {
@@ -174,6 +185,7 @@ function ActivityBadgesDropdown({ file, formatTime }) {
     downloaded: "border-indigo-500/20 bg-indigo-500/8 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/15 dark:hover:bg-indigo-500/15",
     renamed: "border-orange-500/20 bg-orange-500/8 text-orange-600 dark:text-orange-400 hover:bg-orange-500/15 dark:hover:bg-orange-500/15",
     trashed: "border-rose-500/20 bg-rose-500/8 text-rose-600 dark:text-rose-400 hover:bg-rose-500/15 dark:hover:bg-rose-500/15",
+    restored: "border-teal-500/20 bg-teal-500/8 text-teal-600 dark:text-teal-400 hover:bg-teal-500/15 dark:hover:bg-teal-500/15",
   };
 
   const labelMap = {
@@ -183,6 +195,7 @@ function ActivityBadgesDropdown({ file, formatTime }) {
     downloaded: "Downloaded",
     renamed: "Renamed",
     trashed: "Trashed",
+    restored: "Restored",
   };
 
   const LatestIcon = iconMap[latestAction.type] || Eye;

@@ -296,6 +296,8 @@ function mapActionToType(action) {
       return "renamed";
     case ACTIVITY_ACTIONS.TRASHED:
       return "trashed";
+    case ACTIVITY_ACTIONS.RESTORED:
+      return "restored";
     default:
       return "opened";
   }

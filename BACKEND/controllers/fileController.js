@@ -504,10 +504,31 @@ export const restoreAllFiles = async (req, res, next) => {
   try {
     const userId = req.user.id;
 
+    // Find all trashed files first to record their restoration in activity log
+    const trashedFiles = await File.find({ userId, isTrashed: true }).lean();
+
     const result = await File.updateMany(
       { userId, isTrashed: true },
       { isTrashed: false, trashedAt: null }
     );
+
+    // Record restore activity for each restored file
+    if (trashedFiles.length > 0) {
+      for (const file of trashedFiles) {
+        recordActivity({
+          userId,
+          action: ACTIVITY_ACTIONS.RESTORED,
+          resourceType: RESOURCE_TYPES.FILE,
+          resourceId: file._id,
+          resourceSnapshot: {
+            name: file.originalName,
+            mimeType: file.mimeType,
+            size: file.size,
+          },
+          parentDirId: file.directoryId,
+        }).catch((err) => console.error("Activity[restoreAll]:", err.message));
+      }
+    }
 
     return res.json({
       message: `${result.modifiedCount} file(s) restored successfully.`,

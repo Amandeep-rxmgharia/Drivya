@@ -14,6 +14,7 @@ import {
   FileStack,
   AlertCircle,
   ChevronDown,
+  RotateCcw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { card, chip } from "@/components/dashboard/dashboard-tokens";
@@ -29,6 +30,7 @@ const FILTER_TABS = [
   { id: "downloaded", label: "Downloaded", icon: Download },
   { id: "renamed", label: "Renamed", icon: Pencil },
   { id: "trashed", label: "Trashed", icon: Trash2 },
+  { id: "restored", label: "Restored", icon: RotateCcw },
 ];
 
 /**
@@ -235,10 +237,10 @@ export function RecentFilesView({
         aria-labelledby={titleId}
       >
         {/* Toolbar */}
-        <header className="border-b border-border px-5 py-4 sm:px-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            {/* Filter tabs */}
-            <div className="flex items-center gap-3">
+        <header className="border-b border-border px-4 py-3 sm:px-5 sm:py-4">
+          <div className="flex flex-col gap-3 sm:gap-4">
+            {/* Top row: filter tabs & uploading status indicator */}
+            <div className="flex items-center justify-between gap-3 w-full">
               {/* Mobile/Tablet view: Dropdown */}
               <div className="relative lg:hidden" ref={filterDropdownRef}>
                 <button
@@ -284,29 +286,36 @@ export function RecentFilesView({
                 )}
               </div>
 
-              {/* Desktop view: Tabs */}
-              <div
-                className="hidden lg:flex rounded-xl border border-border bg-secondary/40 p-0.5"
-                role="tablist"
-              >
-                {FILTER_TABS.map((tab) => (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={activeFilter === tab.id}
-                    onClick={() => setActiveFilter(tab.id)}
-                    className={cn(
-                      "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-200 cursor-pointer",
-                      activeFilter === tab.id
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-                    )}
-                  >
-                    <tab.icon className="h-3.5 w-3.5" />
-                    {tab.label}
-                  </button>
-                ))}
+              {/* Desktop view: Tabs with horizontal scroll support */}
+              <div className="hidden lg:block -mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto scrollbar-hide">
+                <div
+                  className="flex rounded-xl border border-border bg-secondary/40 p-0.5 sm:w-auto"
+                  role="tablist"
+                >
+                  {FILTER_TABS.map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={activeFilter === tab.id}
+                      onClick={() => setActiveFilter(tab.id)}
+                      className={cn(
+                        "inline-flex items-center gap-1 sm:gap-1.5 rounded-lg px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs font-medium transition-all duration-200 whitespace-nowrap cursor-pointer",
+                        activeFilter === tab.id
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                      )}
+                    >
+                      <tab.icon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                      <span className="hidden xs:inline sm:inline">
+                        {tab.label}
+                      </span>
+                      <span className="xs:hidden sm:hidden">
+                        {tab.id === "all" ? "All" : tab.label.slice(0, 3)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Uploading indicator */}
@@ -314,32 +323,35 @@ export function RecentFilesView({
                 <motion.div
                   initial={{ scale: 0.8, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
-                  className={cn(chip, "gap-2")}
+                  className={cn(chip, "gap-2 shrink-0")}
                 >
                   <span className="relative flex h-2 w-2">
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
                     <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
                   </span>
-                  <span className="text-[11px] font-medium">
+                  <span className="text-[11px] font-medium whitespace-nowrap">
                     {uploadingCount} uploading
                   </span>
                 </motion.div>
               )}
             </div>
 
-            {/* Right-side controls */}
+            {/* Bottom row: search, view toggle */}
             <div className="flex items-center gap-2">
               {/* Search within recent */}
-              <div className="relative">
+              <div className="relative flex-1 min-w-0 sm:flex-none">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                 <input
                   type="text"
                   placeholder="Search recent..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-9 w-44 rounded-xl border border-border bg-secondary/30 pl-9 pr-3 text-xs text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10 transition-all"
+                  className="h-9 w-full sm:w-44 rounded-xl border border-border bg-secondary/30 pl-9 pr-3 text-xs text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10 transition-all"
                 />
               </div>
+
+              {/* Spacer on large screens */}
+              <div className="flex-1 hidden sm:block" />
 
               {/* View toggle */}
               <div className="flex rounded-xl border border-border bg-secondary/40 p-0.5">
@@ -347,7 +359,7 @@ export function RecentFilesView({
                   type="button"
                   onClick={() => setView("list")}
                   className={cn(
-                    "inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors",
+                    "inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors cursor-pointer",
                     view === "list"
                       ? "bg-background text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground",
@@ -361,7 +373,7 @@ export function RecentFilesView({
                   type="button"
                   onClick={() => setView("grid")}
                   className={cn(
-                    "inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors",
+                    "inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors cursor-pointer",
                     view === "grid"
                       ? "bg-background text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground",
