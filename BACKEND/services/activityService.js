@@ -140,10 +140,7 @@ export async function listActivities({
   // ── Build aggregation pipeline ──
   const matchStage = {
     userId: userOid,
-    $or: [
-      { resourceType: { $ne: "directory" } },
-      { parentDirId: { $ne: null } }
-    ]
+    resourceType: "file"
   };
   if (action) {
     matchStage.action = action;
@@ -315,7 +312,7 @@ export async function getActivityStats(userId) {
     const userOid = new mongoose.Types.ObjectId(userId);
 
     const [stats] = await Activity.aggregate([
-      { $match: { userId: userOid, createdAt: { $gte: fortnightStart } } },
+      { $match: { userId: userOid, resourceType: "file", createdAt: { $gte: fortnightStart } } },
       {
         $facet: {
           openedToday: [

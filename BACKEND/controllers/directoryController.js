@@ -3,9 +3,7 @@ import Directory from "../models/directoryModel.js";
 import File from "../models/fileModel.js";
 import User from "../models/userModel.js";
 import { deleteFiles } from "../services/storageService.js";
-import { recordActivity, deleteActivitiesForResources } from "../services/activityService.js";
-import { ACTIVITY_ACTIONS } from "../constants/activityConstants.js";
-import { RESOURCE_TYPES } from "../constants/shareConstants.js";
+import { deleteActivitiesForResources } from "../services/activityService.js";
 
 // ─── List Directory Contents ─────────────────────────────────────
 export const listDirectory = async (req, res, next) => {
@@ -42,20 +40,7 @@ export const listDirectory = async (req, res, next) => {
         .lean(),
     ]);
 
-    // Record directory opened activity if it's not the root directory (fire-and-forget, deduplicated within 1h)
-    if (parentDir.parentDirId !== null) {
-      recordActivity({
-        userId,
-        action: ACTIVITY_ACTIONS.OPENED,
-        resourceType: RESOURCE_TYPES.DIRECTORY,
-        resourceId: parentDir._id,
-        resourceSnapshot: {
-          name: parentDir.name,
-          kind: "folder",
-        },
-        parentDirId: parentDir.parentDirId,
-      }).catch((err) => console.error("Activity[dir-open]:", err.message));
-    }
+
 
     return res.json({
       currentDir: parentDir,
@@ -133,18 +118,7 @@ export const createDirectory = async (req, res, next) => {
       depth: parentDir.depth + 1,
     });
 
-    // Record directory created activity (fire-and-forget)
-    recordActivity({
-      userId,
-      action: ACTIVITY_ACTIONS.UPLOADED,
-      resourceType: RESOURCE_TYPES.DIRECTORY,
-      resourceId: newDir._id,
-      resourceSnapshot: {
-        name: newDir.name,
-        kind: "folder",
-      },
-      parentDirId,
-    }).catch((err) => console.error("Activity[dir-create]:", err.message));
+
 
     return res.status(201).json({
       message: "Directory created.",
@@ -180,19 +154,7 @@ export const renameDirectory = async (req, res, next) => {
       });
     }
 
-    // Record rename activity (fire-and-forget)
-    recordActivity({
-      userId,
-      action: ACTIVITY_ACTIONS.RENAMED,
-      resourceType: RESOURCE_TYPES.DIRECTORY,
-      resourceId: dir._id,
-      resourceSnapshot: {
-        name: dir.name,
-        kind: "folder",
-      },
-      parentDirId: dir.parentDirId,
-      metadata: { oldName: name !== dir.name ? dir.name : null, newName: name },
-    }).catch((err) => console.error("Activity[dir-rename]:", err.message));
+
 
     return res.json({ message: "Directory renamed.", directory: dir });
   } catch (err) {
