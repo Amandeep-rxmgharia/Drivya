@@ -545,7 +545,7 @@ function TrashFileRow({ file, view, onRestore, onDeletePermanently, onPreview })
                 <p className="text-[11px] text-muted-foreground md:hidden">
                   {formatRelativeTime(file.deletedAt)} · {file.size}
                 </p>
-                <p className="text-[10px] text-muted-foreground/60 truncate md:hidden">
+                <p className="text-[10px] text-muted-foreground/60 truncate">
                   {file.originalPath}
                 </p>
               </div>
@@ -757,7 +757,7 @@ export default function TrashFiles() {
         size: formatSize(f.size),
         deletedAt: new Date(f.trashedAt || Date.now()),
         kind: detectFileKind(f.originalName, f.mimeType || ""),
-        originalPath: "My Drive",
+        originalPath: f.originalPath || "My Drive",
         _raw: f,
       }));
       setFiles(normalized);

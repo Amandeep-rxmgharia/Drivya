@@ -3,7 +3,9 @@ import Directory from "../models/directoryModel.js";
 import File from "../models/fileModel.js";
 import User from "../models/userModel.js";
 import { deleteFiles } from "../services/storageService.js";
-import { deleteActivitiesForResources } from "../services/activityService.js";
+import { recordActivity, deleteActivitiesForResources } from "../services/activityService.js";
+import { ACTIVITY_ACTIONS } from "../constants/activityConstants.js";
+import { RESOURCE_TYPES } from "../constants/shareConstants.js";
 
 // ─── List Directory Contents ─────────────────────────────────────
 export const listDirectory = async (req, res, next) => {
@@ -202,48 +204,47 @@ export const deleteDirectory = async (req, res, next) => {
 
       const allDirIds = [dir._id, ...descendantDirs.map((d) => d._id)];
 
-      // Find all files in these directories
-      const filesToDelete = await File.find({
+      // Find all files in these directories that are not already trashed
+      const filesToTrash = await File.find({
         userId,
         directoryId: { $in: allDirIds },
+        isTrashed: false,
       })
-        .select("storagePath size")
+        .select("_id originalName mimeType size directoryId")
         .session(session)
         .lean();
 
-      // Calculate total size to free
-      const totalSize = filesToDelete.reduce((sum, f) => sum + f.size, 0);
+      // Trash the files
+      if (filesToTrash.length > 0) {
+        const fileIdsToTrash = filesToTrash.map((f) => f._id);
+        await File.updateMany(
+          { _id: { $in: fileIdsToTrash } },
+          { isTrashed: true, trashedAt: new Date() }
+        ).session(session);
 
-      // Delete all files and directories from DB
-      await File.deleteMany({
-        userId,
-        directoryId: { $in: allDirIds },
-      }).session(session);
+        // Record trash activity for each file (outside transaction as fire-and-forget)
+        for (const file of filesToTrash) {
+          recordActivity({
+            userId,
+            action: ACTIVITY_ACTIONS.TRASHED,
+            resourceType: RESOURCE_TYPES.FILE,
+            resourceId: file._id,
+            resourceSnapshot: {
+              name: file.originalName,
+              mimeType: file.mimeType,
+              size: file.size,
+            },
+            parentDirId: file.directoryId,
+          }).catch((err) => console.error("Activity[dir-delete-trash-file]:", err.message));
+        }
+      }
 
       await Directory.deleteMany({
         _id: { $in: allDirIds },
       }).session(session);
 
-      // Sync activities cleanup
-      const deletedResourceIds = [...allDirIds, ...filesToDelete.map((f) => f._id)];
-      await deleteActivitiesForResources(deletedResourceIds, userId);
-
-      // Update user storage
-      if (totalSize > 0) {
-        await User.updateOne(
-          { _id: userId },
-          { $inc: { storageUsed: -totalSize } },
-        ).session(session);
-      }
-
-      // Delete files from disk (outside transaction — best-effort)
-      const storagePaths = filesToDelete.map((f) => f.storagePath);
-      if (storagePaths.length > 0) {
-        // Fire and forget — disk cleanup is non-critical
-        deleteFiles(storagePaths).catch((err) =>
-          console.error("Disk cleanup error:", err.message),
-        );
-      }
+      // Clean up activities only for the deleted directories
+      await deleteActivitiesForResources(allDirIds, userId);
     });
 
     return res.json({ message: "Directory deleted." });

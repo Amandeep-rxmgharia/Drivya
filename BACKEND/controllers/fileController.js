@@ -454,6 +454,18 @@ export const restoreFile = async (req, res, next) => {
       return res.status(404).json({ message: "Trashed file not found." });
     }
 
+    // Check if the original parent directory still exists, otherwise move to user root directory
+    const dirExists = await Directory.findOne({ _id: file.directoryId, userId }).lean();
+    let targetDirId = file.directoryId;
+    if (!dirExists) {
+      const user = await User.findById(userId).select("rootDirId").lean();
+      if (user?.rootDirId) {
+        targetDirId = user.rootDirId.toString();
+        file.directoryId = targetDirId;
+        await file.save();
+      }
+    }
+
     // Record restore activity (fire-and-forget)
     recordActivity({
       userId,
@@ -465,7 +477,7 @@ export const restoreFile = async (req, res, next) => {
         mimeType: file.mimeType,
         size: file.size,
       },
-      parentDirId: file.directoryId,
+      parentDirId: targetDirId,
     }).catch((err) => console.error("Activity[restore]:", err.message));
 
     return res.json({ message: "File restored.", file });
@@ -483,7 +495,90 @@ export const listTrash = async (req, res, next) => {
       .sort({ trashedAt: -1 })
       .lean();
 
-    return res.json({ files });
+    if (files.length === 0) {
+      return res.json({ files: [] });
+    }
+
+    // Resolve user's root directory to match for breadcrumbs
+    const user = await User.findById(userId).select("rootDirId").lean();
+    const rootDirIdStr = user?.rootDirId ? user.rootDirId.toString() : null;
+
+    // Collect all unique directoryIds
+    const parentDirIds = new Set();
+    for (const file of files) {
+      if (file.directoryId) {
+        parentDirIds.add(file.directoryId.toString());
+      }
+    }
+
+    // Batch fetch immediate parent directories
+    const parents = await Directory.find({
+      userId,
+      _id: { $in: Array.from(parentDirIds) }
+    }).lean();
+
+    // Gather all unique ancestor directory IDs from parents' paths
+    const ancestorIds = new Set();
+    const dirMap = new Map();
+
+    for (const dir of parents) {
+      dirMap.set(dir._id.toString(), dir);
+      if (dir.path) {
+        for (const ancestorId of dir.path) {
+          ancestorIds.add(ancestorId.toString());
+        }
+      }
+    }
+
+    // Remove any parent IDs from the ancestors set to avoid duplicate queries
+    for (const parentId of parentDirIds) {
+      ancestorIds.delete(parentId);
+    }
+
+    // Batch fetch remaining ancestor directories
+    if (ancestorIds.size > 0) {
+      const ancestors = await Directory.find({
+        userId,
+        _id: { $in: Array.from(ancestorIds) }
+      }).lean();
+      for (const dir of ancestors) {
+        dirMap.set(dir._id.toString(), dir);
+      }
+    }
+
+    // Helper to get breadcrumb string
+    const getPathString = (dirId) => {
+      if (!dirId) return "My Drive";
+      const dirIdStr = dirId.toString();
+      if (dirIdStr === rootDirIdStr) return "My Drive";
+
+      const dir = dirMap.get(dirIdStr);
+      if (!dir) return "My Drive";
+
+      const parts = [];
+      if (dir.path) {
+        for (const ancestorId of dir.path) {
+          const ancestorIdStr = ancestorId.toString();
+          if (ancestorIdStr === rootDirIdStr) {
+            parts.push("My Drive");
+          } else {
+            const ancestor = dirMap.get(ancestorIdStr);
+            if (ancestor) {
+              parts.push(ancestor.name);
+            }
+          }
+        }
+      }
+      parts.push(dir.name);
+      return parts.join(" / ");
+    };
+
+    const filesWithPaths = files.map((file) => ({
+      ...file,
+      originalPath: getPathString(file.directoryId),
+    }));
+
+    return res.json({ files: filesWithPaths });
   } catch (err) {
     next(err);
   }
@@ -604,7 +699,16 @@ export const restoreAllFiles = async (req, res, next) => {
 
     // Record restore activity for each restored file
     if (trashedFiles.length > 0) {
+      const user = await User.findById(userId).select("rootDirId").lean();
+
       for (const file of trashedFiles) {
+        let targetDirId = file.directoryId;
+        const dirExists = await Directory.findOne({ _id: file.directoryId, userId }).lean();
+        if (!dirExists && user?.rootDirId) {
+          targetDirId = user.rootDirId.toString();
+          await File.updateOne({ _id: file._id }, { directoryId: targetDirId });
+        }
+
         recordActivity({
           userId,
           action: ACTIVITY_ACTIONS.RESTORED,
@@ -615,7 +719,7 @@ export const restoreAllFiles = async (req, res, next) => {
             mimeType: file.mimeType,
             size: file.size,
           },
-          parentDirId: file.directoryId,
+          parentDirId: targetDirId,
         }).catch((err) => console.error("Activity[restoreAll]:", err.message));
       }
     }
