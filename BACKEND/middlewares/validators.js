@@ -115,11 +115,6 @@ export const validateUpdateShare = [
     .isBoolean()
     .withMessage("isActive must be a boolean."),
 
-  body("isStarred")
-    .optional()
-    .isBoolean()
-    .withMessage("isStarred must be a boolean."),
-
   body("visibility")
     .optional()
     .isIn(["public", "restricted"])

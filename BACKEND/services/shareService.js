@@ -158,8 +158,6 @@ function buildShareListFilter(ownerId, query) {
       { isActive: false },
       { expiresAt: { $lte: new Date() } },
     ];
-  } else if (query.filter === "starred") {
-    filter.isStarred = true;
   }
 
   if (query.q?.trim()) {
@@ -280,10 +278,6 @@ export async function updateShare(ownerId, shareId, updates) {
 
   if (updates.isActive !== undefined) {
     share.isActive = Boolean(updates.isActive);
-  }
-
-  if (updates.isStarred !== undefined) {
-    share.isStarred = Boolean(updates.isStarred);
   }
 
   if (updates.visibility !== undefined) {
@@ -619,7 +613,6 @@ function formatShareResponse(share, extras = {}) {
     hasPassword: Boolean(share.isPasswordProtected),
     expiresAt: share.expiresAt,
     isExpired: Boolean(expired),
-    isStarred: share.isStarred,
     viewCount: share.viewCount,
     downloadCount: share.downloadCount,
     permissions: share.permissions,

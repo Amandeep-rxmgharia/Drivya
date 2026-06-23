@@ -152,12 +152,6 @@ export function RecentFilesView({
     return files.find((f) => f.id === previewFileId) || null;
   }, [files, previewFileId]);
 
-  const handleToggleStar = useCallback((id) => {
-    setFiles((prevFiles) =>
-      prevFiles.map((f) => (f.id === id ? { ...f, starred: !f.starred } : f)),
-    );
-  }, []);
-
   const handleShare = useCallback((file) => {
     setSharingFile(file);
   }, []);
@@ -451,7 +445,6 @@ export function RecentFilesView({
                   index={gi}
                   formatTime={formatTime}
                   onPreview={(file) => setPreviewFileId(file.id)}
-                  onStar={handleToggleStar}
                   onShare={handleShare}
                 />
               ))}
@@ -488,7 +481,6 @@ export function RecentFilesView({
             file={previewFile}
             onClose={() => setPreviewFileId(null)}
             formatTime={formatTime}
-            onStar={handleToggleStar}
             onShare={handleShare}
           />
         )}

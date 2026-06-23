@@ -11,7 +11,6 @@ import {
   MoreHorizontal,
   Pencil,
   Share2,
-  Star,
   Trash2,
   Upload,
   CheckCircle2,
@@ -270,7 +269,7 @@ function ActivityBadgesDropdown({ file, formatTime }) {
 /* ───────────────────────── File Actions Toolbar ───────────────────────── */
 /* Matches the SharedFiles FileActions pattern exactly */
 
-function FileActions({ file, visible, compact, onPreview, onStar, onShare }) {
+function FileActions({ file, visible, compact, onPreview, onShare }) {
   const stop = (e) => e.stopPropagation();
   const btn =
     "inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30";
@@ -290,18 +289,6 @@ function FileActions({ file, visible, compact, onPreview, onStar, onShare }) {
       onClick={stop}
       onKeyDown={stop}
     >
-      <button
-        type="button"
-        className={cn(
-          btn,
-          file.starred && "text-amber-600 dark:text-amber-400",
-        )}
-        title={file.starred ? "Unstar" : "Star"}
-        aria-pressed={file.starred}
-        onClick={() => onStar?.(file.id)}
-      >
-        <Star className={cn("h-3.5 w-3.5", file.starred && "fill-current")} />
-      </button>
       <button
         type="button"
         className={cn(btn, "hover:text-primary")}
@@ -357,7 +344,7 @@ function UploadProgressBar({ progress }) {
 /* ───────────────────────── File Row (Recent variant) ───────────────────────── */
 /* Uses useScrollReveal for consistent scroll animation with other tabs */
 
-function RecentFileRow({ file, view, formatTime, onPreview, onStar, onShare }) {
+function RecentFileRow({ file, view, formatTime, onPreview, onShare }) {
   const [hovered, setHovered] = useState(false);
   const { ref: revealRef, isVisible } = useScrollReveal();
   const kind = detectFileKind(file.name, file.kind);
@@ -400,7 +387,6 @@ function RecentFileRow({ file, view, formatTime, onPreview, onStar, onShare }) {
               visible={hovered}
               compact
               onPreview={onPreview}
-              onStar={onStar}
               onShare={onShare}
             />
           </div>
@@ -427,18 +413,11 @@ function RecentFileRow({ file, view, formatTime, onPreview, onStar, onShare }) {
           </div>
 
           {/* Bottom badges */}
-          {(file.starred || file.shared) && (
+          {file.shared && (
             <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-border/50">
-              {file.starred && (
-                <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
-                  <Star className="h-2.5 w-2.5 fill-current" /> Starred
-                </span>
-              )}
-              {file.shared && (
-                <span className="inline-flex items-center gap-1 rounded-md border border-violet-500/25 bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:text-violet-300">
-                  <Share2 className="h-2.5 w-2.5" /> Shared
-                </span>
-              )}
+              <span className="inline-flex items-center gap-1 rounded-md border border-violet-500/25 bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:text-violet-300">
+                <Share2 className="h-2.5 w-2.5" /> Shared
+              </span>
             </div>
           )}
         </div>
@@ -491,11 +470,6 @@ function RecentFileRow({ file, view, formatTime, onPreview, onStar, onShare }) {
                       progress={file.uploadProgress}
                     />
                   )}
-                  {file.starred && (
-                    <span className="inline-flex items-center gap-0.5 rounded-md border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
-                      <Star className="h-2.5 w-2.5 fill-current" /> Starred
-                    </span>
-                  )}
                   {file.shared && (
                     <span className="inline-flex items-center gap-0.5 rounded-md border border-violet-500/25 bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:text-violet-300">
                       <Share2 className="h-2.5 w-2.5" /> Shared
@@ -528,7 +502,6 @@ function RecentFileRow({ file, view, formatTime, onPreview, onStar, onShare }) {
               file={file}
               visible={hovered}
               onPreview={onPreview}
-              onStar={onStar}
               onShare={onShare}
             />
           </div>
@@ -554,7 +527,6 @@ export function RecentTimeline({
   index,
   formatTime,
   onPreview,
-  onStar,
   onShare,
 }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -623,7 +595,6 @@ export function RecentTimeline({
               view={view}
               formatTime={formatTime}
               onPreview={onPreview}
-              onStar={onStar}
               onShare={onShare}
             />
           ))}

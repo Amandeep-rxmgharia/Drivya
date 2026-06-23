@@ -83,10 +83,6 @@ const shareSchema = new Schema(
       type: permissionsSchema,
       default: () => ({ ...DEFAULT_PERMISSIONS }),
     },
-    isStarred: {
-      type: Boolean,
-      default: false,
-    },
     viewCount: {
       type: Number,
       default: 0,
@@ -117,9 +113,8 @@ const shareSchema = new Schema(
 // Owner dashboard: list shares sorted by creation date
 shareSchema.index({ ownerId: 1, createdAt: -1 });
 
-// Filter active / expired / starred shares for a user
+// Filter active / expired shares for a user
 shareSchema.index({ ownerId: 1, isActive: 1, expiresAt: 1 });
-shareSchema.index({ ownerId: 1, isStarred: 1, createdAt: -1 });
 
 // One share record per resource per owner (upsert on create)
 shareSchema.index(

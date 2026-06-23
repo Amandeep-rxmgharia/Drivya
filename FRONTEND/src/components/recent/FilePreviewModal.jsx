@@ -13,7 +13,6 @@ import {
   Pencil,
   RotateCcw,
   Share2,
-  Star,
   Sparkles,
   Trash2,
   Upload,
@@ -199,7 +198,6 @@ export function FilePreviewModal({
   file,
   onClose,
   formatTime,
-  onStar,
   onShare,
 }) {
   const [showFullPreview, setShowFullPreview] = useState(false);
@@ -363,11 +361,7 @@ export function FilePreviewModal({
                 <XCircle className="h-3 w-3" /> Upload failed
               </span>
             )}
-            {file.starred && (
-              <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
-                <Star className="h-2.5 w-2.5 fill-current" /> Starred
-              </span>
-            )}
+
             {file.shared && (
               <span className="inline-flex items-center gap-1 rounded-md border border-violet-500/25 bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-700 dark:text-violet-300">
                 <Share2 className="h-2.5 w-2.5" /> Shared
@@ -507,30 +501,13 @@ export function FilePreviewModal({
                 <Download className="h-4 w-4" /> Download
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => onStar?.(file.id)}
-                className={cn(
-                  "inline-flex h-11 sm:h-10 items-center justify-center gap-2 rounded-xl border text-sm font-medium transition-colors cursor-pointer",
-                  file.starred
-                    ? "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300"
-                    : "border-border bg-secondary/40 text-foreground/80 hover:bg-secondary/70",
-                )}
-              >
-                <Star
-                  className={cn("h-4 w-4", file.starred && "fill-current")}
-                />
-                {file.starred ? "Unstar" : "Star"}
-              </button>
-              <button
-                type="button"
-                onClick={() => onShare?.(file)}
-                className="inline-flex h-11 sm:h-10 items-center justify-center gap-2 rounded-xl border border-border bg-secondary/40 text-sm font-medium text-foreground/80 hover:bg-secondary/70 transition-colors cursor-pointer"
-              >
-                <Share2 className="h-4 w-4" /> Share
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => onShare?.(file)}
+              className="w-full inline-flex h-11 sm:h-10 items-center justify-center gap-2 rounded-xl border border-border bg-secondary/40 text-sm font-medium text-foreground/80 hover:bg-secondary/70 transition-colors cursor-pointer"
+            >
+              <Share2 className="h-4 w-4" /> Share
+            </button>
           </div>
 
           {/* Bottom safe area spacer for mobile */}

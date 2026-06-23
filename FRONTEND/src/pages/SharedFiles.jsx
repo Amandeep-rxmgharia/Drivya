@@ -27,7 +27,6 @@ import {
   Share2,
   Shield,
   ShieldCheck,
-  Star,
   ToggleLeft,
   ToggleRight,
   Trash2,
@@ -227,7 +226,6 @@ function SharedFilesSection({
   isLoading = false,
   onRefresh,
   onToggleLink,
-  onToggleStar,
   onRevokeShare,
   onDownload,
 }) {
@@ -273,12 +271,6 @@ function SharedFilesSection({
     [onToggleLink],
   );
 
-  const toggleStar = useCallback(
-    (id) => {
-      onToggleStar?.(id);
-    },
-    [onToggleStar],
-  );
 
   const handleOpenModal = useCallback((file) => {
     setModalFile(file);
@@ -470,11 +462,9 @@ function SharedFilesSection({
               linkActive={file.linkActive}
               passwordProtected={file.password}
               visibility={file.visibility}
-              isStarred={file.starred}
               copiedId={copiedId}
               onCopyLink={handleCopyLink}
               onToggleLink={handleToggleLink}
-              onStar={toggleStar}
               onOpenModal={handleOpenModal}
               onDownload={onDownload}
               onDeleteClick={(id, name) => setDeleteConfirmFile({ id, name })}
@@ -490,7 +480,6 @@ function SharedFilesSection({
           <LinkDetailModal
             file={modalFile}
             onToggleLink={onToggleLink}
-            onToggleStar={onToggleStar}
             onRevokeShare={onRevokeShare}
             onDownload={onDownload}
             onRefresh={onRefresh}
@@ -525,11 +514,9 @@ const SharedFileCard = memo(function SharedFileCard({
   linkActive,
   passwordProtected,
   visibility,
-  isStarred,
   copiedId,
   onCopyLink,
   onToggleLink,
-  onStar,
   onOpenModal,
   onDownload,
   onDeleteClick,
@@ -581,10 +568,8 @@ const SharedFileCard = memo(function SharedFileCard({
                 fileId={file.id}
                 resourceId={file.resourceId}
                 fileName={file.name}
-                starred={isStarred}
                 visible={hovered}
                 compact
-                onStar={onStar}
                 onOpenModal={() => onOpenModal(file)}
                 onDownload={onDownload}
                 onDeleteClick={onDeleteClick}
@@ -608,7 +593,6 @@ const SharedFileCard = memo(function SharedFileCard({
                 )}
                 <VisibilityBadge isPublic={visibility !== "Restricted"} />
                 <PasswordBadge enabled={passwordProtected} />
-                {isStarred && <StarredBadge />}
               </div>
             </div>
 
@@ -688,7 +672,6 @@ const SharedFileCard = memo(function SharedFileCard({
                     <h4 className="truncate text-sm font-semibold text-foreground sm:text-[15px]">
                       {file.name}
                     </h4>
-                    {isStarred && <StarredBadge />}
                     {isExpired ? (
                       <StatusBadge variant="expired" />
                     ) : linkActive ? (
@@ -723,9 +706,7 @@ const SharedFileCard = memo(function SharedFileCard({
                 fileId={file.id}
                 resourceId={file.resourceId}
                 fileName={file.name}
-                starred={isStarred}
                 visible={hovered}
-                onStar={onStar}
                 onOpenModal={() => onOpenModal(file)}
                 onDownload={onDownload}
                 onDeleteClick={onDeleteClick}
@@ -744,10 +725,8 @@ function FileActions({
   fileId,
   resourceId,
   fileName,
-  starred,
   visible,
   compact,
-  onStar,
   onOpenModal,
   onDownload,
   onDeleteClick,
@@ -771,15 +750,6 @@ function FileActions({
       onClick={stop}
       onKeyDown={stop}
     >
-      <button
-        type="button"
-        className={cn(btn, starred && "text-amber-600 dark:text-amber-400")}
-        title={starred ? "Unstar" : "Star"}
-        aria-pressed={starred}
-        onClick={() => onStar?.(fileId)}
-      >
-        <Star className={cn("h-3.5 w-3.5", starred && "fill-current")} />
-      </button>
       <button
         type="button"
         className={btn}
@@ -873,7 +843,6 @@ const calculateExpiryDate = (val) => {
 function LinkDetailModal({
   file,
   onToggleLink,
-  onToggleStar,
   onRevokeShare,
   onDownload,
   onRefresh,
@@ -885,7 +854,6 @@ function LinkDetailModal({
 
   const [activeTab, setActiveTab] = useState("collaborators");
   const [linkActive, setLinkActive] = useState(file.linkActive);
-  const [isStarred, setIsStarred] = useState(file.starred);
   const [visibility, setVisibility] = useState(file.visibility || "Public");
   const [passwordEnabled, setPasswordEnabled] = useState(file.password);
   const [hasPassword, setHasPassword] = useState(file.password);
@@ -957,7 +925,6 @@ function LinkDetailModal({
     try {
       const { share } = await updateShare(shareId, updates);
       setLinkActive(share.linkActive);
-      setIsStarred(share.starred);
       setVisibility(share.visibility);
       setPasswordEnabled(share.password);
       setHasPassword(share.password);
@@ -991,12 +958,6 @@ function LinkDetailModal({
     );
   };
 
-  const handleStarToggle = async () => {
-    await onToggleStar?.(file.id);
-    const nextState = !isStarred;
-    setIsStarred(nextState);
-    addToast(nextState ? "Starred file link" : "Unstarred file link");
-  };
 
   const handleToggleDownload = async () => {
     const nextVal = !allowDownload;
@@ -1186,7 +1147,6 @@ function LinkDetailModal({
             )}
             <VisibilityBadge isPublic={visibility !== "Restricted"} />
             <PasswordBadge enabled={passwordEnabled} />
-            {isStarred && <StarredBadge />}
           </div>
 
           {/* Segmented sliding switcher */}
@@ -1813,29 +1773,13 @@ function LinkDetailModal({
             Actions
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={handleStarToggle}
-              className={cn(
-                "inline-flex h-10 items-center justify-center gap-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer active:scale-95",
-                isStarred
-                  ? "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-400"
-                  : "border-border bg-background/40 hover:bg-background/80 text-foreground/85",
-              )}
-            >
-              <Star className={cn("h-4 w-4", isStarred && "fill-current")} />
-              {isStarred ? "Unstar Link" : "Star Link"}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onDownload?.(file.resourceId, file.name)}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border bg-background/40 hover:bg-background/80 text-xs font-semibold text-foreground/85 transition-all cursor-pointer active:scale-95"
-            >
-              <Download className="h-4 w-4" /> Download File
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => onDownload?.(file.resourceId, file.name)}
+            className="w-full inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border bg-background/40 hover:bg-background/80 text-xs font-semibold text-foreground/85 transition-all cursor-pointer active:scale-95"
+          >
+            <Download className="h-4 w-4" /> Download File
+          </button>
 
           <button
             type="button"
@@ -1919,13 +1863,6 @@ function StatusBadge({ variant }) {
   );
 }
 
-function StarredBadge() {
-  return (
-    <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
-      <Star className="h-2.5 w-2.5 fill-current" /> Starred
-    </span>
-  );
-}
 
 function VisibilityBadge({ isPublic }) {
   return isPublic ? (
@@ -2107,20 +2044,6 @@ export default function SharedFiles() {
     [shares, fetchData],
   );
 
-  const handleToggleStar = useCallback(
-    async (shareId) => {
-      const share = shares.find((s) => s.id === shareId);
-      if (!share) return;
-
-      try {
-        await updateShare(shareId, { isStarred: !share.starred });
-        await fetchData();
-      } catch (err) {
-        console.error("Toggle star failed:", err);
-      }
-    },
-    [shares, fetchData],
-  );
 
   const handleRevokeShare = useCallback(
     async (shareId) => {
@@ -2156,7 +2079,6 @@ export default function SharedFiles() {
         isLoading={isLoading}
         onRefresh={fetchData}
         onToggleLink={handleToggleLink}
-        onToggleStar={handleToggleStar}
         onRevokeShare={handleRevokeShare}
         onDownload={handleDownload}
       />
