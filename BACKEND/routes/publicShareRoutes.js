@@ -6,6 +6,8 @@ import {
   downloadSharedFile,
   checkShareAccess,
   editSharedFile,
+  createShareDownloadToken,
+  downloadSharedFileByToken,
 } from "../controllers/publicShareController.js";
 import {
   publicShareRateLimit,
@@ -32,6 +34,7 @@ router.use((req, res, next) => {
 });
 
 // ─── Public Share Access (no auth required) ───────────────────────
+router.get("/download/:token", downloadSharedFileByToken);
 router.get("/:token", softAuthenticate, getShareMetadata);
 router.get("/:token/check", resolvePublicShare, checkShareAccess);
 
@@ -58,6 +61,14 @@ router.get(
   resolvePublicShare,
   requireShareAccess,
   downloadSharedFile,
+);
+
+router.post(
+  "/:token/download-token",
+  softAuthenticate,
+  resolvePublicShare,
+  requireShareAccess,
+  createShareDownloadToken,
 );
 
 router.put(

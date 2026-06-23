@@ -151,3 +151,30 @@ export function verifyDownloadToken(token) {
   }
   return decoded;
 }
+
+/**
+ * Generate a short-lived download token (60s) for a public share.
+ * @param {string} shareToken
+ * @returns {string}
+ */
+export function generateShareDownloadToken(shareToken) {
+  return jwt.sign(
+    { shareToken, type: "share_download" },
+    JWT_ACCESS_SECRET,
+    { expiresIn: "60s" }
+  );
+}
+
+/**
+ * Verify a public share download token.
+ * @param {string} token
+ * @returns {{ shareToken: string, type: string }}
+ */
+export function verifyShareDownloadToken(token) {
+  const decoded = jwt.verify(token, JWT_ACCESS_SECRET);
+  if (decoded.type !== "share_download") {
+    throw new Error("Invalid share download token.");
+  }
+  return decoded;
+}
+

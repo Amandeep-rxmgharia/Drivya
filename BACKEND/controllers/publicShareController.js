@@ -5,12 +5,15 @@ import {
   incrementShareView,
   incrementShareDownload,
   isUserAuthorizedForShare,
+  isShareAccessible,
 } from "../services/shareService.js";
 import { getFileStream, updateFileContent as updateDiskContent } from "../services/storageService.js";
 import {
   generateShareAccessToken,
   setShareAccessCookie,
   verifyShareAccessToken,
+  generateShareDownloadToken,
+  verifyShareDownloadToken,
 } from "../config/tokenUtils.js";
 import { AppError } from "../utils/errors.js";
 import { VISIBILITY } from "../constants/shareConstants.js";
@@ -222,6 +225,78 @@ export async function downloadSharedFile(req, res, next) {
     });
 
     getFileStream(file.storagePath).pipe(res);
+  } catch (err) {
+    handlePublicShareError(err, res, next);
+  }
+}
+
+// ─── Create Share Download Token ──────────────────────────────────
+export async function createShareDownloadToken(req, res, next) {
+  try {
+    const { token } = req.params;
+    const share = req.share;
+
+    if (!share.permissions?.allowDownload) {
+      return res.status(403).json({ message: "Downloading is not permitted." });
+    }
+
+    // Simplify to cookie-only session tracking
+    const downloadCookieName = `downloaded_${token}`;
+    const hasDownloaded = req.cookies?.[downloadCookieName];
+
+    if (!hasDownloaded) {
+      await incrementShareDownload(token);
+      res.cookie(downloadCookieName, "1", {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+      });
+    }
+
+    const downloadToken = generateShareDownloadToken(token);
+    return res.json({ token: downloadToken });
+  } catch (err) {
+    handlePublicShareError(err, res, next);
+  }
+}
+
+// ─── Download Shared File By Token ────────────────────────────────
+export async function downloadSharedFileByToken(req, res, next) {
+  try {
+    const { token } = req.params; // download token
+    const decoded = verifyShareDownloadToken(token);
+
+    const share = await Share.findOne({ token: decoded.shareToken }).select("+passwordHash").lean();
+    if (!share) {
+      return res.status(404).json({ message: "Share link not found." });
+    }
+    if (!isShareAccessible(share)) {
+      return res.status(410).json({ message: "This share link is no longer available." });
+    }
+
+    if (!share.permissions?.allowDownload) {
+      return res.status(403).json({ message: "Downloading is not permitted." });
+    }
+
+    const { file } = await resolveShareFileForPublicAccess(decoded.shareToken);
+
+    res.set({
+      "Content-Type": file.mimeType,
+      "Content-Disposition": `attachment; filename="${encodeURIComponent(file.originalName)}"`,
+      "Content-Length": file.size,
+    });
+
+    const stream = getFileStream(file.storagePath);
+    stream.on("error", (err) => {
+      console.error("Shared download token stream error:", err.message);
+      if (!res.headersSent) {
+        res.status(500).json({ message: "Error reading file from disk." });
+      } else {
+        res.destroy();
+      }
+    });
+
+    stream.pipe(res);
   } catch (err) {
     handlePublicShareError(err, res, next);
   }

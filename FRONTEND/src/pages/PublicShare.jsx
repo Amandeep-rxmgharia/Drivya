@@ -457,20 +457,21 @@ export default function PublicShare() {
       if (accessToken) {
         headers.Authorization = `Bearer ${accessToken}`;
       }
-      const response = await api.get(`/public/shares/${token}/download`, {
-        headers,
-        responseType: "blob",
-      });
-      const url = window.URL.createObjectURL(response.data);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = metadata.name;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+      // Step 1: Obtain a short-lived download token
+      const { data } = await api.post(`/public/shares/${token}/download-token`, {}, { headers });
+
+      // Step 2: Navigate hidden iframe to the public download URL
+      const downloadUrl = `${api.defaults.baseURL}/public/shares/download/${data.token}`;
+      let iframe = document.getElementById("__drivya_download_frame");
+      if (!iframe) {
+        iframe = document.createElement("iframe");
+        iframe.id = "__drivya_download_frame";
+        iframe.style.display = "none";
+        document.body.appendChild(iframe);
+      }
+      iframe.src = downloadUrl;
     } catch (err) {
-      alert("Download failed: Permission denied or expired share.");
+      // alert("Download failed: Permission denied or expired share.");
     }
   };
 
