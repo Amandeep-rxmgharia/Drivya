@@ -76,23 +76,35 @@ export const uploadFiles = async (directoryId, files, onProgress) => {
 };
 
 /**
- * Download a file (returns blob URL).
+ * Download a file via browser-native download (no memory buffering).
+ *
+ * The old approach used `axios.get(…, { responseType: "blob" })` which
+ * buffers the entire file in JavaScript memory — this causes
+ * `net::ERR_FAILED` for large video files.
+ *
+ * New approach (two-step, token-based):
+ *  1. POST to /api/files/:id/download-token (authenticated via cookies).
+ *     Returns a short-lived JWT (60s) embedding the file ID and user ID.
+ *  2. Navigate a hidden iframe to /api/files/download/:token (public).
+ *     The browser's download manager streams the file directly to disk.
+ *
  * @param {string} fileId
  * @param {string} fileName
  */
 export const downloadFile = async (fileId, fileName) => {
-  const response = await api.get(`/api/files/${fileId}/download`, {
-    responseType: "blob",
-  });
-  // Create and trigger a download link
-  const url = window.URL.createObjectURL(response.data);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  window.URL.revokeObjectURL(url);
+  // Step 1: Obtain a short-lived download token (authenticated request)
+  const { data } = await api.post(`/api/files/${fileId}/download-token`);
+
+  // Step 2: Navigate hidden iframe to the public download URL
+  const downloadUrl = `${api.defaults.baseURL}/api/files/download/${data.token}`;
+  let iframe = document.getElementById("__drivya_download_frame");
+  if (!iframe) {
+    iframe = document.createElement("iframe");
+    iframe.id = "__drivya_download_frame";
+    iframe.style.display = "none";
+    document.body.appendChild(iframe);
+  }
+  iframe.src = downloadUrl;
 };
 
 /**

@@ -15,6 +15,7 @@ import { RESOURCE_TYPES } from "../constants/shareConstants.js";
 import { generateStorageName } from "../middlewares/uploadMiddleware.js";
 import { recordActivity, deleteActivitiesForResources } from "../services/activityService.js";
 import { ACTIVITY_ACTIONS } from "../constants/activityConstants.js";
+import { generateDownloadToken, verifyDownloadToken } from "../config/tokenUtils.js";
 
 // ─── Upload Files ────────────────────────────────────────────────
 export const uploadFiles = async (req, res, next) => {
@@ -180,6 +181,95 @@ export const downloadFile = async (req, res, next) => {
       "Content-Type": file.mimeType,
       "Content-Disposition": `attachment; filename="${encodeURIComponent(file.originalName)}"`,
       "Content-Length": file.size,
+    });
+
+    // Handle stream errors — if the file read fails mid-transfer, destroy the response
+    stream.on("error", (err) => {
+      console.error("Download stream error:", err.message);
+      if (!res.headersSent) {
+        res.status(500).json({ message: "Error reading file from disk." });
+      } else {
+        res.destroy();
+      }
+    });
+
+    stream.pipe(res);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── Create Download Token ───────────────────────────────────────
+// Issues a short-lived JWT so the browser can download via direct
+// navigation (no XHR/fetch memory buffering, no cookies needed).
+export const createDownloadToken = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+
+    // Verify file exists and belongs to user
+    const file = await File.findOne({ _id: id, userId }).lean();
+    if (!file) {
+      return res.status(404).json({ message: "File not found." });
+    }
+
+    const token = generateDownloadToken(userId, id);
+    return res.json({ token });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── Download File By Token (no auth cookies needed) ─────────────
+export const downloadFileByToken = async (req, res, next) => {
+  try {
+    const { token } = req.params;
+
+    let decoded;
+    try {
+      decoded = verifyDownloadToken(token);
+    } catch (err) {
+      return res.status(401).json({ message: "Invalid or expired download link." });
+    }
+
+    const file = await File.findOne({
+      _id: decoded.fileId,
+      userId: decoded.userId,
+    }).lean();
+
+    if (!file) {
+      return res.status(404).json({ message: "File not found." });
+    }
+
+    const stream = getFileStream(file.storagePath);
+
+    // Record download activity (fire-and-forget)
+    recordActivity({
+      userId: decoded.userId,
+      action: ACTIVITY_ACTIONS.DOWNLOADED,
+      resourceType: RESOURCE_TYPES.FILE,
+      resourceId: file._id,
+      resourceSnapshot: {
+        name: file.originalName,
+        mimeType: file.mimeType,
+        size: file.size,
+      },
+      parentDirId: file.directoryId,
+    }).catch((err) => console.error("Activity[download-token]:", err.message));
+
+    res.set({
+      "Content-Type": file.mimeType,
+      "Content-Disposition": `attachment; filename="${encodeURIComponent(file.originalName)}"`,
+      "Content-Length": file.size,
+    });
+
+    stream.on("error", (err) => {
+      console.error("Download stream error:", err.message);
+      if (!res.headersSent) {
+        res.status(500).json({ message: "Error reading file from disk." });
+      } else {
+        res.destroy();
+      }
     });
 
     stream.pipe(res);

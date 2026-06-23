@@ -118,3 +118,36 @@ export function setShareAccessCookie(res, shareToken, token) {
     maxAge: 60 * 60 * 1000, // 1 hour
   });
 }
+
+// ─── Short-lived download tokens ────────────────────────────────
+// Used to allow direct browser-native file downloads without cookies.
+// The frontend obtains a token via an authenticated API call, then
+// navigates the browser to /api/files/download/<token> which streams
+// the file without requiring auth cookies (the token IS the auth).
+
+/**
+ * Generate a short-lived download token (60s) for a specific file.
+ * @param {string} userId
+ * @param {string} fileId
+ * @returns {string}
+ */
+export function generateDownloadToken(userId, fileId) {
+  return jwt.sign(
+    { userId, fileId, type: "file_download" },
+    JWT_ACCESS_SECRET,
+    { expiresIn: "60s" },
+  );
+}
+
+/**
+ * Verify a download token.
+ * @param {string} token
+ * @returns {{ userId: string, fileId: string, type: string }}
+ */
+export function verifyDownloadToken(token) {
+  const decoded = jwt.verify(token, JWT_ACCESS_SECRET);
+  if (decoded.type !== "file_download") {
+    throw new Error("Invalid download token.");
+  }
+  return decoded;
+}
