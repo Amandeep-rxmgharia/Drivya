@@ -574,7 +574,7 @@ function QuickActions({
       onKeyDown={stop}
     >
       {/* Star */}
-      <Tooltip label={starred ? "Unstar" : "Star"}>
+      {!isDirectory && <Tooltip label={starred ? "Unstar" : "Star"}>
         <button
           type="button"
           className={cn(iconBtn, starred && "text-amber-500 dark:text-amber-400")}
@@ -583,7 +583,7 @@ function QuickActions({
         >
           <Star className={cn("h-3.5 w-3.5", starred && "fill-current")} />
         </button>
-      </Tooltip>
+      </Tooltip>}
 
       {/* Preview (only for files) */}
       {!isDirectory && onPreview && (
@@ -732,14 +732,14 @@ function PortaledDropdown({
       )}
 
       {/* Share */}
-      <DropdownItem
+      {!isDirectory && <DropdownItem
         icon={<Share2 className="h-3.5 w-3.5" />}
         label="Share"
         onClick={() => { onClose(); onShare?.(fileId); }}
-      />
+      />}
 
       {/* Copy link */}
-      {onCopyLink && (
+      {onCopyLink && !isDirectory && (
         <DropdownItem
           icon={<Copy className="h-3.5 w-3.5" />}
           label="Copy link"
@@ -757,7 +757,7 @@ function PortaledDropdown({
       )}
 
       {/* Divider */}
-      <div className="my-1.5 h-px bg-border/60" />
+      {!isDirectory && <div className="my-1.5 h-px bg-border/60" />}
 
       {/* Delete */}
       <DropdownItem
@@ -926,26 +926,26 @@ function ContextMenu({
           onClick={onDownload}
         />
       )}
+{!file.isDirectory && <DropdownItem
+  icon={<Share2 className="h-3.5 w-3.5" />}
+  label="Share"
+  onClick={onShare}
+/>}
 
-      <DropdownItem
-        icon={<Share2 className="h-3.5 w-3.5" />}
-        label="Share"
-        onClick={onShare}
-      />
 
-      <DropdownItem
+      {!file.isDirectory && <DropdownItem
         icon={<Star className={cn("h-3.5 w-3.5", file.starred && "fill-amber-400 text-amber-400")} />}
         label={file.starred ? "Remove star" : "Add star"}
         onClick={onStar}
-      />
+      />}
 
-      <DropdownItem
+     {!file.isDirectory && <DropdownItem
         icon={<Copy className="h-3.5 w-3.5" />}
         label="Copy link"
         onClick={onCopyLink}
-      />
+      />}
 
-      <div className="my-1.5 h-px bg-border/60" />
+      {!file.isDirectory && <div className="my-1.5 h-px bg-border/60" />}
 
       <DropdownItem
         icon={<Trash2 className="h-3.5 w-3.5" />}

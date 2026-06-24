@@ -226,7 +226,7 @@ export function FilePreviewModal({
   const { label: kindLabel } = getFileTypeStyle(kind);
 
   const isUploading = file.uploadStatus === "uploading";
-
+console.log(file);
   return createPortal(
     <>
       {/* Backdrop */}
@@ -401,11 +401,11 @@ export function FilePreviewModal({
 
             <div className="flex items-center justify-between py-1.5">
               <span className="flex items-center gap-2 text-sm text-foreground/80">
-                <Clock className="h-4 w-4 text-muted-foreground" /> Last
-                accessed
+                <Clock className="h-4 w-4 text-muted-foreground" /> {file.lastOpened ? `Last
+                accessed` : 'Starred At'}
               </span>
               <span className="text-xs font-medium text-foreground/80 bg-secondary/50 px-2 py-0.5 rounded-md">
-                {formatTime(file.lastOpened)}
+                {file.lastOpened ? formatTime(file.lastOpened): formatTime(file.starredAt)}
               </span>
             </div>
 
@@ -418,7 +418,7 @@ export function FilePreviewModal({
               <span className="text-xs font-medium text-foreground/80 bg-secondary/50 px-2 py-0.5 rounded-md">
                 {(file.lastOpened instanceof Date
                   ? file.lastOpened
-                  : new Date(file.lastOpened)
+                  : new Date(file.lastOpened ? file.lastOpened : file.starredAt)
                 ).toLocaleDateString("en-US", {
                   month: "short",
                   day: "numeric",

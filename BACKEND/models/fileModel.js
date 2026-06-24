@@ -45,6 +45,14 @@ const fileSchema = new Schema(
       type: Date,
       default: null,
     },
+    isStarred: {
+      type: Boolean,
+      default: false,
+    },
+    starredAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     strict: "throw",
@@ -64,6 +72,9 @@ fileSchema.index(
 
 // Trash page query — list all trashed files for a user
 fileSchema.index({ userId: 1, isTrashed: 1, trashedAt: -1 });
+
+// Starred page query — list all starred files for a user
+fileSchema.index({ userId: 1, isStarred: 1, starredAt: -1 });
 
 const File = model("File", fileSchema);
 

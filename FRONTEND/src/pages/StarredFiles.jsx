@@ -21,6 +21,8 @@ import {
   Trash2,
   Undo2,
   X,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { easeSmooth } from "@/lib/motion-presets";
@@ -34,163 +36,21 @@ import {
 import { FilePreviewModal } from "@/components/recent/FilePreviewModal";
 import { ShareModal } from "@/components/dashboard/ShareModal";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
+import {
+  listStarred,
+  toggleStar as toggleStarApi,
+  unstarAll as unstarAllApi,
+} from "../../api/starred.js";
+import { downloadFile } from "../../api/drive.js";
 
 /* ───────────────────────── Mock Data ───────────────────────── */
 
-const STARRED_FILES = [
-  // Documents
-  {
-    id: "st1",
-    name: "Brand Guidelines v3.pdf",
-    size: "4.2 MB",
-    starredAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
-    lastOpened: new Date(Date.now() - 2 * 60 * 60 * 1000),
-    kind: "pdf",
-    starred: true,
-    shared: true,
-  },
-  {
-    id: "st2",
-    name: "Q4-keynote-final.pptx",
-    size: "18.6 MB",
-    starredAt: new Date(Date.now() - 6 * 60 * 60 * 1000),
-    lastOpened: new Date(Date.now() - 6 * 60 * 60 * 1000),
-    kind: "document",
-    starred: true,
-    shared: true,
-  },
-  {
-    id: "st3",
-    name: "financial-report-Q3.xlsx",
-    size: "2.8 MB",
-    starredAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-    lastOpened: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-    kind: "document",
-    starred: true,
-  },
-  {
-    id: "st4",
-    name: "investor-deck.key",
-    size: "12.4 MB",
-    starredAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
-    lastOpened: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
-    kind: "document",
-    starred: true,
-    shared: true,
-  },
-  // Images
-  {
-    id: "st5",
-    name: "Hero-shot-005.png",
-    size: "8.1 MB",
-    starredAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-    lastOpened: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-    kind: "image",
-    starred: true,
-    shared: true,
-  },
-  {
-    id: "st6",
-    name: "app-mockup-v2.fig",
-    size: "34 MB",
-    starredAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
-    lastOpened: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
-    kind: "image",
-    starred: true,
-    shared: true,
-  },
-  {
-    id: "st7",
-    name: "team-photo-2026.jpg",
-    size: "5.6 MB",
-    starredAt: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000),
-    lastOpened: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000),
-    kind: "image",
-    starred: true,
-  },
-  // Media
-  {
-    id: "st8",
-    name: "podcast-ep12.mp3",
-    size: "48 MB",
-    starredAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
-    lastOpened: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
-    kind: "audio",
-    starred: true,
-  },
-  {
-    id: "st9",
-    name: "onboarding-video.mp4",
-    size: "256 MB",
-    starredAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
-    lastOpened: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
-    kind: "video",
-    starred: true,
-    shared: true,
-  },
-  // Code
-  {
-    id: "st10",
-    name: "api-routes.ts",
-    size: "24 KB",
-    starredAt: new Date(Date.now() - 3 * 60 * 60 * 1000),
-    lastOpened: new Date(Date.now() - 3 * 60 * 60 * 1000),
-    kind: "code",
-    starred: true,
-  },
-  {
-    id: "st11",
-    name: "auth-middleware.js",
-    size: "8 KB",
-    starredAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-    lastOpened: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-    kind: "code",
-    starred: true,
-  },
-  // Folders
-  {
-    id: "st12",
-    name: "Design System",
-    size: "248 items",
-    starredAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-    lastOpened: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-    kind: "folder",
-    starred: true,
-    shared: true,
-  },
-  {
-    id: "st13",
-    name: "launch-assets",
-    size: "1.2 GB",
-    starredAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000),
-    lastOpened: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000),
-    kind: "folder",
-    starred: true,
-  },
-  // Archives / Other
-  {
-    id: "st14",
-    name: "client-archives.zip",
-    size: "640 MB",
-    starredAt: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000),
-    lastOpened: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000),
-    kind: "archive",
-    starred: true,
-  },
-  {
-    id: "st15",
-    name: "meeting-notes-may.md",
-    size: "12 KB",
-    starredAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
-    lastOpened: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
-    kind: "document",
-    starred: true,
-  },
-];
+const STARRED_FILES = [];
 
 /* ───────────────────────── Helpers ───────────────────────── */
 
 function formatRelativeTime(date) {
+  console.log(date);
   const now = Date.now();
   const diff = now - date.getTime();
   const mins = Math.floor(diff / 60000);
@@ -202,6 +62,15 @@ function formatRelativeTime(date) {
   if (hrs < 24) return `${hrs}h ago`;
   if (days < 7) return `${days}d ago`;
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function formatBytes(bytes) {
+  if (bytes == null) return "—";
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  if (bytes < 1024 * 1024 * 1024)
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  return (bytes / (1024 * 1024 * 1024)).toFixed(1) + " GB";
 }
 
 const CATEGORY_MAP = {
@@ -369,7 +238,7 @@ function UndoToast({ file, onUndo, onClose }) {
 
 /* ───────────────────────── File Actions Toolbar ───────────────────────── */
 
-function FileActions({ file, visible, compact, onStar, onPreview, onShare }) {
+function FileActions({ file, visible, compact, onStar, onPreview, onShare, onDownload }) {
   const stop = (e) => e.stopPropagation();
   const btn =
     "inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30";
@@ -413,9 +282,16 @@ function FileActions({ file, visible, compact, onStar, onPreview, onShare }) {
       >
         <Share2 className="h-3.5 w-3.5" />
       </button>
-      <button type="button" className={btn} title="Download">
-        <Download className="h-3.5 w-3.5" />
-      </button>
+      {file.resourceType === "file" && (
+        <button
+          type="button"
+          className={btn}
+          title="Download"
+          onClick={() => onDownload?.(file.id, file.name)}
+        >
+          <Download className="h-3.5 w-3.5" />
+        </button>
+      )}
       {!compact && (
         <button
           type="button"
@@ -431,10 +307,10 @@ function FileActions({ file, visible, compact, onStar, onPreview, onShare }) {
 
 /* ───────────────────────── Starred File Row ───────────────────────── */
 
-function StarredFileRow({ file, view, onStar, onPreview, onShare }) {
+function StarredFileRow({ file, view, onStar, onPreview, onShare, onDownload }) {
   const [hovered, setHovered] = useState(false);
   const { ref: revealRef, isVisible } = useScrollReveal();
-  const kind = detectFileKind(file.name, file.kind);
+  const kind = detectFileKind(file.name, file.resourceType === "directory" ? "folder" : file.mimeType);
   const isGrid = view === "grid";
 
   if (isGrid) {
@@ -474,6 +350,7 @@ function StarredFileRow({ file, view, onStar, onPreview, onShare }) {
               onStar={onStar}
               onPreview={onPreview}
               onShare={onShare}
+              onDownload={onDownload}
             />
           </div>
 
@@ -482,7 +359,7 @@ function StarredFileRow({ file, view, onStar, onPreview, onShare }) {
               {file.name}
             </h4>
             <p className="text-[11px] text-muted-foreground tabular-nums">
-              {file.size}
+              {file.resourceType === "file" ? formatBytes(file.size) : ""}
             </p>
           </div>
 
@@ -555,7 +432,7 @@ function StarredFileRow({ file, view, onStar, onPreview, onShare }) {
                   )}
                 </div>
                 <p className="text-[11px] text-muted-foreground md:hidden">
-                  {formatRelativeTime(file.starredAt)} · {file.size}
+                  {formatRelativeTime(file.starredAt)} · {file.resourceType === "file" ? formatBytes(file.size) : ""}
                 </p>
               </div>
             </div>
@@ -567,7 +444,7 @@ function StarredFileRow({ file, view, onStar, onPreview, onShare }) {
 
             {/* Size */}
             <div className="hidden md:flex md:items-center md:justify-start text-right text-sm font-medium tabular-nums text-foreground/80">
-              {file.size}
+              {file.resourceType === "file" ? formatBytes(file.size) : ""}
             </div>
           </div>
 
@@ -579,6 +456,7 @@ function StarredFileRow({ file, view, onStar, onPreview, onShare }) {
               onStar={onStar}
               onPreview={onPreview}
               onShare={onShare}
+              onDownload={onDownload}
             />
           </div>
         </div>
@@ -597,6 +475,7 @@ function CategoryGroup({
   onStar,
   onPreview,
   onShare,
+  onDownload,
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const CatIcon = CATEGORY_ICONS[category] || FileStack;
@@ -667,6 +546,7 @@ function CategoryGroup({
               onStar={onStar}
               onPreview={onPreview}
               onShare={onShare}
+              onDownload={onDownload}
             />
           ))}
         </div>
@@ -707,7 +587,10 @@ function EmptyState({ hasFilters }) {
 /* ───────────────────────── Main Page ───────────────────────── */
 
 export default function StarredFiles() {
-  const [files, setFiles] = useState(STARRED_FILES);
+  const [files, setFiles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   const [activeFilter, setActiveFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("starred");
@@ -716,6 +599,28 @@ export default function StarredFiles() {
 
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
   const filterDropdownRef = useRef(null);
+
+  const fetchStarred = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await listStarred();
+      const parsedStarred = (res.starred || []).map((item) => ({
+        ...item,
+        starredAt: new Date(item.starredAt),
+      }));
+      setFiles(parsedStarred);
+    } catch (err) {
+      console.error("Failed to fetch starred files:", err);
+      setError(err.response?.data?.message || "Failed to load starred files.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchStarred();
+  }, []);
 
   useEffect(() => {
     if (!filterDropdownOpen) return;
@@ -738,24 +643,34 @@ export default function StarredFiles() {
   const [undoFile, setUndoFile] = useState(null);
 
   const handleUnstar = useCallback(
-    (id) => {
+    async (id) => {
       const file = files.find((f) => f.id === id);
       if (!file) return;
-      setUndoFile(file);
-      setFiles((prev) => prev.filter((f) => f.id !== id));
+
+      try {
+        await toggleStarApi(file.resourceType, id);
+        setUndoFile(file);
+        setFiles((prev) => prev.filter((f) => f.id !== id));
+      } catch (err) {
+        console.error("Failed to unstar:", err);
+      }
     },
     [files],
   );
 
-  const handleUndo = useCallback(() => {
+  const handleUndo = useCallback(async () => {
     if (!undoFile) return;
-    setFiles((prev) => {
-      // Re-insert in the original position based on starredAt
-      const newList = [...prev, undoFile];
-      newList.sort((a, b) => b.starredAt - a.starredAt);
-      return newList;
-    });
-    setUndoFile(null);
+    try {
+      await toggleStarApi(undoFile.resourceType, undoFile.id);
+      setFiles((prev) => {
+        const newList = [...prev, undoFile];
+        newList.sort((a, b) => b.starredAt - a.starredAt);
+        return newList;
+      });
+      setUndoFile(null);
+    } catch (err) {
+      console.error("Failed to undo unstar:", err);
+    }
   }, [undoFile]);
 
   const handleDismissUndo = useCallback(() => {
@@ -770,10 +685,19 @@ export default function StarredFiles() {
     setFiles((prev) =>
       prev.map((f) => (f.id === id ? { ...f, shared: isShared } : f)),
     );
+    fetchStarred()
   }, []);
 
   const handlePreview = useCallback((file) => {
     setPreviewFile(file);
+  }, []);
+
+  const handleDownload = useCallback(async (fileId, fileName) => {
+    try {
+      await downloadFile(fileId, fileName);
+    } catch (err) {
+      console.error("Download failed:", err);
+    }
   }, []);
 
   // Filtered & sorted files
@@ -783,7 +707,7 @@ export default function StarredFiles() {
     // Filter by category
     if (activeFilter !== "all") {
       list = list.filter((f) => {
-        const kind = detectFileKind(f.name, f.kind);
+        const kind = detectFileKind(f.name, f.resourceType === "directory" ? "folder" : f.mimeType);
         return getCategoryForKind(kind) === activeFilter;
       });
     }
@@ -797,10 +721,14 @@ export default function StarredFiles() {
     // Sort
     list.sort((a, b) => {
       if (sortBy === "name") return a.name.localeCompare(b.name);
-      if (sortBy === "size") return a.size.localeCompare(b.size);
+      if (sortBy === "size") {
+        const sa = a.size || 0;
+        const sb = b.size || 0;
+        return sa - sb;
+      }
       if (sortBy === "type") {
-        const ka = detectFileKind(a.name, a.kind);
-        const kb = detectFileKind(b.name, b.kind);
+        const ka = detectFileKind(a.name, a.resourceType === "directory" ? "folder" : a.mimeType);
+        const kb = detectFileKind(b.name, b.resourceType === "directory" ? "folder" : b.mimeType);
         return ka.localeCompare(kb);
       }
       // Default: date starred (newest first)
@@ -816,7 +744,7 @@ export default function StarredFiles() {
     const groups = {};
 
     filteredFiles.forEach((file) => {
-      const kind = detectFileKind(file.name, file.kind);
+      const kind = detectFileKind(file.name, file.resourceType === "directory" ? "folder" : file.mimeType);
       const cat = getCategoryForKind(kind);
       if (!groups[cat]) groups[cat] = [];
       groups[cat].push(file);
@@ -1017,7 +945,27 @@ export default function StarredFiles() {
 
         {/* Category groups */}
         <div className="divide-y divide-border/60">
-          {grouped.length === 0 ? (
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-20 gap-3">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="text-sm text-muted-foreground">Loading starred items...</p>
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center px-4">
+              <div className="h-12 w-12 rounded-xl border border-destructive/30 bg-destructive/10 flex items-center justify-center text-destructive mb-4">
+                <AlertCircle className="h-5 w-5" />
+              </div>
+              <h4 className="font-display text-base font-semibold text-foreground">Something went wrong</h4>
+              <p className="mt-2 text-sm text-muted-foreground max-w-sm">{error}</p>
+              <button
+                type="button"
+                onClick={fetchStarred}
+                className="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary px-4 h-9 text-sm font-medium text-primary-foreground shadow-sm hover:opacity-90 transition-opacity"
+              >
+                Try again
+              </button>
+            </div>
+          ) : grouped.length === 0 ? (
             <EmptyState hasFilters={hasFilters} />
           ) : (
             grouped.map((group, gi) => (
@@ -1030,6 +978,7 @@ export default function StarredFiles() {
                 onStar={handleUnstar}
                 onPreview={handlePreview}
                 onShare={handleShare}
+                onDownload={handleDownload}
               />
             ))
           )}

@@ -12,7 +12,6 @@ import {
   FileStack,
   FileText,
   Film,
-  Folder,
   Image,
   LayoutGrid,
   List,
@@ -82,7 +81,6 @@ const CATEGORY_MAP = {
   Images: ["image"],
   Media: ["audio", "video"],
   Code: ["code"],
-  Folders: ["folder"],
   Other: ["archive", "file"],
 };
 
@@ -91,7 +89,6 @@ const CATEGORY_ICONS = {
   Images: Image,
   Media: Film,
   Code: Code2,
-  Folders: Folder,
   Other: FileStack,
 };
 
@@ -108,7 +105,6 @@ const FILTER_TABS = [
   { id: "Images", label: "Images", icon: Image },
   { id: "Media", label: "Media", icon: Film },
   { id: "Code", label: "Code", icon: Code2 },
-  { id: "Folders", label: "Folders", icon: Folder },
 ];
 
 const SORT_OPTIONS = [
@@ -517,7 +513,7 @@ function TrashFileRow({ file, view, onRestore, onDeletePermanently, onPreview })
       }}
     >
       <div
-        onDoubleClick={() => kind !== "folder" && onPreview?.(file)}
+        onDoubleClick={() => onPreview?.(file)}
         className={cn(
           "relative w-full text-left rounded-xl border outline-none",
           "bg-card border-border shadow-sm dark:bg-card/50 dark:backdrop-blur-sm dark:shadow-none",
@@ -983,7 +979,7 @@ export default function TrashFiles() {
 
   // Group by category
   const grouped = useMemo(() => {
-    const order = ["Documents", "Images", "Media", "Code", "Folders", "Other"];
+    const order = ["Documents", "Images", "Media", "Code", "Other"];
     const groups = {};
 
     filteredFiles.forEach((file) => {

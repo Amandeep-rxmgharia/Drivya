@@ -30,6 +30,14 @@ const directorySchema = new Schema(
       default: 0,
       min: 0,
     },
+    isStarred: {
+      type: Boolean,
+      default: false,
+    },
+    starredAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     strict: "throw",
@@ -43,6 +51,9 @@ directorySchema.index({ userId: 1, parentDirId: 1 });
 
 // Subtree queries using regex prefix on materialized path
 directorySchema.index({ userId: 1, path: 1 });
+
+// Starred page query — list all starred directories for a user
+directorySchema.index({ userId: 1, isStarred: 1, starredAt: -1 });
 
 // Prevent duplicate folder names within the same parent for a user
 directorySchema.index(

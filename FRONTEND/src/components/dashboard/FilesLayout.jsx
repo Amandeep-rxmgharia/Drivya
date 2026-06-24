@@ -23,6 +23,7 @@ import {
   fetchShareMap,
   createShare,
 } from "../../../api/shares.js";
+import { toggleStar as toggleStarApi } from "../../../api/starred.js";
 
 const card = "rounded-2xl glass shadow-elegant";
 
@@ -82,6 +83,7 @@ function normalizeItems(directories = [], files = []) {
     kind: "folder",
     isDirectory: true,
     _raw: d,
+    starred: d.isStarred,
   }));
 
   const fls = files.map((f) => ({
@@ -94,6 +96,7 @@ function normalizeItems(directories = [], files = []) {
     isDirectory: false,
     mimeType: f.mimeType,
     _raw: f,
+    starred: f.isStarred,
   }));
 
   return [...dirs, ...fls];
@@ -147,6 +150,17 @@ export function FilesLayout({
       .then(setShareMap)
       .catch(() => setShareMap({}));
   }, [currentDirId]);
+
+  // Sync starred state with loaded items
+  useEffect(() => {
+    const initialStarred = {};
+    allItems.forEach((item) => {
+      if (item.starred) {
+        initialStarred[item.id] = true;
+      }
+    });
+    setStarred(initialStarred);
+  }, [allItems]);
 
   const handleShareUpdated = useCallback((resourceId, share) => {
     if (share) {
@@ -263,8 +277,23 @@ export function FilesLayout({
     [allItems, onRenameDir, onRenameFile],
   );
 
-  const toggleStar = (id) => {
-    setStarred((prev) => ({ ...prev, [id]: !prev[id] }));
+  const toggleStar = async (id) => {
+    const item = allItems.find((f) => f.id === id);
+    if (!item) return;
+
+    try {
+      const resourceType = item.isDirectory ? "directory" : "file";
+      const res = await toggleStarApi(resourceType, id);
+      setStarred((prev) => ({ ...prev, [id]: res.isStarred }));
+      setToastMessage(
+        res.isStarred
+          ? `"${item.name}" added to Starred.`
+          : `"${item.name}" removed from Starred.`,
+      );
+    } catch (err) {
+      console.error("Failed to toggle star:", err);
+      setToastMessage("Failed to update star status.");
+    }
   };
 
   const handleShare = (id) => {
@@ -366,10 +395,9 @@ export function FilesLayout({
         <button
           type="button"
           onClick={() => onBreadcrumbNav?.(null, true)}
-          className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors font-medium"
+          className="inline-flex items-center gap-1.5 rounded-lg px- py-1 text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors font-medium"
         >
           <Home className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">My Drive</span>
         </button>
 
         {breadcrumb.slice(1).map((dir, i) => {
@@ -422,11 +450,11 @@ export function FilesLayout({
             {/* Breadcrumb */}
             <div className="mt-2">{renderBreadcrumb()}</div>
 
-            <p className="mt-1 text-sm text-muted-foreground">
+            {/* <p className="mt-1 text-sm text-muted-foreground">
               {isLoading
                 ? "Loading..."
                 : `${visibleFiles.length} item${visibleFiles.length === 1 ? "" : "s"}`}
-            </p>
+            </p> */}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">

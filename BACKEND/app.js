@@ -10,6 +10,7 @@ import fileRoutes from "./routes/fileRoutes.js";
 import shareRoutes from "./routes/shareRoutes.js";
 import publicShareRoutes from "./routes/publicShareRoutes.js";
 import activityRoutes from "./routes/activityRoutes.js";
+import starRoutes from "./routes/starRoutes.js";
 import { connectDb } from "./config/db.js";
 import { ensureStorageRoot } from "./services/storageService.js";
 
@@ -79,6 +80,7 @@ app.use("/api/files", fileRoutes);
 app.use("/api/shares", shareRoutes);
 app.use("/public/shares", publicShareRoutes);
 app.use("/api/activities", activityRoutes);
+app.use("/api/starred", starRoutes);
 
 // ─── Global Error Handler ────────────────────────────────────
 app.use((err, req, res, next) => {
