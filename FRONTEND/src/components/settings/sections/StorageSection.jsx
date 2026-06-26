@@ -65,15 +65,6 @@ export default function StorageSection() {
             </button>
           </div>
         </SettingRow>
-
-        <SettingRow
-          label="Version History Usage"
-          description="Space used by file version history."
-        >
-          <span className="text-sm font-semibold text-foreground tabular-nums">
-            8.6 GB
-          </span>
-        </SettingRow>
       </SettingSection>
 
       {/* Trash Settings */}
@@ -98,77 +89,6 @@ export default function StorageSection() {
               { value: "never", label: "Never (manual only)" },
             ]}
           />
-        </SettingRow>
-      </SettingSection>
-
-      {/* Version History */}
-      <SettingSection
-        id="version-history"
-        icon={History}
-        title="Version History"
-        description="Control how long previous versions of files are kept."
-      >
-        <SettingRow
-          label="Retention Policy"
-          description="How long to keep previous file versions."
-        >
-          <SettingSelect
-            value={versionRetention}
-            onChange={setVersionRetention}
-            options={[
-              { value: "all", label: "Keep all versions" },
-              { value: "10", label: "Last 10 versions" },
-              { value: "30d", label: "30 days" },
-              { value: "60d", label: "60 days" },
-              { value: "90d", label: "90 days" },
-              { value: "365d", label: "1 year" },
-              { value: "disabled", label: "Disabled" },
-            ]}
-          />
-        </SettingRow>
-
-        {versionRetention === "disabled" && (
-          <div className="px-6 pb-4">
-            <SettingBanner variant="warning" icon={History}>
-              Disabling version history means you won't be able to recover
-              previous versions of edited files. This saves storage but reduces
-              your safety net.
-            </SettingBanner>
-          </div>
-        )}
-      </SettingSection>
-
-      {/* Duplicate Detection */}
-      <SettingSection
-        id="duplicate-detection"
-        icon={Copy}
-        title="Duplicate Detection"
-        description="Identify and manage duplicate files to optimize storage."
-      >
-        <SettingRow
-          label="On Upload"
-          description="What happens when you upload a file that already exists."
-        >
-          <SettingSelect
-            value={duplicateDetection}
-            onChange={setDuplicateDetection}
-            options={[
-              { value: "warn", label: "Warn before uploading" },
-              { value: "skip", label: "Auto-skip duplicates" },
-              { value: "keep", label: "Always keep both" },
-              { value: "disabled", label: "Disabled" },
-            ]}
-          />
-        </SettingRow>
-
-        <SettingRow
-          label="Scan Existing Files"
-          description="Run a one-time scan to find duplicates across your drive."
-        >
-          <button className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-secondary/40 px-4 text-xs font-semibold text-foreground hover:bg-secondary/60 transition-colors">
-            <Copy className="h-3.5 w-3.5" />
-            Scan Now
-          </button>
         </SettingRow>
       </SettingSection>
 
@@ -232,13 +152,6 @@ export default function StorageSection() {
             checked={alertThreshold95}
             onChange={setAlertThreshold95}
           />
-        </SettingRow>
-
-        <SettingRow
-          label="Weekly Storage Summary"
-          description="Email summary of your storage usage and activity."
-        >
-          <SettingToggle checked={weeklySummary} onChange={setWeeklySummary} />
         </SettingRow>
       </SettingSection>
     </div>

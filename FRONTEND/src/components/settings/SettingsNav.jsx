@@ -34,21 +34,9 @@ export const SETTINGS_SECTIONS = [
     group: "General",
   },
   {
-    id: "privacy",
-    label: "Privacy & Data",
-    icon: Eye,
-    group: "General",
-  },
-  {
     id: "storage",
     label: "Storage",
     icon: HardDrive,
-    group: "Data",
-  },
-  {
-    id: "files",
-    label: "File Behavior",
-    icon: Folder,
     group: "Data",
   },
   {
@@ -58,47 +46,16 @@ export const SETTINGS_SECTIONS = [
     group: "Data",
   },
   {
-    id: "sync",
-    label: "Sync & Devices",
-    icon: Smartphone,
-    group: "Data",
-  },
-  {
-    id: "notifications",
-    label: "Notifications",
-    icon: Bell,
-    group: "Preferences",
-  },
-  {
     id: "appearance",
     label: "Appearance",
     icon: Palette,
     group: "Preferences",
   },
   {
-    id: "integrations",
-    label: "Integrations",
-    icon: Zap,
-    group: "Platform",
-  },
-  {
-    id: "developer",
-    label: "Developer",
-    icon: Code2,
-    group: "Platform",
-  },
-  {
     id: "billing",
     label: "Billing",
     icon: CreditCard,
     group: "Platform",
-  },
-  {
-    id: "compliance",
-    label: "Compliance",
-    icon: Shield,
-    group: "Enterprise",
-    tier: "Team",
   },
   {
     id: "recovery",

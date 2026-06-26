@@ -21,38 +21,17 @@ const AccountSection = lazy(
 const SecuritySection = lazy(
   () => import("@/components/settings/sections/SecuritySection"),
 );
-const PrivacySection = lazy(
-  () => import("@/components/settings/sections/PrivacySection"),
-);
 const StorageSection = lazy(
   () => import("@/components/settings/sections/StorageSection"),
-);
-const FileSection = lazy(
-  () => import("@/components/settings/sections/FileSection"),
 );
 const SharingSection = lazy(
   () => import("@/components/settings/sections/SharingSection"),
 );
-const SyncSection = lazy(
-  () => import("@/components/settings/sections/SyncSection"),
-);
-const NotificationSection = lazy(
-  () => import("@/components/settings/sections/NotificationSection"),
-);
 const AppearanceSection = lazy(
   () => import("@/components/settings/sections/AppearanceSection"),
 );
-const IntegrationSection = lazy(
-  () => import("@/components/settings/sections/IntegrationSection"),
-);
-const DeveloperSection = lazy(
-  () => import("@/components/settings/sections/DeveloperSection"),
-);
 const BillingSection = lazy(
   () => import("@/components/settings/sections/BillingSection"),
-);
-const ComplianceSection = lazy(
-  () => import("@/components/settings/sections/ComplianceSection"),
 );
 const RecoverySection = lazy(
   () => import("@/components/settings/sections/RecoverySection"),
@@ -64,17 +43,10 @@ const LabsSection = lazy(
 const SECTION_COMPONENTS = {
   account: AccountSection,
   security: SecuritySection,
-  privacy: PrivacySection,
   storage: StorageSection,
-  files: FileSection,
   sharing: SharingSection,
-  sync: SyncSection,
-  notifications: NotificationSection,
   appearance: AppearanceSection,
-  integrations: IntegrationSection,
-  developer: DeveloperSection,
   billing: BillingSection,
-  compliance: ComplianceSection,
   recovery: RecoverySection,
   labs: LabsSection,
 };

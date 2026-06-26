@@ -82,7 +82,7 @@ function HeroSection({ userProfile }) {
       </div>
       <div className="absolute -top-32 -right-24 h-72 w-72 rounded-full bg-ambient-primary blur-3xl opacity-80 pointer-events-none" />
       <div className="absolute -bottom-20 -left-16 h-56 w-56 rounded-full bg-ambient-primary blur-3xl opacity-50 pointer-events-none" />
-      <div className="relative flex flex-col lg:flex-row lg:items-end lg:justify-between gap-10">
+      <div className="relative flex flex-col lg:flex-row lg:items-end lg:justify-start gap-0">
         <div className="max-w-xl">
           <div className={chip}>
             <span className="h-1.5 w-1.5 rounded-full bg-primary shadow-glow" />
@@ -155,6 +155,24 @@ function StorageDonut({ used, limit }) {
 
   return (
     <div className="relative flex flex-col items-center gap-5 p-5 min-w-[210px]">
+      {/* BG design */}
+      <div className="absolute inset-0 z-0 opacity-13 dark:opacity-13 pointer-events-none overflow-hidden rounded-[32px]">
+        <svg className="w-full h-full" viewBox="0 0 210 320" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">
+          <defs>
+            <pattern id="donut-grid" width="32" height="32" patternUnits="userSpaceOnUse">
+              <path d="M 32 0 L 0 0 0 32" fill="none" stroke="currentColor" strokeWidth="0.4" />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#donut-grid)" />
+          <circle cx="105" cy="95" r="80" stroke="var(--primary)" strokeWidth="0.5" strokeDasharray="3 6" />
+          <circle cx="105" cy="95" r="60" stroke="var(--primary)" strokeWidth="0.3" strokeDasharray="2 8" />
+          <circle cx="105" cy="95" r="100" stroke="var(--primary)" strokeWidth="0.5" opacity="0.4" />
+          <path d="M10 260 L200 180" stroke="var(--primary)" strokeWidth="1" strokeLinecap="round" opacity="0.5" />
+          <path d="M10 280 L200 200" stroke="var(--accent)" strokeWidth="0.75" strokeLinecap="round" strokeDasharray="3 5" opacity="0.4" />
+          <circle cx="200" cy="180" r="3" fill="var(--primary)" opacity="0.5" />
+          <circle cx="10" cy="260" r="2" fill="var(--accent)" opacity="0.4" />
+        </svg>
+      </div>
       {/* Ambient glow */}
       <div className="absolute -inset-6 rounded-[32px] bg-gradient-to-br from-primary/[0.03] to-transparent blur-3xl pointer-events-none" />
 

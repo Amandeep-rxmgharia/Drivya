@@ -24,7 +24,6 @@ export default function SharingSection() {
   const [defaultExpiry, setDefaultExpiry] = useState("never");
   const [passwordDefault, setPasswordDefault] = useState("suggest");
   const [downloadPermission, setDownloadPermission] = useState("allow");
-  const [watermark, setWatermark] = useState("none");
   const [shareNotify, setShareNotify] = useState("first-view");
   const [publicProfile, setPublicProfile] = useState("name");
 
@@ -120,75 +119,6 @@ export default function SharingSection() {
               { value: "allow", label: "Allow downloads" },
               { value: "disable", label: "View-only (no download)" },
               { value: "ask", label: "Ask per share" },
-            ]}
-          />
-        </SettingRow>
-      </SettingSection>
-
-      {/* Watermark */}
-      <SettingSection
-        id="watermark"
-        icon={Droplet}
-        title="Watermark Settings"
-        description="Add watermarks to shared file previews."
-      >
-        <SettingRow
-          label="Watermark Type"
-          description="Choose how to watermark shared content."
-          vertical
-        >
-          <SettingRadioGroup
-            value={watermark}
-            onChange={setWatermark}
-            options={[
-              {
-                value: "none",
-                label: "No Watermark",
-                description: "Content shared without any watermark overlay.",
-              },
-              {
-                value: "email",
-                label: "Viewer's Email",
-                description:
-                  "Semi-transparent overlay showing the viewer's email address.",
-              },
-              {
-                value: "custom",
-                label: "Custom Text",
-                description:
-                  "Custom watermark text with variables like {date}, {viewer}.",
-              },
-              {
-                value: "forensic",
-                label: "Invisible Forensic",
-                description:
-                  "Embedded tracking metadata invisible to the human eye.",
-              },
-            ]}
-          />
-        </SettingRow>
-      </SettingSection>
-
-      {/* Notifications */}
-      <SettingSection
-        id="sharing-notifications"
-        icon={Bell}
-        title="Sharing Notifications"
-        description="How you're notified about shared file activity."
-      >
-        <SettingRow
-          label="View Notifications"
-          description="When to notify about views of your shared files."
-        >
-          <SettingSelect
-            value={shareNotify}
-            onChange={setShareNotify}
-            options={[
-              { value: "every", label: "Every view" },
-              { value: "first-view", label: "First view only" },
-              { value: "download", label: "Downloads only" },
-              { value: "digest", label: "Daily digest" },
-              { value: "disabled", label: "Disabled" },
             ]}
           />
         </SettingRow>

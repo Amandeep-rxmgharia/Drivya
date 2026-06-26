@@ -793,7 +793,6 @@ function Topbar({
                   {[
                     { label: "Account & Profile", icon: User, path: "/dashboard/settings/account" },
                     { label: "Storage details", icon: HardDrive, path: "/dashboard/settings/storage" },
-                    { label: "Sync & Devices", icon: Laptop, path: "/dashboard/settings/sync" },
                     { label: "Security & 2FA", icon: ShieldCheck, path: "/dashboard/settings/security" },
                   ].map((item) => (
                     <button

@@ -128,12 +128,7 @@ export default function SecuritySection() {
                   value: "sms",
                   label: "SMS Code",
                   description: "Receive a verification code via text message.",
-                },
-                {
-                  value: "webauthn",
-                  label: "Hardware Security Key",
-                  description: "Use a FIDO2/WebAuthn key like YubiKey.",
-                },
+                }
               ]}
             />
           </SettingRow>
@@ -145,24 +140,6 @@ export default function SecuritySection() {
         >
           <button className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-secondary/40 px-4 text-xs font-semibold text-foreground hover:bg-secondary/60 transition-colors">
             View Backup Codes
-          </button>
-        </SettingRow>
-      </SettingSection>
-
-      {/* Passkeys */}
-      <SettingSection
-        id="passkeys"
-        icon={Fingerprint}
-        title="Passkeys"
-        description="Sign in with biometrics — fingerprint, Face ID, or Windows Hello."
-      >
-        <SettingRow
-          label="Registered Passkeys"
-          description="No passkeys registered yet."
-        >
-          <button className="inline-flex h-9 items-center gap-2 rounded-xl bg-gradient-primary px-4 text-xs font-semibold text-primary-foreground shadow-glow hover:opacity-90 transition-opacity">
-            <Fingerprint className="h-3.5 w-3.5" />
-            Add Passkey
           </button>
         </SettingRow>
       </SettingSection>
@@ -254,7 +231,7 @@ export default function SecuritySection() {
         title="Login Settings"
         description="Configure session behavior and alerts."
       >
-        <SettingRow
+        {/* <SettingRow
           label="Session Timeout"
           description="Auto-lock the dashboard after inactivity."
         >
@@ -270,7 +247,7 @@ export default function SecuritySection() {
               { value: "never", label: "Never" },
             ]}
           />
-        </SettingRow>
+        </SettingRow> */}
 
         <SettingRow
           label="Login Alerts"
@@ -281,7 +258,7 @@ export default function SecuritySection() {
       </SettingSection>
 
       {/* Encryption */}
-      <SettingSection
+      {/* <SettingSection
         id="encryption"
         icon={Lock}
         title="Encryption"
@@ -321,7 +298,7 @@ export default function SecuritySection() {
             </SettingBanner>
           </div>
         )}
-      </SettingSection>
+      </SettingSection> */}
     </div>
   );
 }

@@ -31,7 +31,6 @@ export default function AccountSection({ userProfile, setUserProfile }) {
   // Local state fallback in case of direct usage without parent context
   const [localProfile, setLocalProfile] = useState({
     displayName: "Amelia Moreau",
-    username: "amelia-moreau",
     email: "amelia@drivya.com",
     phone: "+1 (555) 012-3456",
     language: "en",
@@ -96,21 +95,6 @@ export default function AccountSection({ userProfile, setUserProfile }) {
           />
         </SettingRow>
 
-        {/* Username */}
-        <SettingRow
-          label="Username"
-          description="Used for @mentions and your profile URL."
-        >
-          <SettingInput
-            value={profile.username}
-            onChange={(val) => updateProfile("username", val)}
-            placeholder="username"
-            icon={AtSign}
-            maxLength={30}
-            className="w-56"
-          />
-        </SettingRow>
-
         {/* Email */}
         <SettingRow
           label="Email Address"
@@ -144,78 +128,6 @@ export default function AccountSection({ userProfile, setUserProfile }) {
             className="w-56"
           />
         </SettingRow>
-      </SettingSection>
-
-      {/* Localization */}
-      <SettingSection
-        id="localization"
-        icon={Globe}
-        title="Language & Region"
-        description="Localization preferences for dates, numbers, and UI language."
-      >
-        <SettingRow
-          label="Language"
-          description="Controls the language of the Drivya interface."
-        >
-          <SettingSelect
-            value={profile.language}
-            onChange={(val) => updateProfile("language", val)}
-            options={[
-              { value: "en", label: "English (US)" },
-              { value: "en-gb", label: "English (UK)" },
-              { value: "es", label: "Español" },
-              { value: "fr", label: "Français" },
-              { value: "de", label: "Deutsch" },
-              { value: "ja", label: "日本語" },
-              { value: "ko", label: "한국어" },
-              { value: "zh", label: "中文" },
-              { value: "pt", label: "Português" },
-              { value: "hi", label: "हिन्दी" },
-              { value: "ar", label: "العربية" },
-            ]}
-          />
-        </SettingRow>
-
-        <SettingRow
-          label="Date Format"
-          description="How dates appear throughout the app."
-        >
-          <SettingSelect
-            value={dateFormat}
-            onChange={setDateFormat}
-            options={[
-              { value: "MM/DD/YYYY", label: "MM/DD/YYYY" },
-              { value: "DD/MM/YYYY", label: "DD/MM/YYYY" },
-              { value: "YYYY-MM-DD", label: "YYYY-MM-DD" },
-            ]}
-          />
-        </SettingRow>
-
-        <SettingRow
-          label="Auto-Detect Time Zone"
-          description="Automatically set your time zone from your browser."
-        >
-          <SettingToggle checked={autoTimezone} onChange={setAutoTimezone} />
-        </SettingRow>
-
-        {!autoTimezone && (
-          <SettingRow label="Time Zone">
-            <SettingSelect
-              value={profile.timezone}
-              onChange={(val) => updateProfile("timezone", val)}
-              options={[
-                { value: "America/New_York", label: "Eastern (UTC-5)" },
-                { value: "America/Chicago", label: "Central (UTC-6)" },
-                { value: "America/Denver", label: "Mountain (UTC-7)" },
-                { value: "America/Los_Angeles", label: "Pacific (UTC-8)" },
-                { value: "Europe/London", label: "London (UTC+0)" },
-                { value: "Europe/Berlin", label: "Berlin (UTC+1)" },
-                { value: "Asia/Tokyo", label: "Tokyo (UTC+9)" },
-                { value: "Asia/Kolkata", label: "India (UTC+5:30)" },
-              ]}
-            />
-          </SettingRow>
-        )}
       </SettingSection>
 
       {/* Account Type */}
