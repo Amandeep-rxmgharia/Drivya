@@ -1693,7 +1693,7 @@ function LinkDetailModal({
                               onSubmit={handleSavePassword}
                               className="overflow-hidden space-y-2 border-t border-border/30"
                             >
-                              <div className="flex items-center justify-between pl-1">
+                              <div className="flex items-center justify-between mt-3 pl-1">
                                 <div className="text-[9px] font-bold text-muted-foreground/80 flex items-center gap-1.5 uppercase tracking-wider">
                                   <KeyRound className="h-3.5 w-3.5 text-amber-500 animate-pulse" />
                                   {hasPassword
@@ -1702,7 +1702,7 @@ function LinkDetailModal({
                                 </div>
                                 {hasPassword && (
                                   <span className="text-[9px] font-bold text-amber-500/80 uppercase tracking-tight bg-amber-500/5 px-2 py-0.5 rounded-lg border border-amber-500/10">
-                                    Password is set
+                                    Already Set!
                                   </span>
                                 )}
                               </div>

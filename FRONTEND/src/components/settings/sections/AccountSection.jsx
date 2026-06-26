@@ -70,7 +70,7 @@ export default function AccountSection({ userProfile, setUserProfile }) {
               {getInitials(profile.displayName)}
             </div>
             <div className="flex flex-col gap-1">
-              <button className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-secondary/60 transition-colors">
+              <button className="inline-flex w-fit cursor-pointer items-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-secondary/60 transition-colors">
                 <Camera className="h-3 w-3" />
                 Upload
               </button>
@@ -258,8 +258,7 @@ export default function AccountSection({ userProfile, setUserProfile }) {
               Delete Account
             </p>
             <p className="text-[12px] text-muted-foreground mt-0.5">
-              Permanently delete your account and all files. 30-day grace
-              period.
+              Permanently delete your account and all files.
             </p>
           </div>
           <button className="inline-flex h-9 items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-4 text-xs font-semibold text-destructive hover:bg-destructive/20 transition-colors shrink-0">

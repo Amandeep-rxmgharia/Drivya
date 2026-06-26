@@ -1,11 +1,11 @@
 import { useState, useMemo, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { useOutletContext } from "react-router-dom";
+import { motion } from "motion/react";
 import {
   Box,
   Cloud,
   Command,
 } from "lucide-react";
-import { easeSmooth } from "@/lib/motion-presets";
 import { RecentFilesView } from "@/components/recent/RecentFilesView";
 import { listActivities, getActivityStats } from "../../api/activities.js";
 import { cn } from "@/lib/utils";
@@ -13,83 +13,73 @@ import {
   card,
   subtleHover,
   chip,
-  iconBtn,
-  primaryBtn,
-  ghostBtn,
   Kbd,
 } from "@/components/dashboard/dashboard-tokens";
 
 /* ───────────────────────── Hero ───────────────────────── */
 
-function HeroSection() {
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+function formatNumber(n) {
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + "M";
+  if (n >= 1000) return (n / 1000).toFixed(1) + "K";
+  return n;
+}
+
+function formatBytes(bytes) {
+  if (bytes == null) return "0 B";
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  return (bytes / (1024 * 1024 * 1024)).toFixed(1) + " GB";
+}
+
+function HeroSection({ userProfile }) {
+  const [stats, setStats] = useState(null);
+
+  useEffect(() => {
+    getActivityStats()
+      .then((res) => {
+        if (res?.stats) setStats(res.stats);
+      })
+      .catch(() => {});
+  }, []);
+
+  const displayName = userProfile?.displayName || userProfile?.name || "there";
+  const uploadCount = stats?.thisWeek ?? 0;
+  const changeText = stats?.weeklyData?.uploads?.change || "0%";
+  const storageUsed = userProfile?.storageUsed || 0;
+  const storageLimit = userProfile?.storageLimit || 1073741824;
+
   return (
     <section
       className={`${card} ${subtleHover} relative overflow-hidden p-6 md:p-10 animate-fade-in`}
     >
-      <div className="absolute inset-0 z-0 opacity-15 dark:opacity-20 pointer-events-none flex items-center justify-end">
+      <div className="absolute inset-0 z-0 opacity-13 dark:opacity-13 pointer-events-none flex items-center justify-end">
         <svg
           className="w-full h-full max-w-lg"
           viewBox="0 0 500 500"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
         >
-          {/* Background Grid */}
           <defs>
-            <pattern
-              id="grid"
-              width="40"
-              height="40"
-              patternUnits="userSpaceOnUse"
-            >
-              <path
-                d="M 40 0 L 0 0 0 40"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="0.5"
-              />
+            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="0.5" />
             </pattern>
           </defs>
           <rect width="100%" height="100%" fill="url(#grid)" />
-
-          {/* Logistic Lines Paths */}
-          <path
-            d="M50 100 H250 V280 H450"
-            stroke="var(--primary)"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-          <path
-            d="M100 200 H350 V380 H400"
-            stroke="var(--accent)"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeDasharray="4 4"
-          />
-          <path
-            d="M50 400 H200 V320 H450"
-            stroke="var(--primary)"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-          />
-
-          {/* Static nodes at path endpoints */}
-          <circle
-            cx="450"
-            cy="280"
-            r="4"
-            fill="var(--primary)"
-            className="drop-shadow-primary-glow"
-          />
-          <circle
-            cx="400"
-            cy="380"
-            r="4"
-            fill="var(--accent)"
-            className="drop-shadow-primary-glow"
-          />
+          <path d="M50 100 H250 V280 H450" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" />
+          <path d="M100 200 H350 V380 H400" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" strokeDasharray="4 4" />
+          <path d="M50 400 H200 V320 H450" stroke="var(--primary)" strokeWidth="1.5" strokeLinecap="round" />
+          <circle cx="450" cy="280" r="4" fill="var(--primary)" className="drop-shadow-primary-glow" />
+          <circle cx="400" cy="380" r="4" fill="var(--accent)" className="drop-shadow-primary-glow" />
         </svg>
       </div>
-      {/* ambient glow — same language as landing page */}
       <div className="absolute -top-32 -right-24 h-72 w-72 rounded-full bg-ambient-primary blur-3xl opacity-80 pointer-events-none" />
       <div className="absolute -bottom-20 -left-16 h-56 w-56 rounded-full bg-ambient-primary blur-3xl opacity-50 pointer-events-none" />
       <div className="relative flex flex-col lg:flex-row lg:items-end lg:justify-between gap-10">
@@ -99,24 +89,20 @@ function HeroSection() {
             All systems operational
           </div>
           <h1 className="mt-5 font-display text-4xl md:text-5xl font-semibold tracking-tight leading-[1.1] text-foreground">
-            Good morning, <span className="text-gradient">Amelia</span>.
+            {getGreeting()}, <span className="text-gradient">{displayName}</span>.
           </h1>
-          <p className="mt-3 text-muted-foreground leading-relaxed max-w-lg">
-            You uploaded{" "}
-            <span className="font-semibold text-foreground">42 files</span> this
-            week — 12% more than last week. Your vault is fully encrypted and
-            synced across 3 devices.
+          <p  className="mt-3 text-muted-foreground leading-relaxed max-w-lg">
+            {uploadCount > 0 ? (
+              <>You uploaded <span className="font-semibold text-foreground">{formatNumber(uploadCount)} {uploadCount === 1 ? "file" : "files"}</span> this week — <span className="font-semibold text-foreground">{changeText}</span> vs last week.</>
+            ) : (
+              <>Your vault is fully encrypted and synced across your devices.</>
+            )}
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
-            {/* Google Drive Button */}
             <button className="group relative inline-flex h-11 items-center gap-3 overflow-hidden rounded-xl border border-primary/20 bg-primary/5 px-4 text-sm font-semibold text-foreground shadow-sm backdrop-blur-md transition-all duration-300 hover:scale-104 cursor-pointer active:scale-[0.98]">
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/20 to-transparent -translate-x-full " />
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/20 to-transparent -translate-x-full" />
               <div className="flex h-6 w-6 items-center justify-center rounded-[7px] bg-background shadow-sm ring-1 ring-border/50 transition-all duration-300 group-hover:ring-primary/40 group-hover:shadow-[0_0_12px_-3px_var(--color-primary)]">
-                <svg
-                  className="h-3.5 w-3.5 text-primary"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                >
+                <svg className="h-3.5 w-3.5 text-primary" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M7.71 3.5L1.15 15l3.43 6 6.55-11.5M9.73 3.5h13.12l-3.43 6H6.28M15.66 15H2.55l3.43 6h13.11" />
                 </svg>
               </div>
@@ -125,7 +111,6 @@ function HeroSection() {
               </span>
             </button>
 
-            {/* Dropbox Button */}
             <button className="group relative inline-flex h-11 items-center gap-3 overflow-hidden rounded-xl border border-border/60 bg-secondary/30 px-4 text-sm font-medium text-foreground/90 shadow-sm backdrop-blur-md transition-all duration-300 hover:scale-104 cursor-pointer active:scale-[0.98]">
               <div className="flex h-6 w-6 items-center justify-center rounded-[7px] bg-background shadow-sm ring-1 ring-border/50 transition-all duration-300 group-hover:ring-[#0061FF]/40 group-hover:shadow-[0_0_12px_-3px_#0061FF]">
                 <Box className="h-3.5 w-3.5 text-muted-foreground group-hover:text-[#0061FF] transition-colors" />
@@ -133,7 +118,6 @@ function HeroSection() {
               <span className="relative z-10">Connect Dropbox</span>
             </button>
 
-            {/* OneDrive Button */}
             <button className="group relative inline-flex h-11 items-center gap-3 overflow-hidden rounded-xl border border-border/60 bg-secondary/30 px-4 text-sm font-medium text-foreground/90 shadow-sm backdrop-blur-md transition-all duration-300 cursor-pointer hover:scale-104 active:scale-[0.98]">
               <div className="flex h-6 w-6 items-center justify-center rounded-[7px] bg-background shadow-sm ring-1 ring-border/50 transition-all duration-300 group-hover:ring-[#0078D4]/40 group-hover:shadow-[0_0_12px_-3px_#0078D4]">
                 <Cloud className="h-3.5 w-3.5 text-muted-foreground group-hover:text-[#0078D4] transition-colors" />
@@ -144,80 +128,109 @@ function HeroSection() {
         </div>
 
         <div>
-          <StorageDonut />
+          <StorageDonut used={storageUsed} limit={storageLimit} />
         </div>
       </div>
     </section>
   );
 }
 
-function StorageDonut() {
-  const used = 62;
-  const r = 56;
+function StorageDonut({ used, limit }) {
+  const usagePct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+  const usedDisplay = formatBytes(used);
+  const limitDisplay = formatBytes(limit);
+  const r = 38;
   const c = 2 * Math.PI * r;
+
+  const isHigh = usagePct >= 80;
+  const isMedium = usagePct >= 50 && usagePct < 80;
+  const statusLabel = isHigh ? "Critical" : isMedium ? "Elevated" : "Healthy";
+  const arcClass = isHigh ? "stroke-destructive" : isMedium ? "stroke-accent" : "stroke-primary";
+  const chipClass = isHigh
+    ? "border-destructive/20 bg-destructive/10 text-destructive"
+    : isMedium
+    ? "border-accent/20 bg-accent/10 text-accent"
+    : "border-primary/20 bg-primary/10 text-primary";
+  const dotClass = isHigh ? "bg-destructive" : isMedium ? "bg-accent" : "bg-primary";
+
   return (
-    <div className="flex items-center gap-5 rounded-2xl border border-border/60 bg-secondary/30 p-5">
-      <div className="relative h-36 w-36">
-        <svg viewBox="0 0 140 140" className="h-full w-full -rotate-90">
-          <circle
-            cx="70"
-            cy="70"
-            r={r}
-            stroke="var(--color-border)"
-            strokeWidth="12"
-            fill="none"
-          />
+    <div className="relative flex flex-col items-center gap-5 p-5 min-w-[210px]">
+      {/* Ambient glow */}
+      <div className="absolute -inset-6 rounded-[32px] bg-gradient-to-br from-primary/[0.03] to-transparent blur-3xl pointer-events-none" />
+
+      {/* Donut */}
+      <div className="relative">
+        <div className="absolute -inset-5 rounded-full bg-gradient-to-br from-primary/[0.04] via-transparent to-transparent blur-2xl pointer-events-none" />
+        <svg width="150" height="150" viewBox="0 0 100 100" className="-rotate-90">
+          <circle cx="50" cy="50" r={r} className="stroke-border/30" strokeWidth="8" fill="none" />
           <motion.circle
-            cx="70"
-            cy="70"
-            r={r}
-            stroke="url(#g-storage)"
-            strokeWidth="12"
+            cx="50" cy="50" r={r}
+            className={arcClass}
+            strokeWidth="8"
             strokeLinecap="round"
             fill="none"
             strokeDasharray={c}
             initial={{ strokeDashoffset: c }}
-            animate={{ strokeDashoffset: c - (c * used) / 100 }}
-            transition={{ duration: 0.8, ease: easeSmooth }}
+            animate={{ strokeDashoffset: c - (c * usagePct) / 100 }}
+            transition={{ duration: 1.2, ease: "easeOut", delay: 0.3 }}
           />
-          <defs>
-            <linearGradient id="g-storage" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="var(--color-primary)" />
-              <stop offset="100%" stopColor="var(--color-primary-glow)" />
-            </linearGradient>
-          </defs>
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <div className="font-display text-2xl font-semibold tracking-tight text-foreground">
-            156
-            <span className="text-muted-foreground text-sm font-medium">
-              {" "}
-              GB
-            </span>
-          </div>
-          <div className="text-[11px] font-medium text-muted-foreground">
-            of 250 GB
-          </div>
+          <span
+            className="font-display text-[28px] font-bold tracking-tight text-foreground leading-none"
+          >
+            {usagePct}
+            <span className="text-[10px] font-medium text-muted-foreground ml-0.5">%</span>
+          </span>
+          <motion.span
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.4, delay: 0.7 }}
+            className="text-[10px] font-medium text-muted-foreground/50 mt-1"
+          >
+            used
+          </motion.span>
         </div>
       </div>
-      <div className="space-y-2 min-w-[140px]">
-        {[
-          { l: "Images", v: 64 },
-          { l: "Videos", v: 48 },
-          { l: "Documents", v: 32 },
-          { l: "Trash", v: 12 },
-        ].map((t, i) => (
-          <div key={t.l} className="flex items-center gap-2 text-xs">
-            <span
-              className="h-2 w-2 rounded-full bg-gradient-primary"
-              style={{ opacity: 1 - i * 0.18 }}
-            />
-            <span className="text-muted-foreground flex-1">{t.l}</span>
-            <span className="font-semibold text-foreground tabular-nums">
-              {t.v} GB
-            </span>
-          </div>
-        ))}
+
+      {/* Status chip */}
+      <motion.div
+        initial={{ opacity: 0, y: 4 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.8 }}
+        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 ${chipClass}`}
+      >
+        <span className={`h-1.5 w-1.5 rounded-full ${dotClass}`} />
+        <span className="text-[10px] font-semibold tracking-wider uppercase">{statusLabel}</span>
+      </motion.div>
+
+      {/* Capacity bar */}
+      <div className="w-full space-y-2">
+        <div className="flex items-center justify-between text-[11px]">
+          <span className="text-muted-foreground/60">{usedDisplay} used</span>
+          <span className="text-muted-foreground/40">{limitDisplay} total</span>
+        </div>
+        <div className="h-1.5 w-full  rounded-full bg-border/30 overflow-hidden">
+          <motion.div
+            className={`h-full rounded-full ${arcClass}`}
+            initial={{ width: 0 }}
+            animate={{ width: `${usagePct}90%` }}
+            transition={{ duration: 1, ease: "easeOut", delay: 0.6 }}
+          />
+        </div>
+        {isHigh && (
+          <button className="mt-2 w-full flex items-center justify-center gap-1.5 rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-1.5 text-[10px] font-semibold text-destructive cursor-pointer hover:bg-destructive/15 transition-colors">
+            <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 6h18" /><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" /><path d="M19 6v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+            </svg>
+            Free up space
+          </button>
+        )}
+        {!isHigh && !isMedium && (
+          <p className="mt-1.5 text-[10px] text-center text-muted-foreground/40">
+            Plenty of space remaining
+          </p>
+        )}
       </div>
     </div>
   );
@@ -229,22 +242,22 @@ const WEEKLY_DATA = {
   uploads: {
     label: "Uploads",
     title: "Weekly Uploads",
-    change: "↑ 12%",
-    rawValues: [5, 8, 4, 9, 6, 7, 3],
+    change: null,
+    rawValues: [0, 0, 0, 0, 0, 0, 0],
     suffix: "uploads",
   },
   opened: {
     label: "Opened",
     title: "Weekly Opens",
     change: "↑ 8%",
-    rawValues: [15, 22, 12, 28, 18, 10, 13],
+    rawValues: [0, 0, 0, 0, 0, 0, 0],
     suffix: "files",
   },
   downloads: {
     label: "Downloads",
     title: "Weekly Downloads",
     change: "↓ 4%",
-    rawValues: [2, 4, 1, 5, 3, 3, 0],
+    rawValues: [0, 0, 0, 0, 0, 0, 0],
     suffix: "files",
   },
 };
@@ -607,9 +620,10 @@ function AnalyticsCard() {
 /* ───────────────────────── Home page ───────────────────────── */
 
 export default function Home() {
+  const { userProfile } = useOutletContext?.() || {};
   return (
     <>
-      <HeroSection />
+      <HeroSection userProfile={userProfile} />
 
       <div className="lg:col-span-2 space-y-6">
         <AnalyticsCard />
