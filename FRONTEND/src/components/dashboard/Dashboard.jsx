@@ -38,6 +38,15 @@ import { chip, iconBtn, primaryBtn, Kbd } from "./dashboard-tokens.jsx";
 import { FloatingActionButton } from "./FloatingActionButton.jsx";
 import { AiAssistantPanel } from "./AiAssistantPanel.jsx";
 import { getCurrentUser } from "../../../api/auth.js";
+import {
+  listNotifications,
+  getUnreadCount,
+  markAsRead as apiMarkAsRead,
+  markAllAsRead as apiMarkAllAsRead,
+  deleteNotification as apiDeleteNotification,
+  clearNotifications as apiClearNotifications,
+  NOTIFICATION_STREAM_BASE,
+} from "../../../api/notifications.js";
 
 /* ───────────────────────── Sidebar ───────────────────────── */
 
@@ -297,6 +306,21 @@ const NOTIFICATION_TYPES = {
   },
 };
 
+const normalizeNotification = (n) => ({
+  id: n._id || n.id,
+  _id: n._id || n.id,
+  title: n.title,
+  description: n.description,
+  type: n.type,
+  timestamp: n.createdAt || n.timestamp,
+  read: n.read,
+  actionLabel: n.actionLabel,
+  actionPath: n.actionPath,
+  metadata: n.metadata,
+});
+
+const normalizeNotifications = (items) => items.map(normalizeNotification);
+
 const formatTimeAgo = (isoString) => {
   if (!isoString) return "";
   const date = new Date(isoString);
@@ -316,48 +340,7 @@ const formatTimeAgo = (isoString) => {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 };
 
-const MOCK_NOTIFICATIONS = [
-  {
-    id: "1",
-    title: "Suspicious Login Alert",
-    description: "New login detected from Safari on macOS (San Francisco, CA).",
-    type: "security",
-    timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-    read: false,
-    actionLabel: "Review activity",
-    actionPath: "/dashboard/settings/security",
-  },
-  {
-    id: "2",
-    title: "Storage Limit Warning",
-    description: "Your storage is at 62% of capacity. Clean up files or upgrade to get more space.",
-    type: "storage",
-    timestamp: new Date(Date.now() - 3.5 * 60 * 60 * 1000).toISOString(),
-    read: false,
-    actionLabel: "Manage storage",
-    actionPath: "/dashboard/settings/storage",
-  },
-  {
-    id: "3",
-    title: "Folder Shared",
-    description: "Sarah Jenkins shared the folder 'Q3 Presentation Assets' with you.",
-    type: "sharing",
-    timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-    read: true,
-    actionLabel: "View files",
-    actionPath: "/dashboard/shared",
-  },
-  {
-    id: "4",
-    title: "Scheduled Maintenance",
-    description: "Drivya will undergo system maintenance on June 8 at 02:00 UTC (15 min expected downtime).",
-    type: "system",
-    timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    read: true,
-    actionLabel: "Details",
-    actionPath: "/dashboard/settings/notifications",
-  },
-];
+
 
 const getInitials = (name) => {
   if (!name) return "AM";
@@ -379,6 +362,7 @@ function Topbar({
   deleteNotification,
   markAllRead,
   clearAllNotifications,
+  onBellToggle,
 }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
@@ -486,7 +470,11 @@ function Topbar({
         {/* Bell Icon & Dropdown */}
         <div className="relative flex items-center justify-center" ref={bellDropdownRef}>
           <button
-            onClick={() => setBellOpen((o) => !o)}
+            onClick={() => {
+              const next = !bellOpen;
+              setBellOpen(next);
+              if (next && onBellToggle) onBellToggle();
+            }}
             className={`${iconBtn} relative ${bellOpen ? "bg-secondary" : ""}`}
             aria-label="Notifications"
           >
@@ -860,42 +848,96 @@ export function DashboardLayout() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const [notifications, setNotifications] = useState(() => {
-    const saved = localStorage.getItem("drivya-notifications");
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        // ignore
-      }
-    }
-    return MOCK_NOTIFICATIONS;
-  });
-
+  const [notifications, setNotifications] = useState([]);
   const [toasts, setToasts] = useState([]);
 
-  useEffect(() => {
-    localStorage.setItem("drivya-notifications", JSON.stringify(notifications));
-  }, [notifications]);
-
-  const addNotification = (notif) => {
-    const newNotif = {
-      id: crypto.randomUUID(),
-      timestamp: new Date().toISOString(),
-      read: false,
-      ...notif,
-    };
-    setNotifications((prev) => [newNotif, ...prev]);
-
-    // Add visual toast
-    const toastId = crypto.randomUUID();
-    setToasts((prev) => [...prev, { id: toastId, ...newNotif }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== toastId));
-    }, 4000);
+  const fetchNotifications = async () => {
+    try {
+      const data = await listNotifications({ limit: 50 });
+      return normalizeNotifications(data.items);
+    } catch (err) {
+      console.error("Failed to fetch notifications:", err);
+      return null;
+    }
   };
 
+  // ─── Initial fetch + SSE real-time stream ─────────────────
+  useEffect(() => {
+    let mounted = true;
+
+    fetchNotifications().then((items) => {
+      if (mounted && items) setNotifications(items);
+    });
+
+    let eventSource = null;
+    let pollInterval = null;
+
+    function connectSSE() {
+      try {
+        const es = new EventSource(NOTIFICATION_STREAM_BASE, { withCredentials: true });
+
+        es.onopen = () => {
+          if (pollInterval) {
+            clearInterval(pollInterval);
+            pollInterval = null;
+          }
+        };
+
+        es.onmessage = (event) => {
+          if (!mounted) return;
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === "notification") {
+              const n = normalizeNotification(data.notification);
+              setNotifications((prev) => {
+                if (prev.some((x) => x.id === n.id)) return prev;
+                return [n, ...prev];
+              });
+
+              const toastId = crypto.randomUUID();
+              setToasts((prev) => [...prev, { id: toastId, ...n }]);
+              setTimeout(() => {
+                setToasts((prev) => prev.filter((t) => t.id !== toastId));
+              }, 4000);
+            }
+          } catch (e) {}
+        };
+
+        es.onerror = () => {
+          es.close();
+          if (mounted && !pollInterval) {
+            pollInterval = setInterval(() => {
+              fetchNotifications().then((items) => {
+                if (mounted && items) setNotifications(items);
+              });
+            }, 15000);
+          }
+        };
+
+        eventSource = es;
+      } catch (e) {
+        if (mounted && !pollInterval) {
+          pollInterval = setInterval(() => {
+            fetchNotifications().then((items) => {
+              if (mounted && items) setNotifications(items);
+            });
+          }, 15000);
+        }
+      }
+    }
+
+    connectSSE();
+
+    return () => {
+      mounted = false;
+      if (eventSource) eventSource.close();
+      if (pollInterval) clearInterval(pollInterval);
+    };
+  }, []);
+
+  // ─── Handlers that call the API ────────────────────────────
   const markAsRead = (id) => {
+    apiMarkAsRead(id).catch(() => {});
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n))
     );
@@ -903,35 +945,37 @@ export function DashboardLayout() {
 
   const toggleRead = (id, event) => {
     event?.stopPropagation();
+    const n = notifications.find((x) => x._id === id || x.id === id);
+    const currentlyRead = n?.read ?? false;
     setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: !n.read } : n))
+      prev.map((n) => {
+        const nid = n._id || n.id;
+        if (nid === id) return { ...n, read: !currentlyRead };
+        return n;
+      })
     );
+    if (currentlyRead) {
+      apiMarkAsRead(id).catch(() => {});
+    }
   };
 
   const deleteNotification = (id, event) => {
     event?.stopPropagation();
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    setNotifications((prev) =>
+      prev.filter((n) => (n._id || n.id) !== id)
+    );
+    apiDeleteNotification(id).catch(() => {});
   };
 
   const markAllRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    apiMarkAllAsRead().catch(() => {});
   };
 
   const clearAllNotifications = () => {
     setNotifications([]);
+    apiClearNotifications().catch(() => {});
   };
-
-  useEffect(() => {
-    const handleAddNotification = (e) => {
-      if (e.detail) {
-        addNotification(e.detail);
-      }
-    };
-    window.addEventListener("add-drivya-notification", handleAddNotification);
-    return () => {
-      window.removeEventListener("add-drivya-notification", handleAddNotification);
-    };
-  }, []);
 
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
@@ -1096,6 +1140,11 @@ export function DashboardLayout() {
             deleteNotification={deleteNotification}
             markAllRead={markAllRead}
             clearAllNotifications={clearAllNotifications}
+            onBellToggle={() => {
+              fetchNotifications().then((items) => {
+                if (items) setNotifications(items);
+              });
+            }}
           />
           <main
             className="dashboard-main min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 lg:p-8 space-y-6"

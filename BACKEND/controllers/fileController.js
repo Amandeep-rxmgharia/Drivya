@@ -16,6 +16,7 @@ import { generateStorageName } from "../middlewares/uploadMiddleware.js";
 import { recordActivity, deleteActivitiesForResources } from "../services/activityService.js";
 import { ACTIVITY_ACTIONS } from "../constants/activityConstants.js";
 import { generateDownloadToken, verifyDownloadToken } from "../config/tokenUtils.js";
+import { createNotification } from "../services/notificationService.js";
 
 // ─── Upload Files ────────────────────────────────────────────────
 export const uploadFiles = async (req, res, next) => {
@@ -124,6 +125,7 @@ export const uploadFiles = async (req, res, next) => {
     });
 
     // Record upload activity for each file (fire-and-forget)
+    let uploadCount = 0;
     for (const file of savedFiles) {
       recordActivity({
         userId,
@@ -137,6 +139,30 @@ export const uploadFiles = async (req, res, next) => {
         },
         parentDirId: directoryId,
       }).catch((err) => console.error("Activity[upload]:", err.message));
+      uploadCount++;
+    }
+
+    if (savedFiles.length > 0) {
+      const names = savedFiles.map((f) => f.originalName);
+      const title = names.length === 1 ? `Uploaded "${names[0]}"` : `${names.length} files uploaded`;
+      createNotification(userId, {
+        type: "upload",
+        title,
+        description: `Successfully uploaded to "${dir.name}".`,
+        actionPath: "/dashboard/drive",
+      }).catch((err) => console.error("Notification[upload]:", err));
+    }
+
+    const newStorageUsed = user.storageUsed + totalUploadSize;
+    const usagePct = (newStorageUsed / user.storageLimit) * 100;
+    if (usagePct >= 80 && usagePct < 95) {
+      createNotification(userId, {
+        type: "storage",
+        title: "Storage running low",
+        description: `You've used ${Math.round(usagePct)}% of your storage. Consider freeing up space.`,
+        actionLabel: "Manage storage",
+        actionPath: "/dashboard/settings/storage",
+      }).catch((err) => console.error("Notification[storage-warn]:", err));
     }
 
     return res.status(201).json({
@@ -396,6 +422,12 @@ export const renameFile = async (req, res, next) => {
       metadata: { oldName, newName: trimmedName },
     }).catch((err) => console.error("Activity[rename]:", err.message));
 
+    createNotification(userId, {
+      type: "system",
+      title: `Renamed "${oldName}"`,
+      description: `File renamed to "${trimmedName}".`,
+    }).catch((err) => console.error("Notification[rename]:", err));
+
     return res.json({ message: "File renamed successfully.", file });
   } catch (err) {
     next(err);
@@ -431,6 +463,14 @@ export const trashFile = async (req, res, next) => {
       },
       parentDirId: file.directoryId,
     }).catch((err) => console.error("Activity[trash]:", err.message));
+
+    createNotification(userId, {
+      type: "system",
+      title: `Moved "${file.originalName}" to trash`,
+      description: "The file can be restored from trash within 30 days.",
+      actionLabel: "View trash",
+      actionPath: "/dashboard/trash",
+    }).catch((err) => console.error("Notification[trash]:", err));
 
     return res.json({ message: "File moved to trash.", file });
   } catch (err) {
@@ -479,6 +519,12 @@ export const restoreFile = async (req, res, next) => {
       },
       parentDirId: targetDirId,
     }).catch((err) => console.error("Activity[restore]:", err.message));
+
+    createNotification(userId, {
+      type: "system",
+      title: `Restored "${file.originalName}"`,
+      description: "The file has been restored from trash.",
+    }).catch((err) => console.error("Notification[restore]:", err));
 
     return res.json({ message: "File restored.", file });
   } catch (err) {

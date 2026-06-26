@@ -6,6 +6,7 @@ import { deleteFiles } from "../services/storageService.js";
 import { recordActivity, deleteActivitiesForResources } from "../services/activityService.js";
 import { ACTIVITY_ACTIONS } from "../constants/activityConstants.js";
 import { RESOURCE_TYPES } from "../constants/shareConstants.js";
+import { createNotification } from "../services/notificationService.js";
 
 // ─── List Directory Contents ─────────────────────────────────────
 export const listDirectory = async (req, res, next) => {
@@ -120,7 +121,11 @@ export const createDirectory = async (req, res, next) => {
       depth: parentDir.depth + 1,
     });
 
-
+    createNotification(userId, {
+      type: "system",
+      title: `Created folder "${name}"`,
+      description: parentDir.name ? `Inside "${parentDir.name}".` : "In root directory.",
+    }).catch((err) => console.error("Notification[dir-create]:", err));
 
     return res.status(201).json({
       message: "Directory created.",
@@ -144,11 +149,11 @@ export const renameDirectory = async (req, res, next) => {
     const { id } = req.params;
     const { name } = req.body;
 
-    const dir = await Directory.findOneAndUpdate(
-      { _id: id, userId, parentDirId: { $ne: null } }, // cannot rename root
-      { name },
-      { new: true, runValidators: true },
-    );
+    const dir = await Directory.findOne({
+      _id: id,
+      userId,
+      parentDirId: { $ne: null },
+    });
 
     if (!dir) {
       return res.status(404).json({
@@ -156,7 +161,15 @@ export const renameDirectory = async (req, res, next) => {
       });
     }
 
+    const oldName = dir.name;
+    dir.name = name;
+    await dir.save();
 
+    createNotification(userId, {
+      type: "system",
+      title: `Renamed folder to "${name}"`,
+      description: `Folder renamed from "${oldName}".`,
+    }).catch((err) => console.error("Notification[dir-rename]:", err));
 
     return res.json({ message: "Directory renamed.", directory: dir });
   } catch (err) {
@@ -176,6 +189,7 @@ export const deleteDirectory = async (req, res, next) => {
   try {
     const userId = req.user.id;
     const { id } = req.params;
+    let dirName;
 
     await session.withTransaction(async () => {
       // Find the directory to delete
@@ -192,6 +206,8 @@ export const deleteDirectory = async (req, res, next) => {
         err.status = 404;
         throw err;
       }
+
+      dirName = dir.name;
 
       // Find all descendant directories using Array of Ancestors path match
       const descendantDirs = await Directory.find({
@@ -246,6 +262,14 @@ export const deleteDirectory = async (req, res, next) => {
       // Clean up activities only for the deleted directories
       await deleteActivitiesForResources(allDirIds, userId);
     });
+
+    createNotification(userId, {
+      type: "system",
+      title: `Deleted folder "${dirName}"`,
+      description: "The folder has been removed permanently and its files have been moved to trash.",
+      actionLabel: "View trash",
+      actionPath: "/dashboard/trash",
+    }).catch((err) => console.error("Notification[dir-delete]:", err));
 
     return res.json({ message: "Directory deleted." });
   } catch (err) {

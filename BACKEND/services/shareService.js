@@ -24,6 +24,7 @@ import {
   invalidateShareTokenCache,
 } from "./cacheService.js";
 import { notFound, badRequest, conflict, gone } from "../utils/errors.js";
+import { createNotification } from "./notificationService.js";
 import { parsePagination, paginatedResponse } from "../utils/pagination.js";
 
 const SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS, 10) || 12;
@@ -91,6 +92,16 @@ export async function createOrGetShare(ownerId, { resourceType, resourceId }) {
   });
 
   await invalidateOwnerShareCache(ownerId.toString());
+
+  if (share) {
+    createNotification(ownerId, {
+      type: "sharing",
+      title: "Share link created",
+      description: `Share link for "${resource.snapshot.name}" is ready.`,
+      actionLabel: "View share",
+      actionPath: "/dashboard/shared",
+    }).catch((err) => console.error("Notification error:", err));
+  }
 
   return { share: formatShareResponse(share.toObject()), created: true };
 }
@@ -361,7 +372,7 @@ export async function inviteCollaborator(ownerId, shareId, { email, role }) {
   if (!share) throw notFound("Share not found.");
 
   const normalizedEmail = email.trim().toLowerCase();
-  const owner = await User.findById(ownerId).select("email").lean();
+  const owner = await User.findById(ownerId).select("name email").lean();
 
   if (owner?.email === normalizedEmail) {
     throw badRequest("You cannot invite yourself.");
@@ -400,6 +411,16 @@ export async function inviteCollaborator(ownerId, shareId, { email, role }) {
   }
 
   await invalidateOwnerShareCache(ownerId.toString());
+
+  if (existingUser) {
+    createNotification(existingUser._id, {
+      type: "sharing",
+      title: `${share.resourceSnapshot?.name || "A file"} was shared with you`,
+      description: `${owner?.name || "Someone"} shared a file with you.`,
+      actionLabel: "View shared file",
+      actionPath: "/dashboard/shared",
+    }).catch((err) => console.error("Notification error:", err));
+  }
 
   return formatCollaboratorResponse(collaborator.toObject());
 }

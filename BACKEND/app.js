@@ -11,6 +11,7 @@ import shareRoutes from "./routes/shareRoutes.js";
 import publicShareRoutes from "./routes/publicShareRoutes.js";
 import activityRoutes from "./routes/activityRoutes.js";
 import starRoutes from "./routes/starRoutes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
 import { connectDb } from "./config/db.js";
 import { ensureStorageRoot } from "./services/storageService.js";
 
@@ -38,6 +39,7 @@ app.use(
       directives: {
         ...helmet.contentSecurityPolicy.getDefaultDirectives(),
         "frame-ancestors": ["'self'", ...allowedOrigins],
+        "connect-src": ["'self'", "http://localhost:3000", "http://localhost:5173", "http://localhost:5174"],
       },
     },
     frameguard: false,
@@ -81,6 +83,7 @@ app.use("/api/shares", shareRoutes);
 app.use("/public/shares", publicShareRoutes);
 app.use("/api/activities", activityRoutes);
 app.use("/api/starred", starRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 // ─── Global Error Handler ────────────────────────────────────
 app.use((err, req, res, next) => {

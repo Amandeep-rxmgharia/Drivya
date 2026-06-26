@@ -3,7 +3,7 @@ import axios from "axios";
 // ─── Axios Instance ──────────────────────────────────────────
 const api = axios.create({
   baseURL: "http://localhost:3000",
-  withCredentials: true, // send/receive httpOnly cookies
+  withCredentials: true,
   timeout: 10000,
   headers: {
     "Content-Type": "application/json",

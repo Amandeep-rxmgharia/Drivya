@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Bell,
   Mail,
@@ -10,6 +10,10 @@ import {
 } from "lucide-react";
 import { SettingSection, SettingRow } from "../setting-primitives";
 import { SettingToggle, SettingSelect } from "../setting-controls";
+import {
+  getNotificationPreferences,
+  updateNotificationPreferences,
+} from "../../../../api/notifications.js";
 
 const CATEGORIES = [
   {
@@ -64,6 +68,22 @@ const CATEGORIES = [
   },
 ];
 
+const STORAGE_KEY = "drivya-notification-prefs";
+
+function loadLocalPrefs() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) return JSON.parse(saved);
+  } catch {}
+  return null;
+}
+
+function saveLocalPrefs(prefs) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+  } catch {}
+}
+
 export default function NotificationSection() {
   const [inApp, setInApp] = useState(true);
   const [emailEnabled, setEmailEnabled] = useState(true);
@@ -75,6 +95,8 @@ export default function NotificationSection() {
   const [quietEnd, setQuietEnd] = useState("07:00");
 
   const [categoryPrefs, setCategoryPrefs] = useState(() => {
+    const local = loadLocalPrefs();
+    if (local?.categoryPrefs) return local.categoryPrefs;
     const prefs = {};
     CATEGORIES.forEach((cat) => {
       prefs[cat.id] = {
@@ -85,6 +107,26 @@ export default function NotificationSection() {
     });
     return prefs;
   });
+
+  useEffect(() => {
+    getNotificationPreferences().then((prefs) => {
+      if (prefs) {
+        const local = loadLocalPrefs();
+        const merged = { ...local, ...prefs };
+        if (merged.categoryPrefs) setCategoryPrefs(merged.categoryPrefs);
+        if (merged.emailEnabled !== undefined) setEmailEnabled(merged.emailEnabled);
+        if (merged.pushEnabled !== undefined) setPushEnabled(merged.pushEnabled);
+        if (merged.digestFrequency) setDigestFrequency(merged.digestFrequency);
+        if (merged.quietHours !== undefined) setQuietHours(merged.quietHours);
+      }
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const prefs = { categoryPrefs, emailEnabled, pushEnabled, digestFrequency, quietHours, quietStart, quietEnd };
+    saveLocalPrefs(prefs);
+    updateNotificationPreferences(prefs).catch(() => {});
+  }, [categoryPrefs, emailEnabled, pushEnabled, digestFrequency, quietHours, quietStart, quietEnd]);
 
   const toggleCategoryChannel = (catId, channel) => {
     setCategoryPrefs((prev) => ({

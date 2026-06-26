@@ -8,6 +8,7 @@ import {
   clearTokenCookies,
   verifyRefreshToken,
 } from "../config/tokenUtils.js";
+import { createNotification } from "../services/notificationService.js";
 
 // ─── Register ────────────────────────────────────────────────
 export const register = async (req, res, next) => {
@@ -103,6 +104,14 @@ export const login = async (req, res, next) => {
     const accessToken = generateAccessToken(user._id.toString());
     const refreshToken = generateRefreshToken(user._id.toString());
     setTokenCookies(res, accessToken, refreshToken);
+
+    createNotification(user._id, {
+      type: "security",
+      title: "New sign-in detected",
+      description: `Account accessed from ${req.headers["user-agent"]?.slice(0, 60) || "unknown device"}.`,
+      actionLabel: "Review activity",
+      actionPath: "/dashboard/settings/security",
+    }).catch((err) => console.error("Notification[login]:", err));
 
     return res.json({
       message: "Login successful!",
