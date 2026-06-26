@@ -32,6 +32,26 @@ const userSchema = new Schema(
       unique: true,
       trim: true,
     },
+    phone: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    language: {
+      type: String,
+      trim: true,
+      default: "en",
+    },
+    timezone: {
+      type: String,
+      trim: true,
+      default: "auto",
+    },
+    avatarUrl: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     password: {
       type: String,
       required: true,

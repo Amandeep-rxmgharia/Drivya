@@ -48,6 +48,8 @@ import {
   NOTIFICATION_STREAM_BASE,
 } from "../../../api/notifications.js";
 
+const API_BASE = "http://localhost:3000";
+
 /* ───────────────────────── Sidebar ───────────────────────── */
 
 const navMain = [
@@ -410,6 +412,12 @@ function Topbar({
 
   const initials = getInitials(userProfile?.displayName);
   const currentStatus = userProfile?.status || "active";
+  const avatarUrl = userProfile?.avatarUrl;
+  const fullAvatarUrl = avatarUrl
+    ? avatarUrl.startsWith("http")
+      ? avatarUrl
+      : `${API_BASE}${avatarUrl}`
+    : null;
 
   return (
     <motion.header
@@ -679,7 +687,21 @@ function Topbar({
             className="flex items-center gap-2 rounded-xl pl-1 pr-2 h-10 hover:bg-secondary/50 transition-colors relative"
           >
             <div className="relative">
-              <div className="h-8 w-8 rounded-lg bg-gradient-primary ring-1 ring-border flex items-center justify-center text-xs font-semibold text-primary-foreground shadow-glow">
+              {fullAvatarUrl ? (
+                <img
+                  src={fullAvatarUrl}
+                  alt={userProfile?.displayName || "Profile"}
+                  className="h-8 w-8 rounded-lg object-cover ring-1 ring-border shadow-glow"
+                  onError={(e) => {
+                    e.target.style.display = "none";
+                    if (e.target.nextSibling) e.target.nextSibling.style.display = "flex";
+                  }}
+                />
+              ) : null}
+              <div
+                style={{ display: fullAvatarUrl ? "none" : "flex" }}
+                className="h-8 w-8 rounded-lg bg-gradient-primary ring-1 ring-border flex items-center justify-center text-xs font-semibold text-primary-foreground shadow-glow"
+              >
                 {initials}
               </div>
               <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-background ${STATUS_META[currentStatus]?.color}`} />
@@ -698,7 +720,21 @@ function Topbar({
                 {/* Header card info */}
                 <div className="flex items-center gap-3 p-2 rounded-xl bg-secondary/25 border border-border/40 mb-2">
                   <div className="relative shrink-0">
-                    <div className="h-10 w-10 rounded-xl bg-gradient-primary flex items-center justify-center text-sm font-bold text-primary-foreground shadow-glow">
+                    {fullAvatarUrl ? (
+                      <img
+                        src={fullAvatarUrl}
+                        alt={userProfile?.displayName || "Profile"}
+                        className="h-10 w-10 rounded-xl object-cover shadow-glow"
+                        onError={(e) => {
+                          e.target.style.display = "none";
+                          if (e.target.nextSibling) e.target.nextSibling.style.display = "flex";
+                        }}
+                      />
+                    ) : null}
+                    <div
+                      style={{ display: fullAvatarUrl ? "none" : "flex" }}
+                      className="h-10 w-10 rounded-xl bg-gradient-primary flex items-center justify-center text-sm font-bold text-primary-foreground shadow-glow"
+                    >
                       {initials}
                     </div>
                     <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ring-2 ring-popover ${STATUS_META[currentStatus]?.color}`} />
@@ -1059,6 +1095,7 @@ export function DashboardLayout() {
       timezone: "auto",
       status: "active",
       tier: "Free",
+      avatarUrl: "",
     };
   });
 
@@ -1077,6 +1114,10 @@ export function DashboardLayout() {
             name: data.user.name,
             displayName: data.user.name,
             email: data.user.email,
+            phone: data.user.phone || data.user.contact || "",
+            language: data.user.language || "en",
+            timezone: data.user.timezone || "auto",
+            avatarUrl: data.user.avatarUrl || "",
             storageUsed: data.user.storageUsed || 0,
             storageLimit: data.user.storageLimit || 1024 * 1024 * 1024,
             tier: data.user.storageLimit > 2 * 1024 * 1024 * 1024 ? "Pro" : "Free",

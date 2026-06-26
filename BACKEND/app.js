@@ -12,6 +12,7 @@ import publicShareRoutes from "./routes/publicShareRoutes.js";
 import activityRoutes from "./routes/activityRoutes.js";
 import starRoutes from "./routes/starRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
+import accountRoutes from "./routes/accountRoutes.js";
 import { connectDb } from "./config/db.js";
 import { ensureStorageRoot } from "./services/storageService.js";
 
@@ -42,6 +43,7 @@ app.use(
         "connect-src": ["'self'", "http://localhost:3000", "http://localhost:5173", "http://localhost:5174"],
       },
     },
+    crossOriginResourcePolicy: { policy: "cross-origin" },
     frameguard: false,
   })
 );
@@ -84,6 +86,7 @@ app.use("/public/shares", publicShareRoutes);
 app.use("/api/activities", activityRoutes);
 app.use("/api/starred", starRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/account", accountRoutes);
 
 // ─── Global Error Handler ────────────────────────────────────
 app.use((err, req, res, next) => {

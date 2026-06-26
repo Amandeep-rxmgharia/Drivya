@@ -171,3 +171,53 @@ export const validateSharePassword = [
     .withMessage("Password cannot exceed 128 characters."),
 ];
 
+// ─── Account / Profile Validators ────────────────────────────────
+
+/**
+ * Validation chain for updating user profile.
+ */
+export const validateUpdateProfile = [
+  body("name")
+    .optional()
+    .trim()
+    .isLength({ min: 3, max: 50 })
+    .withMessage("Name must be between 3 and 50 characters."),
+
+  body("phone")
+    .optional()
+    .trim()
+    .isLength({ max: 20 })
+    .withMessage("Phone number cannot exceed 20 characters."),
+
+  body("language")
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 10 })
+    .withMessage("Language code must be between 2 and 10 characters."),
+
+  body("timezone")
+    .optional()
+    .trim()
+    .isLength({ max: 50 })
+    .withMessage("Timezone cannot exceed 50 characters."),
+];
+
+/**
+ * Validation chain for changing password.
+ */
+export const validateChangePassword = [
+  body("currentPassword")
+    .notEmpty()
+    .withMessage("Current password is required."),
+
+  body("newPassword")
+    .notEmpty()
+    .withMessage("New password is required.")
+    .isLength({ min: 8 })
+    .withMessage("New password must be at least 8 characters.")
+    .matches(/[a-zA-Z]/)
+    .withMessage("New password must contain at least one letter.")
+    .matches(/\d/)
+    .withMessage("New password must contain at least one number."),
+];
+

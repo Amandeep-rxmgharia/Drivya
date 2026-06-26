@@ -8,6 +8,7 @@ export function SettingSection({
   icon: Icon,
   title,
   description,
+  action,
   children,
   className,
 }) {
@@ -27,7 +28,7 @@ export function SettingSection({
               <Icon className="h-4 w-4" />
             </div>
           )}
-          <div>
+          <div className="flex-1">
             <h3 className="font-display text-base font-semibold tracking-tight text-foreground">
               {title}
             </h3>
@@ -37,6 +38,7 @@ export function SettingSection({
               </p>
             )}
           </div>
+          {action && <div className="shrink-0">{action}</div>}
         </div>
       </div>
 
