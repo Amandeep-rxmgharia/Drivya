@@ -1,5 +1,6 @@
 import bcrypt from "bcrypt";
 import mongoose from "mongoose";
+import crypto from "node:crypto";
 import Share from "../models/shareModel.js";
 import ShareCollaborator from "../models/shareCollaboratorModel.js";
 import File from "../models/fileModel.js";
@@ -83,13 +84,72 @@ export async function createOrGetShare(ownerId, { resourceType, resourceId }) {
   const resource = await resolveResource(ownerId, resourceType, resourceId);
   const token = await createUniqueShareToken();
 
-  const share = await Share.create({
+  // Apply user's saved sharing defaults for newly created share links.
+  const userDefaults = await User.findById(ownerId)
+    .lean()
+    .select(
+      "defaultShareAccess defaultShareExpiryDays defaultSharePassword defaultShareDownloadPermission defaultShareNotify defaultSharePublicProfile",
+    );
+
+  // UI uses "view" / "view-download"
+  const defaultAccess = userDefaults?.defaultShareAccess || "view";
+  const defaultExpiryDays =
+    userDefaults?.defaultShareExpiryDays === undefined
+      ? null
+      : userDefaults?.defaultShareExpiryDays;
+
+  const passwordDefault = userDefaults?.defaultSharePassword || "suggest";
+  const allowDownload = Boolean(
+    userDefaults?.defaultShareDownloadPermission ?? false,
+  );
+
+  const expiresAt =
+    defaultExpiryDays == null ? null : computeExpirationDate(defaultExpiryDays);
+
+  const passwordShouldBeRequired = passwordDefault === "always";
+  const visibility = passwordShouldBeRequired ? VISIBILITY.RESTRICTED : VISIBILITY.PUBLIC;
+
+  const sharePayload = {
     ownerId,
     resourceType: resource.resourceType,
     resourceId: resource.resourceId,
     token,
     resourceSnapshot: resource.snapshot,
-  });
+    isActive: true,
+    visibility,
+    expiresAt: expiresAt || null,
+    permissions: {
+      allowView: true,
+      allowDownload: defaultAccess === "view-download" ? true : allowDownload,
+      allowEdit: false,
+    },
+    isPasswordProtected: passwordShouldBeRequired,
+    passwordHash: null,
+  };
+
+  if (sharePayload.visibility !== VISIBILITY.RESTRICTED) {
+    sharePayload.isPasswordProtected = false;
+    sharePayload.passwordHash = null;
+  }
+
+  let passwordPlaintext = null;
+  if (passwordShouldBeRequired) {
+    // Generate a one-time plaintext password to return to the frontend.
+    const alphabet =
+      "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+    const bytes = crypto.randomBytes(18);
+    passwordPlaintext = Array.from(bytes)
+      .map((b) => alphabet[b % alphabet.length])
+      .join("")
+      .slice(0, 12);
+
+    sharePayload.passwordHash = await bcrypt.hash(
+      passwordPlaintext,
+      SALT_ROUNDS,
+    );
+  }
+
+  const share = await Share.create(sharePayload);
 
   await invalidateOwnerShareCache(ownerId.toString());
 
@@ -103,7 +163,11 @@ export async function createOrGetShare(ownerId, { resourceType, resourceId }) {
     }).catch((err) => console.error("Notification error:", err));
   }
 
-  return { share: formatShareResponse(share.toObject()), created: true };
+  return {
+    share: formatShareResponse(share.toObject()),
+    created: true,
+    password: passwordPlaintext,
+  };
 }
 
 /**
@@ -489,6 +553,10 @@ export async function getPublicShareMetadata(token, userId = null) {
   if (!share) throw notFound("Share link not found.");
   if (!isShareAccessible(share)) throw gone("This share link is no longer available.");
 
+  const owner = await User.findById(share.ownerId)
+    .select("name defaultSharePublicProfile")
+    .lean();
+
   const isAuthorized = await isUserAuthorizedForShare(share, userId);
   const requiresAuth = share.visibility === VISIBILITY.RESTRICTED;
 
@@ -496,6 +564,30 @@ export async function getPublicShareMetadata(token, userId = null) {
   const freshCounts = await Share.findOne({ token })
     .select("viewCount downloadCount")
     .lean();
+
+  const publicProfile = owner?.defaultSharePublicProfile || "name";
+
+  const sharedByBase = {
+    label:
+      publicProfile === "anonymous"
+        ? "A Drivya user"
+        : owner?.name || "Unknown",
+    name: owner?.name || null,
+    email: null,
+    avatarUrl: null,
+  };
+
+  // If "full", include email + avatar for richer UI
+  if (publicProfile === "full") {
+    const ownerFull = await User.findById(share.ownerId)
+      .select("name email avatarUrl defaultSharePublicProfile")
+      .lean();
+
+    sharedByBase.email = ownerFull?.email || null;
+    sharedByBase.avatarUrl = ownerFull?.avatarUrl || null;
+    sharedByBase.name = ownerFull?.name || null;
+    sharedByBase.label = ownerFull?.name || "Unknown";
+  }
 
   return {
     token: share.token,
@@ -510,6 +602,13 @@ export async function getPublicShareMetadata(token, userId = null) {
     permissions: share.permissions,
     expiresAt: share.expiresAt,
     isActive: share.isActive,
+
+    // Backward-compatible label for existing UI
+    sharedByLabel: sharedByBase.label,
+
+    // New richer object for "full" profile
+    sharedBy: sharedByBase,
+
     _passwordHash: share.passwordHash, // Included for token signature verification
     viewCount: freshCounts?.viewCount || 0,
     downloadCount: freshCounts?.downloadCount || 0,

@@ -343,7 +343,7 @@ export default function PublicShare() {
   const [editValue, setEditValue] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [signedAccount,setSignedAccount] = useState(null)
+  const [signedAccount, setSignedAccount] = useState(null)
   // Fetch metadata on mount or when token/accessToken changes
   const fetchMetadata = useCallback(async () => {
     setLoading(true);
@@ -371,7 +371,7 @@ export default function PublicShare() {
       } else {
         setError(
           err.response?.data?.message ||
-            "Failed to retrieve shared file details."
+          "Failed to retrieve shared file details."
         );
       }
     } finally {
@@ -732,6 +732,35 @@ export default function PublicShare() {
                       <Globe className="h-3 w-3 animate-pulse" />
                       Shared Link
                     </span>
+
+                    {metadata?.sharedBy?.label ? (
+                      <span className="text-[10px] font-medium text-muted-foreground/80 bg-secondary/50 border border-border/30 px-2 py-0.5 rounded-lg">
+                        Shared by{" "}
+                        <span className="text-foreground font-semibold">
+                          {metadata.sharedBy.label}
+                        </span>
+
+                        {metadata.sharedBy?.email ? (
+                          <span className="text-muted-foreground/80 font-medium">
+                            {" "}
+                            · {metadata.sharedBy.email}
+                          </span>
+                        ) : null}
+
+                        {metadata.sharedBy?.avatarUrl ? (
+                          <span className="hidden" aria-hidden="true">
+                            {metadata.sharedBy.avatarUrl}
+                          </span>
+                        ) : null}
+                      </span>
+                    ) : metadata?.sharedByLabel ? (
+                      <span className="text-[10px] font-medium text-muted-foreground/80 bg-secondary/50 border border-border/30 px-2 py-0.5 rounded-lg">
+                        Shared by{" "}
+                        <span className="text-foreground font-semibold">
+                          {metadata.sharedByLabel}
+                        </span>
+                      </span>
+                    ) : null}
                   </div>
                 </div>
               </div>

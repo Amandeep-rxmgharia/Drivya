@@ -68,6 +68,44 @@ const userSchema = new Schema(
       default: 1 * 1024 * 1024 * 1024, // 1 GB default
       min: [0, "Storage limit cannot be negative"],
     },
+
+    // ─── Sharing defaults (used when creating new share links) ───
+    defaultShareAccess: {
+      type: String,
+      enum: ["view", "view-download"],
+      default: "view",
+    },
+    defaultShareExpiryDays: {
+      type: Number,
+      default: null, // null = never
+      validate: {
+        validator: function (v) {
+          // allow null or one of supported values
+          if (v === null || v === undefined) return true;
+          return [1, 7, 30, 90, 365].includes(v);
+        },
+        message: "defaultShareExpiryDays must be one of: null, 1, 7, 30, 90, 365",
+      },
+    },
+    defaultSharePassword: {
+      type: String,
+      enum: ["always", "suggest", "never"],
+      default: "suggest",
+    },
+    defaultShareDownloadPermission: {
+      type: Boolean,
+      default: true,
+    },
+    defaultShareNotify: {
+      // Persisted for future use (UI currently includes it)
+      type: String,
+      default: "first-view",
+    },
+    defaultSharePublicProfile: {
+      type: String,
+      enum: ["full", "name", "anonymous"],
+      default: "name",
+    },
   },
   {
     strict: "throw",

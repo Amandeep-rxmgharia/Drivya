@@ -40,3 +40,15 @@ export const deleteAccount = async (password) => {
   });
   return response.data;
 };
+
+// ─── Sharing Defaults API ─────────────────────────────────────────
+
+export const getSharingDefaults = async () => {
+  const response = await api.get("/api/account/sharing-defaults");
+  return response.data;
+};
+
+export const updateSharingDefaults = async (data) => {
+  const response = await api.patch("/api/account/sharing-defaults", data);
+  return response.data;
+};

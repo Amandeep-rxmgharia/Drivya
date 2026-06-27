@@ -101,6 +101,7 @@ export const createShare = async ({ resourceId, resourceType = "file" }) => {
   return {
     ...response.data,
     share: normalizeShare(response.data.share),
+    password: response.data.password ?? null,
   };
 };
 

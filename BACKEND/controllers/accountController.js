@@ -275,6 +275,90 @@ export const changePassword = async (req, res, next) => {
 };
 
 // ─── Delete Account ──────────────────────────────────────────
+export const getSharingDefaults = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id)
+      .lean()
+      .select(
+        "defaultShareAccess defaultShareExpiryDays defaultSharePassword defaultShareDownloadPermission defaultShareNotify defaultSharePublicProfile",
+      );
+
+    if (!user) return res.status(404).json({ message: "User not found." });
+
+    return res.json({
+      defaults: {
+        defaultAccess: user.defaultShareAccess,
+        defaultExpiryDays: user.defaultShareExpiryDays,
+        passwordDefault: user.defaultSharePassword,
+        downloadPermission: user.defaultShareDownloadPermission,
+        shareNotify: user.defaultShareNotify,
+        publicProfile: user.defaultSharePublicProfile,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const updateSharingDefaults = async (req, res, next) => {
+  try {
+    const allowed = [
+      "defaultAccess",
+      "defaultExpiryDays",
+      "passwordDefault",
+      "downloadPermission",
+      "shareNotify",
+      "publicProfile",
+    ];
+
+    const updates = {};
+    for (const key of allowed) {
+      if (req.body[key] !== undefined) {
+        updates[key] = req.body[key];
+      }
+    }
+
+    // Map UI keys -> userSchema keys
+    const mapped = {};
+    if (updates.defaultAccess !== undefined) mapped.defaultShareAccess = updates.defaultAccess;
+    if (updates.defaultExpiryDays !== undefined) mapped.defaultShareExpiryDays = updates.defaultExpiryDays;
+    if (updates.passwordDefault !== undefined) mapped.defaultSharePassword = updates.passwordDefault;
+    if (updates.downloadPermission !== undefined) mapped.defaultShareDownloadPermission = updates.downloadPermission;
+    if (updates.shareNotify !== undefined) mapped.defaultShareNotify = updates.shareNotify;
+    if (updates.publicProfile !== undefined) mapped.defaultSharePublicProfile = updates.publicProfile;
+
+    if (Object.keys(mapped).length === 0) {
+      return res.status(400).json({ message: "No valid fields to update." });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { $set: mapped },
+      { new: true, runValidators: true },
+    )
+      .lean()
+      .select(
+        "defaultShareAccess defaultShareExpiryDays defaultSharePassword defaultShareDownloadPermission defaultShareNotify defaultSharePublicProfile",
+      );
+
+    if (!user) return res.status(404).json({ message: "User not found." });
+
+    return res.json({
+      message: "Sharing defaults updated.",
+      defaults: {
+        defaultAccess: user.defaultShareAccess,
+        defaultExpiryDays: user.defaultShareExpiryDays,
+        passwordDefault: user.defaultSharePassword,
+        downloadPermission: user.defaultShareDownloadPermission,
+        shareNotify: user.defaultShareNotify,
+        publicProfile: user.defaultSharePublicProfile,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const deleteAccount = async (req, res, next) => {
   const { password } = req.body;
   const session = await mongoose.startSession();

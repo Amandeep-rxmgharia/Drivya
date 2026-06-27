@@ -38,6 +38,7 @@ export async function createShare(req, res, next) {
         ? "Share link created."
         : "Share link already exists.",
       share: result.share,
+      password: result.password ?? null,
     });
   } catch (err) {
     handleShareError(err, res, next);

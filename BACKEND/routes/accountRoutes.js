@@ -8,6 +8,8 @@ import {
   deleteAvatar,
   changePassword,
   deleteAccount,
+  getSharingDefaults,
+  updateSharingDefaults,
 } from "../controllers/accountController.js";
 import { authenticate } from "../middlewares/authMiddleware.js";
 import {
@@ -28,6 +30,13 @@ router.get("/avatar/:filename", getAvatar);
 
 // All remaining routes require authentication
 router.use(authenticate);
+
+/**
+ * Sharing defaults (used when creating new share links)
+ * NOTE: kept under authenticated routes.
+ */
+router.get("/sharing-defaults", getSharingDefaults);
+router.patch("/sharing-defaults", updateSharingDefaults);
 
 // ─── Profile ─────────────────────────────────────────────────
 router.get("/profile", getProfile);
