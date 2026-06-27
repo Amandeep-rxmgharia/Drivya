@@ -98,7 +98,14 @@ export async function createOrGetShare(ownerId, { resourceType, resourceId }) {
       ? null
       : userDefaults?.defaultShareExpiryDays;
 
-  const passwordDefault = userDefaults?.defaultSharePassword || "never";
+  // "suggest" is a UI concept only. Backend should not store or behave differently for it.
+  // Treat any unknown/default value except "always" as "never".
+  const passwordDefaultRaw = userDefaults?.defaultSharePassword || "never";
+  const passwordDefault =
+    passwordDefaultRaw === "always" || passwordDefaultRaw === "never"
+      ? passwordDefaultRaw
+      : "never";
+
   const allowDownload = Boolean(
     userDefaults?.defaultShareDownloadPermission ?? false,
   );
@@ -154,13 +161,30 @@ export async function createOrGetShare(ownerId, { resourceType, resourceId }) {
   await invalidateOwnerShareCache(ownerId.toString());
 
   if (share) {
-    createNotification(ownerId, {
-      type: "sharing",
-      title: "Share link created",
-      description: `Share link for "${resource.snapshot.name}" is ready.`,
-      actionLabel: "View share",
-      actionPath: "/dashboard/shared",
-    }).catch((err) => console.error("Notification error:", err));
+    // Password-in-inbox behavior: include the plaintext in a dedicated notification
+    // so frontend can copy/delete it. No backend should ever expose plaintext via "eye".
+    if (passwordShouldBeRequired && passwordPlaintext) {
+      createNotification(ownerId, {
+        // Must use an enum-valid Notification.type.
+        // Frontend uses metadata.notificationKind to decide how to render/copy.
+        type: "sharing",
+        title: "Share password created",
+        // Frontend bell inbox renders `description`; keep plaintext here for copy.
+        description: `Password: ${passwordPlaintext}`,
+        actionLabel: "View inbox",
+        actionPath: "/dashboard/notifications",
+        // Frontend bell copy/delete checks this field.
+        metadata: { notificationKind: "share_password" },
+      }).catch((err) => console.error("Notification error:", err));
+    } else {
+      createNotification(ownerId, {
+        type: "sharing",
+        title: "Share link created",
+        description: `Share link for "${resource.snapshot.name}" is ready.`,
+        actionLabel: "View share",
+        actionPath: "/dashboard/shared",
+      }).catch((err) => console.error("Notification error:", err));
+    }
   }
 
   return {
