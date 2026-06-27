@@ -168,10 +168,10 @@ function ProfileHeroCard({ profile, onEditClick, onAvatarChange }) {
                 Verified
               </span>
             </span>
-            {profile.phone && (
+            {profile.contact && (
               <span className="inline-flex items-center gap-1.5">
                 <Phone className="h-3.5 w-3.5" />
-                {profile.phone}
+                {profile.contact}
               </span>
             )}
           </div>
@@ -211,7 +211,7 @@ function EditProfileModal({
 }) {
   const [form, setForm] = useState({
     name: "",
-    phone: "",
+    contact: "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -223,7 +223,7 @@ function EditProfileModal({
     if (open) {
       setForm({
         name: profile.name || "",
-        phone: profile.phone || "",
+        contact: profile.contact || "",
       });
       setError("");
       setSuccess(false);
@@ -235,7 +235,7 @@ function EditProfileModal({
 
   const hasChanges =
     form.name !== (profile.name || "") ||
-    form.phone !== (profile.phone || "");
+    form.contact !== (profile.contact || "");
 
   const handleAvatarSelect = (e) => {
     const file = e.target.files?.[0];
@@ -257,7 +257,8 @@ function EditProfileModal({
     e.target.value = "";
   };
 
-  const handleSave = async () => {
+  const handleSave = async (e) => {
+    if (e) e.preventDefault();
     if (!form.name.trim()) {
       setError("Display name is required.");
       return;
@@ -272,8 +273,8 @@ function EditProfileModal({
     try {
       const updates = {};
       if (form.name !== profile.name) updates.name = form.name.trim();
-      if (form.phone !== (profile.phone || ""))
-        updates.phone = form.phone.trim();
+      if (form.contact !== (profile.contact || ""))
+        updates.contact = form.contact.trim();
 
       if (Object.keys(updates).length > 0) {
         await onSave(updates);
@@ -300,10 +301,19 @@ function EditProfileModal({
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
       <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-modal-backdrop"
         onClick={onClose}
       />
-      <div className="relative w-full max-w-lg rounded-2xl border border-border/60 bg-background shadow-2xl mx-4 overflow-hidden">
+      <form
+        onSubmit={handleSave}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && e.target.tagName !== "TEXTAREA") {
+            e.preventDefault();
+            if (!saving && !success) handleSave();
+          }
+        }}
+        className="relative w-full max-w-lg rounded-2xl border border-border/60 bg-background shadow-2xl mx-4 overflow-hidden animate-modal-panel"
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border/60 px-6 py-4">
           <div className="flex items-center gap-3">
@@ -442,9 +452,9 @@ function EditProfileModal({
             </label>
             <input
               type="tel"
-              value={form.phone}
+              value={form.contact}
               onChange={(e) =>
-                setForm((prev) => ({ ...prev, phone: e.target.value }))
+                setForm((prev) => ({ ...prev, contact: e.target.value }))
               }
               placeholder="+1 (555) 000-0000"
               maxLength={20}
@@ -473,6 +483,7 @@ function EditProfileModal({
         {/* Footer */}
         <div className="flex items-center justify-end gap-2 border-t border-border/60 px-6 py-4 bg-secondary/10">
           <button
+            type="button"
             onClick={onClose}
             disabled={saving}
             className="h-9 rounded-xl border border-border bg-secondary/50 px-4 text-xs font-semibold text-foreground hover:bg-secondary/80 transition-colors"
@@ -480,7 +491,7 @@ function EditProfileModal({
             Cancel
           </button>
           <button
-            onClick={handleSave}
+            type="submit"
             disabled={saving || !hasChanges || success}
             className="h-9 rounded-xl bg-primary px-5 text-xs font-semibold text-primary-foreground shadow-sm hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
           >
@@ -499,7 +510,7 @@ function EditProfileModal({
             )}
           </button>
         </div>
-      </div>
+      </form>
     </div>
   );
 }
@@ -704,7 +715,6 @@ export default function AccountSection({ userProfile, setUserProfile }) {
     name: "",
     email: "",
     contact: "",
-    phone: "",
     language: "en",
     timezone: "auto",
     avatarUrl: "",
@@ -725,7 +735,7 @@ export default function AccountSection({ userProfile, setUserProfile }) {
       displayName: p.name,
       name: p.name,
       email: p.email,
-      phone: p.phone || p.contact,
+      phone: p.contact,
       language: p.language,
       timezone: p.timezone,
       avatarUrl: p.avatarUrl,
@@ -881,13 +891,13 @@ export default function AccountSection({ userProfile, setUserProfile }) {
         >
           <div className="flex items-center gap-2">
             <span className="text-sm text-foreground/80 font-medium">
-              {profile.phone || "Not set"}
+              {profile.contact || "Not set"}
             </span>
             <button
               onClick={() => setEditOpen(true)}
               className="text-xs font-medium text-primary hover:text-primary/80 transition-colors"
             >
-              {profile.phone ? "Edit" : "Add"}
+              {profile.contact ? "Edit" : "Add"}
             </button>
           </div>
         </SettingRow>

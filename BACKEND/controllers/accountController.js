@@ -29,8 +29,7 @@ export const getProfile = async (req, res, next) => {
         id: user._id,
         name: user.name,
         email: user.email,
-        contact: user.contact,
-        phone: user.phone || "",
+        contact: user.contact || "",
         language: user.language || "en",
         timezone: user.timezone || "auto",
         avatarUrl: user.avatarUrl || "",
@@ -46,7 +45,7 @@ export const getProfile = async (req, res, next) => {
 
 // ─── Update Profile ──────────────────────────────────────────
 export const updateProfile = async (req, res, next) => {
-  const allowedFields = ["name", "phone", "language", "timezone"];
+  const allowedFields = ["name", "contact", "language", "timezone"];
   const updates = {};
 
   for (const field of allowedFields) {
@@ -78,8 +77,7 @@ export const updateProfile = async (req, res, next) => {
         id: user._id,
         name: user.name,
         email: user.email,
-        contact: user.contact,
-        phone: user.phone || "",
+        contact: user.contact || "",
         language: user.language || "en",
         timezone: user.timezone || "auto",
         avatarUrl: user.avatarUrl || "",
@@ -160,8 +158,7 @@ export const uploadAvatar = async (req, res, next) => {
         id: user._id,
         name: user.name,
         email: user.email,
-        contact: user.contact,
-        phone: user.phone || "",
+        contact: user.contact || "",
         language: user.language || "en",
         timezone: user.timezone || "auto",
         avatarUrl,
@@ -234,8 +231,7 @@ export const deleteAvatar = async (req, res, next) => {
         id: user._id,
         name: user.name,
         email: user.email,
-        contact: user.contact,
-        phone: user.phone || "",
+        contact: user.contact || "",
         language: user.language || "en",
         timezone: user.timezone || "auto",
         avatarUrl: "",

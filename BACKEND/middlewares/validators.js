@@ -183,7 +183,7 @@ export const validateUpdateProfile = [
     .isLength({ min: 3, max: 50 })
     .withMessage("Name must be between 3 and 50 characters."),
 
-  body("phone")
+  body("contact")
     .optional()
     .trim()
     .isLength({ max: 20 })

@@ -32,11 +32,7 @@ const userSchema = new Schema(
       unique: true,
       trim: true,
     },
-    phone: {
-      type: String,
-      trim: true,
-      default: "",
-    },
+
     language: {
       type: String,
       trim: true,
