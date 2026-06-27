@@ -43,6 +43,12 @@ const notificationSchema = new Schema(
       type: Schema.Types.Mixed,
       default: null,
     },
+
+    // Per-notification expiry (used for 1-time secrets like share passwords).
+    expiresAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -51,10 +57,15 @@ const notificationSchema = new Schema(
 
 notificationSchema.index({ userId: 1, createdAt: -1 });
 notificationSchema.index({ userId: 1, read: 1, createdAt: -1 });
+
+// Default long TTL for regular notifications
 notificationSchema.index(
   { createdAt: 1 },
   { expireAfterSeconds: NOTIFICATION_TTL_DAYS * 24 * 60 * 60 },
 );
+
+// Short TTL for sensitive notifications when `expiresAt` is set
+notificationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 const Notification = model("Notification", notificationSchema);
 

@@ -164,17 +164,23 @@ export async function createOrGetShare(ownerId, { resourceType, resourceId }) {
     // Password-in-inbox behavior: include the plaintext in a dedicated notification
     // so frontend can copy/delete it. No backend should ever expose plaintext via "eye".
     if (passwordShouldBeRequired && passwordPlaintext) {
+      // Auto-delete the share-password notification after ~2 minutes.
+      const expiresAt = new Date(Date.now() + 2 * 60 * 1000);
+
       createNotification(ownerId, {
         // Must use an enum-valid Notification.type.
         // Frontend uses metadata.notificationKind to decide how to render/copy.
         type: "sharing",
-        title: "Share password created",
+        title: `Share password created: ${resource?.snapshot?.name || "your file"}`,
         // Frontend bell inbox renders `description`; keep plaintext here for copy.
-        description: `Password: ${passwordPlaintext}`,
-        actionLabel: "View inbox",
-        actionPath: "/dashboard/notifications",
+        // Description must be ONLY the password (no extra text).
+        description: `${passwordPlaintext}`,
+        // Remove View inbox button from the notification payload.
+        actionLabel: null,
+        actionPath: null,
         // Frontend bell copy/delete checks this field.
-        metadata: { notificationKind: "share_password" },
+        metadata: { notificationKind: "share_password", resourceName: resource?.snapshot?.name || null },
+        expiresAt,
       }).catch((err) => console.error("Notification error:", err));
     } else {
       createNotification(ownerId, {

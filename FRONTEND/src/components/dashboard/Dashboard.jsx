@@ -963,10 +963,24 @@ export function DashboardLayout() {
               });
 
               const toastId = crypto.randomUUID();
-              setToasts((prev) => [...prev, { id: toastId, ...n }]);
+
+              const isSharePassword =
+                n.metadata?.notificationKind === "share_password";
+
+              const toastPayload = isSharePassword
+                ? {
+                  id: toastId,
+                  type: n.type,
+                  title: "Password delivered to inbox",
+                  description: `Password for ${n.metadata?.resourceName || "your shared file"} is ready. Open notifications to copy (it will auto-delete shortly).`,
+                }
+                : { id: toastId, ...n };
+
+              setToasts((prev) => [...prev, toastPayload]);
+
               setTimeout(() => {
                 setToasts((prev) => prev.filter((t) => t.id !== toastId));
-              }, 4000);
+              }, 6500);
             }
           } catch (e) { }
         };

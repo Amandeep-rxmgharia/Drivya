@@ -32,7 +32,7 @@ function pushToUser(userId, data) {
   }
 }
 
-export async function createNotification(userId, { type, title, description, actionLabel, actionPath, metadata }) {
+export async function createNotification(userId, { type, title, description, actionLabel, actionPath, metadata, expiresAt } = {}) {
   const notification = await Notification.create({
     userId,
     type,
@@ -41,6 +41,7 @@ export async function createNotification(userId, { type, title, description, act
     actionLabel: actionLabel || null,
     actionPath: actionPath || null,
     metadata: metadata || null,
+    expiresAt: expiresAt || null,
   });
 
   const data = notification.toObject();
