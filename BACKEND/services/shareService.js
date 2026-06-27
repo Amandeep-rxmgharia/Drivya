@@ -98,7 +98,7 @@ export async function createOrGetShare(ownerId, { resourceType, resourceId }) {
       ? null
       : userDefaults?.defaultShareExpiryDays;
 
-  const passwordDefault = userDefaults?.defaultSharePassword || "suggest";
+  const passwordDefault = userDefaults?.defaultSharePassword || "never";
   const allowDownload = Boolean(
     userDefaults?.defaultShareDownloadPermission ?? false,
   );

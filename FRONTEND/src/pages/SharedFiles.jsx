@@ -10,7 +10,6 @@ import {
   Clock,
   Copy,
   Download,
-  Eye,
   ExternalLink,
   Globe,
   LayoutGrid,
@@ -20,7 +19,6 @@ import {
   Lock,
   MoreHorizontal,
   Search,
-  EyeOff,
   KeyRound,
   Loader2,
   Plus,
@@ -32,6 +30,7 @@ import {
   Trash2,
   X,
   AlertTriangle,
+  Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { easeSmooth } from "@/lib/motion-presets";
@@ -57,10 +56,10 @@ import {
 import { downloadFile } from "../../api/drive.js";
 
 /* ───────────────────────── Filter / Sort Options ───────────────────────── */
- const FILTER_OPTIONS = [{ id: "all", label: "All Links" },
-  { id: "active", label: "Active" },
-  { id: "protected", label: "Protected" },
-  { id: "expired", label: "Expired" },
+const FILTER_OPTIONS = [{ id: "all", label: "All Links" },
+{ id: "active", label: "Active" },
+{ id: "protected", label: "Protected" },
+{ id: "expired", label: "Expired" },
 ];
 
 const SORT_OPTIONS = [
@@ -445,32 +444,32 @@ function SharedFilesSection({
           )}
           role="list"
         >
-        {isLoading ? (
-          <div className="col-span-full flex flex-col items-center justify-center py-16 gap-3">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground">Loading shared links...</p>
-          </div>
-        ) : filteredFiles.length === 0 ? (
-          <EmptyState />
-        ) : (
-          filteredFiles.map((file, i) => (
-            <SharedFileCard
-              key={file.id}
-              file={file}
-              index={i}
-              isGrid={isGrid}
-              linkActive={file.linkActive}
-              passwordProtected={file.password}
-              visibility={file.visibility}
-              copiedId={copiedId}
-              onCopyLink={handleCopyLink}
-              onToggleLink={handleToggleLink}
-              onOpenModal={handleOpenModal}
-              onDownload={onDownload}
-              onDeleteClick={(id, name) => setDeleteConfirmFile({ id, name })}
-            />
-          ))
-        )}
+          {isLoading ? (
+            <div className="col-span-full flex flex-col items-center justify-center py-16 gap-3">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="text-sm text-muted-foreground">Loading shared links...</p>
+            </div>
+          ) : filteredFiles.length === 0 ? (
+            <EmptyState />
+          ) : (
+            filteredFiles.map((file, i) => (
+              <SharedFileCard
+                key={file.id}
+                file={file}
+                index={i}
+                isGrid={isGrid}
+                linkActive={file.linkActive}
+                passwordProtected={file.password}
+                visibility={file.visibility}
+                copiedId={copiedId}
+                onCopyLink={handleCopyLink}
+                onToggleLink={handleToggleLink}
+                onOpenModal={handleOpenModal}
+                onDownload={onDownload}
+                onDeleteClick={(id, name) => setDeleteConfirmFile({ id, name })}
+              />
+            ))
+          )}
         </div>
       </section>
 
@@ -858,7 +857,6 @@ function LinkDetailModal({
   const [passwordEnabled, setPasswordEnabled] = useState(file.password);
   const [hasPassword, setHasPassword] = useState(file.password);
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [passwordSaved, setPasswordSaved] = useState(false);
   const [showExpirationDropdown, setShowExpirationDropdown] = useState(false);
   const [expiration, setExpiration] = useState(file.expiresAt || "Never");
@@ -1568,7 +1566,7 @@ function LinkDetailModal({
                                         (val !== "Never" &&
                                           file.expiresAt &&
                                           file.expiresAt ===
-                                            calculateExpiryDate(val))
+                                          calculateExpiryDate(val))
                                         ? "bg-secondary text-foreground"
                                         : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
                                     )}
@@ -1710,31 +1708,16 @@ function LinkDetailModal({
                               <div className="flex gap-2">
                                 <div className="relative flex-1">
                                   <input
-                                    type={showPassword ? "text" : "password"}
+                                    type="password"
                                     value={password}
-                                    onChange={(e) =>
-                                      setPassword(e.target.value)
-                                    }
+                                    onChange={(e) => setPassword(e.target.value)}
                                     placeholder={
                                       hasPassword
                                         ? "Enter new password..."
                                         : "Create secure key..."
                                     }
-                                    className="h-10 w-full rounded-xl border border-border/80 bg-background/50 pl-3.5 pr-10 text-xs text-foreground focus:outline-none focus:border-primary/50 transition-all font-mono"
+                                    className="h-10 w-full rounded-xl border border-border/80 bg-background/50 pl-3.5 pr-3 text-xs text-foreground focus:outline-none focus:border-primary/50 transition-all font-mono"
                                   />
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setShowPassword(!showPassword)
-                                    }
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/60 hover:text-foreground transition-colors cursor-pointer"
-                                  >
-                                    {showPassword ? (
-                                      <EyeOff className="h-4 w-4" />
-                                    ) : (
-                                      <Eye className="h-4 w-4" />
-                                    )}
-                                  </button>
                                 </div>
 
                                 <button

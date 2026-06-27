@@ -734,22 +734,42 @@ export default function PublicShare() {
                     </span>
 
                     {metadata?.sharedBy?.label ? (
-                      <span className="text-[10px] font-medium text-muted-foreground/80 bg-secondary/50 border border-border/30 px-2 py-0.5 rounded-lg">
-                        Shared by{" "}
-                        <span className="text-foreground font-semibold">
-                          {metadata.sharedBy.label}
+                      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground/80 bg-secondary/50 border border-border/30 px-2 py-0.5 rounded-lg">
+                        {metadata.sharedBy?.avatarUrl ? (() => {
+                          const raw = metadata.sharedBy.avatarUrl;
+                          const isHttp = raw.startsWith("http://") || raw.startsWith("https://");
+                          const isRootPath = raw.startsWith("/");
+                          const resolvedSrc = isRootPath
+                            ? `${api.defaults.baseURL}${raw}`
+                            : isHttp
+                              ? raw
+                              : null; // unknown/relative format, don’t try to load
+                          if (!resolvedSrc) return null;
+
+                          return (
+                            <img
+                              src={resolvedSrc}
+                              alt={`${metadata.sharedBy.label} avatar`}
+                              className="h-4 w-4 rounded-full object-cover border border-border/60"
+                              referrerPolicy="no-referrer"
+                              onError={(e) => {
+                                e.currentTarget.style.display = "none";
+                              }}
+                            />
+                          );
+                        })() : null}
+
+                        <span>
+                          Shared by{" "}
+                          <span className="text-foreground font-semibold">
+                            {metadata.sharedBy.label}
+                          </span>
                         </span>
 
                         {metadata.sharedBy?.email ? (
                           <span className="text-muted-foreground/80 font-medium">
                             {" "}
                             · {metadata.sharedBy.email}
-                          </span>
-                        ) : null}
-
-                        {metadata.sharedBy?.avatarUrl ? (
-                          <span className="hidden" aria-hidden="true">
-                            {metadata.sharedBy.avatarUrl}
                           </span>
                         ) : null}
                       </span>

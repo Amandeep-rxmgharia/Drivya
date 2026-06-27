@@ -164,7 +164,7 @@ function Sidebar({ collapsed, onClose, mobileOpen, userProfile }) {
                     100,
                     Math.round(
                       ((userProfile?.storageUsed || 0) * 100) /
-                        (userProfile?.storageLimit || 1024 * 1024 * 1024)
+                      (userProfile?.storageLimit || 1024 * 1024 * 1024)
                     )
                   )}%`,
                 }}
@@ -491,7 +491,7 @@ function Topbar({
               <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-primary shadow-glow ring-2 ring-background animate-pulse" />
             )}
           </button>
-          
+
           <AnimatePresence>
             {bellOpen && (
               <motion.div
@@ -525,21 +525,19 @@ function Topbar({
                 <div className="flex gap-1.5 p-0.5 mb-2 rounded-lg bg-secondary/35 border border-border/40">
                   <button
                     onClick={() => setFilter("all")}
-                    className={`flex-1 py-1 px-2 text-[11px] font-semibold rounded-md transition-all ${
-                      filter === "all"
-                        ? "bg-secondary text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
+                    className={`flex-1 py-1 px-2 text-[11px] font-semibold rounded-md transition-all ${filter === "all"
+                      ? "bg-secondary text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                      }`}
                   >
                     All ({notifications.length})
                   </button>
                   <button
                     onClick={() => setFilter("unread")}
-                    className={`flex-1 py-1 px-2 text-[11px] font-semibold rounded-md transition-all ${
-                      filter === "unread"
-                        ? "bg-secondary text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
+                    className={`flex-1 py-1 px-2 text-[11px] font-semibold rounded-md transition-all ${filter === "unread"
+                      ? "bg-secondary text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                      }`}
                   >
                     Unread ({notifications.filter((n) => !n.read).length})
                   </button>
@@ -576,11 +574,10 @@ function Topbar({
                                 setBellOpen(false);
                               }
                             }}
-                            className={`group/item relative flex gap-3 p-2.5 rounded-xl border transition-all cursor-pointer ${
-                              n.read
-                                ? "bg-transparent border-transparent hover:bg-secondary/40 text-muted-foreground"
-                                : "bg-secondary/40 border-border/40 hover:bg-secondary/60 text-foreground"
-                            }`}
+                            className={`group/item relative flex gap-3 p-2.5 rounded-xl border transition-all cursor-pointer ${n.read
+                              ? "bg-transparent border-transparent hover:bg-secondary/40 text-muted-foreground"
+                              : "bg-secondary/40 border-border/40 hover:bg-secondary/60 text-foreground"
+                              }`}
                           >
                             {/* Left Icon */}
                             <div className="relative shrink-0 mt-0.5">
@@ -624,6 +621,44 @@ function Topbar({
                                   </button>
                                 </div>
                               )}
+
+                              {/* Copy-only action for 1-time share password */}
+                              {n.metadata?.notificationKind === "share_password" &&
+                                typeof n.description === "string" &&
+                                n.description.trim().length > 0 && (
+                                  <div className="mt-2 flex items-center gap-2">
+                                    <button
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        try {
+                                          await navigator.clipboard?.writeText?.(
+                                            n.description,
+                                          );
+                                          // Immediate delete after copy
+                                          deleteNotification(n.id, e);
+                                          setBellOpen(false);
+                                        } catch {
+                                          // still attempt delete to avoid leaving password behind
+                                          deleteNotification(n.id, e);
+                                        }
+                                      }}
+                                      className="px-2 py-0.5 text-[10px] font-semibold text-primary bg-primary/10 border border-primary/20 hover:bg-primary/20 rounded-md transition-colors"
+                                    >
+                                      Copy password
+                                    </button>
+
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        deleteNotification(n.id, e);
+                                      }}
+                                      className="px-2 py-0.5 text-[10px] font-semibold text-muted-foreground bg-secondary/10 border border-border/40 hover:bg-secondary/20 rounded-md transition-colors"
+                                      title="Dismiss"
+                                    >
+                                      Dismiss
+                                    </button>
+                                  </div>
+                                )}
                             </div>
 
                             {/* Hover Quick Actions */}
@@ -761,11 +796,10 @@ function Topbar({
                         <button
                           key={statusKey}
                           onClick={() => setUserProfile((p) => ({ ...p, status: statusKey }))}
-                          className={`flex items-center justify-center gap-1.5 px-1.5 py-1 rounded-lg text-[11px] font-medium border transition-all ${
-                            isSelected
-                              ? "bg-secondary border-border/80 text-foreground"
-                              : "bg-transparent border-transparent text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
-                          }`}
+                          className={`flex items-center justify-center gap-1.5 px-1.5 py-1 rounded-lg text-[11px] font-medium border transition-all ${isSelected
+                            ? "bg-secondary border-border/80 text-foreground"
+                            : "bg-transparent border-transparent text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
+                            }`}
                         >
                           <span className={`h-2 w-2 rounded-full ${meta.color}`} />
                           <span className="truncate">{meta.label.split(" ")[0]}</span>
@@ -791,11 +825,10 @@ function Topbar({
                         <button
                           key={themeItem.id}
                           onClick={() => setMode(themeItem.id)}
-                          className={`flex items-center justify-center gap-1.5 px-1.5 py-1 rounded-lg text-[11px] font-medium border transition-all ${
-                            isSelected
-                              ? "bg-secondary border-border/80 text-foreground"
-                              : "bg-transparent border-transparent text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
-                          }`}
+                          className={`flex items-center justify-center gap-1.5 px-1.5 py-1 rounded-lg text-[11px] font-medium border transition-all ${isSelected
+                            ? "bg-secondary border-border/80 text-foreground"
+                            : "bg-transparent border-transparent text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
+                            }`}
                         >
                           <themeItem.icon className="h-3 w-3" />
                           <span>{themeItem.label}</span>
@@ -935,7 +968,7 @@ export function DashboardLayout() {
                 setToasts((prev) => prev.filter((t) => t.id !== toastId));
               }, 4000);
             }
-          } catch (e) {}
+          } catch (e) { }
         };
 
         es.onerror = () => {
@@ -972,7 +1005,7 @@ export function DashboardLayout() {
 
   // ─── Handlers that call the API ────────────────────────────
   const markAsRead = (id) => {
-    apiMarkAsRead(id).catch(() => {});
+    apiMarkAsRead(id).catch(() => { });
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n))
     );
@@ -990,7 +1023,7 @@ export function DashboardLayout() {
       })
     );
     if (currentlyRead) {
-      apiMarkAsRead(id).catch(() => {});
+      apiMarkAsRead(id).catch(() => { });
     }
   };
 
@@ -999,17 +1032,17 @@ export function DashboardLayout() {
     setNotifications((prev) =>
       prev.filter((n) => (n._id || n.id) !== id)
     );
-    apiDeleteNotification(id).catch(() => {});
+    apiDeleteNotification(id).catch(() => { });
   };
 
   const markAllRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    apiMarkAllAsRead().catch(() => {});
+    apiMarkAllAsRead().catch(() => { });
   };
 
   const clearAllNotifications = () => {
     setNotifications([]);
-    apiClearNotifications().catch(() => {});
+    apiClearNotifications().catch(() => { });
   };
 
   useEffect(() => {

@@ -89,8 +89,8 @@ const userSchema = new Schema(
     },
     defaultSharePassword: {
       type: String,
-      enum: ["always", "suggest", "never"],
-      default: "suggest",
+      enum: ["always", "never"],
+      default: "never",
     },
     defaultShareDownloadPermission: {
       type: Boolean,

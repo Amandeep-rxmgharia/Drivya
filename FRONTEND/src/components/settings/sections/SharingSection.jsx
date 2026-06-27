@@ -46,7 +46,7 @@ function daysToExpiry(days) {
 export default function SharingSection() {
   const [defaultAccess, setDefaultAccess] = useState("view");
   const [defaultExpiry, setDefaultExpiry] = useState("never");
-  const [passwordDefault, setPasswordDefault] = useState("suggest");
+  const [passwordDefault, setPasswordDefault] = useState("never");
   const [publicProfile, setPublicProfile] = useState("name");
 
   const [isLoadingDefaults, setIsLoadingDefaults] = useState(true);
@@ -75,7 +75,9 @@ export default function SharingSection() {
 
         setDefaultAccess(res?.defaults?.defaultAccess ?? "view");
         setDefaultExpiry(daysToExpiry(res?.defaults?.defaultExpiryDays ?? null));
-        setPasswordDefault(res?.defaults?.passwordDefault ?? "suggest");
+        // "suggest" option removed end-to-end; only allow "always" or "never"
+        const rawPwdDefault = res?.defaults?.passwordDefault;
+        setPasswordDefault(rawPwdDefault === "always" ? "always" : "never");
         setPublicProfile(res?.defaults?.publicProfile ?? "name");
       } catch (err) {
         if (!cancelled) {
@@ -192,12 +194,6 @@ export default function SharingSection() {
                   label: "Always Require",
                   description:
                     "Auto-generate a strong password for every new link.",
-                },
-                {
-                  value: "suggest",
-                  label: "Suggest Password",
-                  description:
-                    "Show password option pre-enabled, user can remove.",
                 },
                 {
                   value: "never",
