@@ -45,9 +45,7 @@ export default function SharingSection() {
             onChange={setDefaultAccess}
             options={[
               { value: "view", label: "View only" },
-              { value: "view-download", label: "View + Download" },
-              { value: "view-comment", label: "View + Comment" },
-              { value: "edit", label: "Edit" },
+              { value: "view-download", label: "View + Download" }
             ]}
           />
         </SettingRow>
@@ -104,21 +102,6 @@ export default function SharingSection() {
                 label: "Never Require",
                 description: "No password by default. User can add manually.",
               },
-            ]}
-          />
-        </SettingRow>
-
-        <SettingRow
-          label="Download Permission"
-          description="Whether recipients can download files by default."
-        >
-          <SettingSelect
-            value={downloadPermission}
-            onChange={setDownloadPermission}
-            options={[
-              { value: "allow", label: "Allow downloads" },
-              { value: "disable", label: "View-only (no download)" },
-              { value: "ask", label: "Ask per share" },
             ]}
           />
         </SettingRow>

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { createPortal } from "react-dom";
+import { motion } from "motion/react";
 import { Check, ChevronDown, Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -58,15 +59,44 @@ export function SettingSelect({
   className,
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef(null);
+  const triggerRef = useRef(null);
+  const dropdownRef = useRef(null);
+  const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
 
   useEffect(() => {
+    if (!open) return;
     const handler = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+      if (
+        !triggerRef.current?.contains(e.target) &&
+        !dropdownRef.current?.contains(e.target)
+      ) {
+        setOpen(false);
+      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = () => setOpen(false);
+    window.addEventListener("scroll", handler, true);
+    window.addEventListener("resize", handler);
+    return () => {
+      window.removeEventListener("scroll", handler, true);
+      window.removeEventListener("resize", handler);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || !triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    setCoords({
+      top: rect.bottom + 6,
+      left: rect.left,
+      width: Math.max(rect.width, 180),
+    });
+  }, [open]);
 
   const selected = options.find((o) =>
     typeof o === "string" ? o === value : o.value === value,
@@ -78,8 +108,9 @@ export function SettingSelect({
     : placeholder;
 
   return (
-    <div ref={ref} className={cn("relative", className)}>
+    <div className={cn("relative", className)}>
       <button
+        ref={triggerRef}
         type="button"
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
@@ -101,42 +132,47 @@ export function SettingSelect({
         />
       </button>
 
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, y: -4, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -4, scale: 0.97 }}
-            transition={{ duration: 0.15 }}
-            className="absolute right-0 z-50 mt-1.5 max-h-56 w-full min-w-[180px] overflow-auto rounded-xl border border-border bg-popover p-1 shadow-elegant"
-          >
-            {options.map((opt) => {
-              const optValue = typeof opt === "string" ? opt : opt.value;
-              const optLabel = typeof opt === "string" ? opt : opt.label;
-              const isSelected = optValue === value;
-              return (
-                <button
-                  key={optValue}
-                  type="button"
-                  onClick={() => {
-                    onChange?.(optValue);
-                    setOpen(false);
-                  }}
-                  className={cn(
-                    "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition-colors",
-                    isSelected
-                      ? "bg-primary/10 text-primary font-medium"
-                      : "text-foreground/80 hover:bg-secondary/60 hover:text-foreground",
-                  )}
-                >
-                  <span className="flex-1 text-left">{optLabel}</span>
-                  {isSelected && <Check className="h-3.5 w-3.5" />}
-                </button>
-              );
-            })}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {open && createPortal(
+        <motion.div
+          ref={dropdownRef}
+          initial={{ opacity: 0, y: -4, scale: 0.97 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.15 }}
+          style={{
+            position: "fixed",
+            top: coords.top,
+            left: coords.left,
+            width: coords.width,
+          }}
+          className="z-[9999] max-h-56 overflow-auto rounded-xl border border-border bg-popover p-1 shadow-elegant"
+        >
+          {options.map((opt) => {
+            const optValue = typeof opt === "string" ? opt : opt.value;
+            const optLabel = typeof opt === "string" ? opt : opt.label;
+            const isSelected = optValue === value;
+            return (
+              <button
+                key={optValue}
+                type="button"
+                onClick={() => {
+                  onChange?.(optValue);
+                  setOpen(false);
+                }}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition-colors",
+                  isSelected
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-foreground/80 hover:bg-secondary/60 hover:text-foreground",
+                )}
+              >
+                <span className="flex-1 text-left">{optLabel}</span>
+                {isSelected && <Check className="h-3.5 w-3.5" />}
+              </button>
+            );
+          })}
+        </motion.div>,
+        document.body,
+      )}
     </div>
   );
 }
