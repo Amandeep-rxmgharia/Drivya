@@ -504,9 +504,9 @@ export default function PublicShare() {
     }
   };
 
-  // Keyboard shortcut Ctrl+S inside editor
+  // Keyboard shortcut Alt+S inside editor
   const handleEditorKeyDown = (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+    if (e.altKey && e.key === "s") {
       e.preventDefault();
       handleSaveChanges();
     }

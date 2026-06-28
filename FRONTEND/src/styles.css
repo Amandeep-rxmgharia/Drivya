@@ -544,3 +544,24 @@
   --ambient-radial-large: oklch(0.7 0.02 265 / 0.28);
   --icon-glow-filter: drop-shadow(0 0 22px oklch(0.7 0.02 265 / 0.75));
 }
+
+/* ─── Spacing and Corner Radius overrides (Content Density) ─── */
+:root[data-density="compact"] {
+  --spacing: 0.18rem;
+  --radius: 0.75rem;
+}
+:root[data-density="comfortable"] {
+  --spacing: 0.25rem;
+  --radius: 0.875rem;
+}
+:root[data-density="spacious"] {
+  --spacing: 0.3rem;
+  --radius: 1rem;
+}
+
+/* ─── Screen Reader / Keyboard Accessibility Focus ring ─── */
+:root[data-screen-reader="true"] *:focus-visible {
+  outline: 3px solid var(--color-primary) !important;
+  outline-offset: 3px !important;
+}
+

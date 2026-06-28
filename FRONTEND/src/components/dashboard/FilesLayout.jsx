@@ -339,11 +339,10 @@ export function FilesLayout({
       )
         return;
 
-      const isCmdOrCtrl = e.metaKey || e.ctrlKey;
       const isShift = e.shiftKey;
       const key = e.key.toLowerCase();
 
-      if (isCmdOrCtrl && !isShift && key === "d") {
+      if (e.altKey && !isShift && key === "d") {
         if (selectedId) {
           e.preventDefault();
           handleDownload(selectedId);
@@ -351,7 +350,7 @@ export function FilesLayout({
         return;
       }
 
-      if (isCmdOrCtrl && isShift && key === "c") {
+      if (e.altKey && key === "c") {
         if (selectedId) {
           e.preventDefault();
           handleCopyLink(selectedId);

@@ -32,6 +32,25 @@
           document.documentElement.dataset.theme = dark ? "dark" : "light";
           var meta = document.getElementById("theme-color-meta");
           if (meta) meta.setAttribute("content", dark ? "#0b0e18" : "#f4f6f9");
+
+          // Density
+          var density = localStorage.getItem("drivya-density") || "comfortable";
+          document.documentElement.setAttribute("data-density", density);
+
+          // Font Size
+          var fontSize = localStorage.getItem("drivya-font-size") || "default";
+          var fontSizeMap = {
+            small: "13px",
+            default: "15px",
+            medium: "17px",
+            large: "19px",
+            xl: "21px"
+          };
+          document.documentElement.style.fontSize = fontSizeMap[fontSize] || "15px";
+
+          // Screen Reader
+          var screenReader = localStorage.getItem("drivya-screen-reader") === "true";
+          document.documentElement.setAttribute("data-screen-reader", screenReader ? "true" : "false");
         } catch (e) {}
       })();
     </script>

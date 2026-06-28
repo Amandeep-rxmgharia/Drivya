@@ -375,7 +375,7 @@ function Topbar({
   const { mode, setMode } = useTheme();
 
   const isMac = typeof window !== "undefined" && /Mac|iPod|iPhone|iPad/.test(navigator.platform || "");
-  const modKeySymbol = isMac ? "⌘" : "Ctrl";
+  const modKeySymbol = "Alt";
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -1064,7 +1064,6 @@ export function DashboardLayout() {
       const shortcutsEnabled = localStorage.getItem("drivya-shortcuts") !== "false";
       if (!shortcutsEnabled) return;
 
-      const isCmdOrCtrl = e.metaKey || e.ctrlKey;
       const isShift = e.shiftKey;
       const key = e.key.toLowerCase();
 
@@ -1076,8 +1075,8 @@ export function DashboardLayout() {
         activeEl.isContentEditable
       );
 
-      // Search shortcut (⌘+K or Ctrl+K) - focus search bar
-      if (isCmdOrCtrl && !isShift && key === "k") {
+      // Search shortcut (Alt+K) - focus search bar
+      if (e.altKey && !isShift && key === "k") {
         e.preventDefault();
         const searchInput = document.getElementById("topbar-search-input");
         if (searchInput) {
@@ -1089,29 +1088,29 @@ export function DashboardLayout() {
 
       if (isTyping) return;
 
-      // Upload shortcut (⌘+U or Ctrl+U)
-      if (isCmdOrCtrl && !isShift && key === "u") {
+      // Upload shortcut (Alt+U)
+      if (e.altKey && !isShift && key === "u") {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent("open-upload-modal"));
         return;
       }
 
-      // New Folder shortcut (⌘+N or Ctrl+N)
-      if (isCmdOrCtrl && !isShift && key === "n") {
+      // New Folder shortcut (Alt+N)
+      if (e.altKey && !isShift && key === "n") {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent("open-folder-modal"));
         return;
       }
 
-      // Settings shortcut (⌘+⇧+S or Ctrl+Shift+S)
-      if (isCmdOrCtrl && isShift && key === "s") {
+      // Settings shortcut (Alt+S)
+      if (e.altKey && key === "s") {
         e.preventDefault();
         navigate("/dashboard/settings");
         return;
       }
 
-      // Help shortcut (⌘+/ or Ctrl+/)
-      if (isCmdOrCtrl && !isShift && key === "/") {
+      // Help shortcut (Alt+/)
+      if (e.altKey && !isShift && key === "/") {
         e.preventDefault();
         setShortcutHelpOpen((prev) => !prev);
         return;
@@ -1296,19 +1295,15 @@ export function DashboardLayout() {
 /* ───────────────────────── Shortcut Help Modal ───────────────────────── */
 
 function ShortcutHelpModal({ onClose }) {
-  const isMac = typeof window !== "undefined" && /Mac|iPod|iPhone|iPad/.test(navigator.platform || "");
-  const mod = isMac ? "⌘" : "Ctrl";
-  const shift = isMac ? "⇧" : "Shift";
-
   const shortcutsList = [
-    { keys: [mod, "K"], action: "Search", desc: "Focus the search bar in the topbar" },
-    { keys: [mod, "U"], action: "Upload Files", desc: "Open the file upload dialog" },
-    { keys: [mod, "N"], action: "New Folder", desc: "Create a new folder in the current directory" },
-    { keys: [mod, shift, "S"], action: "Settings", desc: "Navigate to the Settings panel" },
-    { keys: [mod, "D"], action: "Download", desc: "Download the currently selected file" },
-    { keys: [mod, shift, "C"], action: "Copy Share Link", desc: "Copy the share link of the selected file" },
+    { keys: ["Alt", "K"], action: "Search", desc: "Focus search bar" },
+    { keys: ["Alt", "U"], action: "Upload Files", desc: "Open upload files dialog" },
+    { keys: ["Alt", "N"], action: "New Folder", desc: "Create a new folder in the current directory" },
+    { keys: ["Alt", "S"], action: "Settings", desc: "Navigate to the Settings panel" },
+    { keys: ["Alt", "D"], action: "Download", desc: "Download the selected file" },
+    { keys: ["Alt", "C"], action: "Copy Share Link", desc: "Copy sharing link of selected file" },
     { keys: ["Del"], action: "Move to Trash", desc: "Delete the selected file" },
-    { keys: [mod, "/"], action: "Shortcut Help", desc: "Toggle this shortcut reference dialog" },
+    { keys: ["Alt", "/"], action: "Shortcut Help", desc: "Toggle this shortcut reference dialog" },
   ];
 
   useEffect(() => {

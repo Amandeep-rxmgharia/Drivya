@@ -8,9 +8,9 @@ import {
   Type,
   Maximize,
   Minimize,
-  Accessibility,
   Keyboard,
   Sparkles,
+  Accessibility,
 } from "lucide-react";
 import {
   SettingSection,
@@ -34,11 +34,18 @@ const ACCENT_COLORS = [
 ];
 
 export default function AppearanceSection() {
-  const { mode: theme, setMode: setTheme, accentColor, setAccentColor } = useTheme();
-  const [density, setDensity] = useState("comfortable");
-  const [fontSize, setFontSize] = useState("default");
-  const [reducedMotion, setReducedMotion] = useState("default");
-  const [screenReader, setScreenReader] = useState(false);
+  const {
+    mode: theme,
+    setMode: setTheme,
+    accentColor,
+    setAccentColor,
+    density,
+    setDensity,
+    fontSize,
+    setFontSize,
+    screenReader,
+    setScreenReader,
+  } = useTheme();
   const [shortcuts, setShortcuts] = useState(() => {
     return localStorage.getItem("drivya-shortcuts") !== "false";
   });
@@ -49,9 +56,7 @@ export default function AppearanceSection() {
     window.dispatchEvent(new Event("storage"));
   };
 
-  const isMac = typeof window !== "undefined" && /Mac|iPod|iPhone|iPad/.test(navigator.platform || "");
-  const modKey = isMac ? "⌘" : "Ctrl";
-  const shiftKey = isMac ? "⇧" : "Shift";
+  const modKey = "Alt";
 
   return (
     <div className="space-y-6">
@@ -172,58 +177,14 @@ export default function AppearanceSection() {
           <SettingSelect
             value={fontSize}
             onChange={setFontSize}
-            options={[
+             options={[
               { value: "small", label: "Small (13px)" },
-              { value: "default", label: "Default (14px)" },
-              { value: "medium", label: "Medium (15px)" },
-              { value: "large", label: "Large (16px)" },
-              { value: "xl", label: "Extra Large (18px)" },
+              { value: "default", label: "Default (15px)" },
+              { value: "medium", label: "Medium (17px)" },
+              { value: "large", label: "Large (19px)" },
+              { value: "xl", label: "Extra Large (21px)" },
             ]}
           />
-        </SettingRow>
-      </SettingSection>
-
-      {/* Accessibility */}
-      <SettingSection
-        id="accessibility"
-        icon={Accessibility}
-        title="Accessibility"
-        description="Make Drivya work better for everyone."
-      >
-        <SettingRow
-          label="Motion Preferences"
-          description="Reduce or disable animations for motion sensitivity."
-          vertical
-        >
-          <SettingRadioGroup
-            value={reducedMotion}
-            onChange={setReducedMotion}
-            options={[
-              {
-                value: "default",
-                label: "Default",
-                description: "All animations and transitions enabled.",
-              },
-              {
-                value: "reduced",
-                label: "Reduced Motion",
-                description:
-                  "Essential transitions only, shortened duration. Removes hover effects and parallax.",
-              },
-              {
-                value: "off",
-                label: "No Motion",
-                description: "All animations disabled. Instant transitions.",
-              },
-            ]}
-          />
-        </SettingRow>
-
-        <SettingRow
-          label="Screen Reader Optimization"
-          description="Enhanced ARIA labels, landmarks, live regions, and skip-navigation links."
-        >
-          <SettingToggle checked={screenReader} onChange={setScreenReader} />
         </SettingRow>
       </SettingSection>
 
@@ -245,14 +206,14 @@ export default function AppearanceSection() {
           <div className="px-6 pb-4">
             <div className="rounded-xl border border-border/60 bg-secondary/20 divide-y divide-border/40">
               {[
-                { keys: [modKey, "K"], action: "Search" },
-                { keys: [modKey, "U"], action: "Upload" },
-                { keys: [modKey, "N"], action: "New Folder" },
-                { keys: [modKey, shiftKey, "S"], action: "Settings" },
-                { keys: [modKey, "D"], action: "Download" },
-                { keys: [modKey, shiftKey, "C"], action: "Copy Link" },
+                { keys: ["Alt", "K"], action: "Search" },
+                { keys: ["Alt", "U"], action: "Upload" },
+                { keys: ["Alt", "N"], action: "New Folder" },
+                { keys: ["Alt", "S"], action: "Settings" },
+                { keys: ["Alt", "D"], action: "Download" },
+                { keys: ["Alt", "C"], action: "Copy Link" },
                 { keys: ["Del"], action: "Move to Trash" },
-                { keys: [modKey, "/"], action: "Shortcut Help" },
+                { keys: ["Alt", "/"], action: "Shortcut Help" },
               ].map((s) => (
                 <div
                   key={s.action}
@@ -274,6 +235,21 @@ export default function AppearanceSection() {
             </div>
           </div>
         )}
+      </SettingSection>
+
+      {/* Accessibility */}
+      <SettingSection
+        id="accessibility"
+        icon={Accessibility}
+        title="Accessibility"
+        description="Optimize your experience for readability and navigation."
+      >
+        <SettingRow
+          label="Screen Reader Mode"
+          description="Enhance visual indicators and markup clarity for assistive technologies."
+        >
+          <SettingToggle checked={screenReader} onChange={setScreenReader} />
+        </SettingRow>
       </SettingSection>
     </div>
   );

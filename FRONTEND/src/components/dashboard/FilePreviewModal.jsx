@@ -303,7 +303,7 @@ function TextPreview({ url, fileId }) {
   };
 
   const handleKeyDown = (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+    if (e.altKey && e.key === "s") {
       e.preventDefault();
       handleSaveChanges();
     }
@@ -327,7 +327,7 @@ function TextPreview({ url, fileId }) {
       {fileId && (
         <div className="flex items-center justify-between mb-3 bg-secondary/10 p-2 rounded-xl border border-border/40 shrink-0">
           <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
-            {isEditing ? "Editing Mode (Ctrl+S to Save)" : "View Mode"}
+            {isEditing ? "Editing Mode (Alt+S to Save)" : "View Mode"}
           </span>
           <div className="flex gap-2">
             {isEditing ? (

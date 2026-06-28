@@ -165,7 +165,7 @@ export async function createOrGetShare(ownerId, { resourceType, resourceId }) {
     // so frontend can copy/delete it. No backend should ever expose plaintext via "eye".
     if (passwordShouldBeRequired && passwordPlaintext) {
       // Auto-delete the share-password notification after ~2 minutes.
-      const expiresAt = new Date(Date.now() + 2 * 60 * 1000);
+      const expiresAt = new Date(Date.now() +  60 * 1000);
 
       createNotification(ownerId, {
         // Must use an enum-valid Notification.type.
