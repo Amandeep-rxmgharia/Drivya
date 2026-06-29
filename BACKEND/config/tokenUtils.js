@@ -17,8 +17,8 @@ const SHARE_SECRET = JWT_SHARE_SECRET || JWT_ACCESS_SECRET;
  * @param {string} userId
  * @returns {string}
  */
-export function generateAccessToken(userId) {
-  return jwt.sign({ id: userId }, JWT_ACCESS_SECRET, {
+export function generateAccessToken(userId, sessionId) {
+  return jwt.sign({ id: userId, sid: sessionId }, JWT_ACCESS_SECRET, {
     expiresIn: ACCESS_TOKEN_EXPIRY,
   });
 }
@@ -26,10 +26,11 @@ export function generateAccessToken(userId) {
 /**
  * Generate a long-lived refresh token.
  * @param {string} userId
+ * @param {string} sessionId
  * @returns {string}
  */
-export function generateRefreshToken(userId) {
-  return jwt.sign({ id: userId }, JWT_REFRESH_SECRET, {
+export function generateRefreshToken(userId, sessionId) {
+  return jwt.sign({ id: userId, sid: sessionId }, JWT_REFRESH_SECRET, {
     expiresIn: REFRESH_TOKEN_EXPIRY,
   });
 }

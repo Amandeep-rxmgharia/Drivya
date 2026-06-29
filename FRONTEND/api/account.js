@@ -52,3 +52,20 @@ export const updateSharingDefaults = async (data) => {
   const response = await api.patch("/api/account/sharing-defaults", data);
   return response.data;
 };
+
+// ─── Active Sessions API ─────────────────────────────────────────
+
+export const getActiveSessions = async () => {
+  const response = await api.get("/api/account/sessions");
+  return response.data;
+};
+
+export const revokeSession = async (id) => {
+  const response = await api.delete(`/api/account/sessions/${id}`);
+  return response.data;
+};
+
+export const revokeOtherSessions = async () => {
+  const response = await api.delete("/api/account/sessions/others");
+  return response.data;
+};

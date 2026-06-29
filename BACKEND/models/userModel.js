@@ -106,6 +106,10 @@ const userSchema = new Schema(
       enum: ["full", "name", "anonymous"],
       default: "name",
     },
+    loginAlerts: {
+      type: Boolean,
+      default: true,
+    },
   },
   {
     strict: "throw",

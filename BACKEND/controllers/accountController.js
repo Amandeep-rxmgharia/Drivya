@@ -9,6 +9,7 @@ import Notification from "../models/notificationModel.js";
 import Share from "../models/shareModel.js";
 import { clearTokenCookies } from "../config/tokenUtils.js";
 import { deleteFile } from "../services/storageService.js";
+import { createNotification } from "../services/notificationService.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const AVATAR_DIR = path.resolve(__dirname, "..", "storage", "avatars");
@@ -36,6 +37,7 @@ export const getProfile = async (req, res, next) => {
         storageUsed: user.storageUsed || 0,
         storageLimit: user.storageLimit || 1024 * 1024 * 1024,
         memberSince: user.createdAt,
+        loginAlerts: user.loginAlerts !== false,
       },
     });
   } catch (err) {
@@ -45,7 +47,7 @@ export const getProfile = async (req, res, next) => {
 
 // ─── Update Profile ──────────────────────────────────────────
 export const updateProfile = async (req, res, next) => {
-  const allowedFields = ["name", "contact", "language", "timezone"];
+  const allowedFields = ["name", "contact", "language", "timezone", "loginAlerts"];
   const updates = {};
 
   for (const field of allowedFields) {
@@ -84,6 +86,7 @@ export const updateProfile = async (req, res, next) => {
         storageUsed: user.storageUsed || 0,
         storageLimit: user.storageLimit || 1024 * 1024 * 1024,
         memberSince: user.createdAt,
+        loginAlerts: user.loginAlerts !== false,
       },
     });
   } catch (err) {
@@ -267,6 +270,22 @@ export const changePassword = async (req, res, next) => {
     // Update password (pre-save hook will hash it)
     user.password = newPassword;
     await user.save();
+
+    // Revoke all OTHER sessions of this user
+    const Session = (await import("../models/sessionModel.js")).default;
+    await Session.deleteMany({
+      userId: user._id,
+      _id: { $ne: req.user.sessionId },
+    });
+
+    // Create security notification in inbox
+    await createNotification(user._id, {
+      type: "security",
+      title: "Password updated successfully",
+      description: "Your account password was recently changed. If you did not make this change, please contact support immediately.",
+      actionLabel: "Security Settings",
+      actionPath: "/dashboard/settings/security",
+    });
 
     return res.json({ message: "Password changed successfully." });
   } catch (err) {

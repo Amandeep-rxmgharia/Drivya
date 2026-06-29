@@ -1167,6 +1167,7 @@ export function DashboardLayout() {
             storageUsed: data.user.storageUsed || 0,
             storageLimit: data.user.storageLimit || 1024 * 1024 * 1024,
             tier: data.user.storageLimit > 2 * 1024 * 1024 * 1024 ? "Pro" : "Free",
+            loginAlerts: data.user.loginAlerts !== false,
           }));
         }
       } catch (err) {

@@ -11,6 +11,11 @@ import {
   getSharingDefaults,
   updateSharingDefaults,
 } from "../controllers/accountController.js";
+import {
+  listSessions,
+  revokeSession,
+  revokeOtherSessions,
+} from "../controllers/sessionController.js";
 import { authenticate } from "../middlewares/authMiddleware.js";
 import {
   validateUpdateProfile,
@@ -58,6 +63,11 @@ router.put(
   handleValidationErrors,
   changePassword,
 );
+
+// ─── Sessions ────────────────────────────────────────────────
+router.get("/sessions", listSessions);
+router.delete("/sessions/others", revokeOtherSessions);
+router.delete("/sessions/:id", revokeSession);
 
 // ─── Delete Account ──────────────────────────────────────────
 router.delete("/", deleteAccount);

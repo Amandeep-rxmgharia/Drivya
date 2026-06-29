@@ -32,7 +32,13 @@ import {
   SettingRadioGroup,
   SettingInput,
 } from "../setting-controls";
-import { changePassword } from "../../../../api/account.js";
+import {
+  changePassword,
+  updateProfile,
+  getActiveSessions,
+  revokeSession,
+  revokeOtherSessions,
+} from "../../../../api/account.js";
 
 /* ═══════════════════════ Password Strength ═══════════════════════ */
 
@@ -369,50 +375,86 @@ function PasswordChangeForm({ onClose }) {
   );
 }
 
-/* ═══════════════════════ Mock Sessions ═══════════════════════ */
-
-const MOCK_SESSIONS = [
-  {
-    id: 1,
-    device: "MacBook Pro",
-    browser: "Chrome 126",
-    os: "macOS Sequoia",
-    ip: "73.162.xxx.xxx",
-    location: "San Francisco, US",
-    lastActive: "Active now",
-    current: true,
-  },
-  {
-    id: 2,
-    device: "iPhone 16 Pro",
-    browser: "Drivya iOS App",
-    os: "iOS 19.1",
-    ip: "73.162.xxx.xxx",
-    location: "San Francisco, US",
-    lastActive: "2 hours ago",
-    current: false,
-  },
-  {
-    id: 3,
-    device: "Windows Desktop",
-    browser: "Firefox 130",
-    os: "Windows 11",
-    ip: "185.42.xxx.xxx",
-    location: "Lisbon, PT",
-    lastActive: "3 days ago",
-    current: false,
-  },
-];
-
 /* ═══════════════════════ Security Section ═══════════════════════ */
 
-export default function SecuritySection() {
+export default function SecuritySection({ userProfile, setUserProfile }) {
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [twoFAEnabled, setTwoFAEnabled] = useState(true);
   const [twoFAMethod, setTwoFAMethod] = useState("totp");
-  const [loginAlerts, setLoginAlerts] = useState(true);
+  const [loginAlerts, setLoginAlerts] = useState(userProfile?.loginAlerts !== false);
   const [sessionTimeout, setSessionTimeout] = useState("1h");
   const [encryptionLevel, setEncryptionLevel] = useState("standard");
+
+  const [sessions, setSessions] = useState([]);
+  const [loadingSessions, setLoadingSessions] = useState(true);
+
+  // Sync loginAlerts with userProfile context updates
+  useEffect(() => {
+    if (userProfile) {
+      setLoginAlerts(userProfile.loginAlerts !== false);
+    }
+  }, [userProfile]);
+
+  // Fetch active sessions on mount
+  useEffect(() => {
+    let cancelled = false;
+    const fetchSessions = async () => {
+      try {
+        const data = await getActiveSessions();
+        if (!cancelled && data?.sessions) {
+          setSessions(data.sessions);
+        }
+      } catch (err) {
+        console.error("Failed to load active sessions:", err);
+      } finally {
+        if (!cancelled) setLoadingSessions(false);
+      }
+    };
+    fetchSessions();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleRevokeSession = async (sessionId) => {
+    try {
+      await revokeSession(sessionId);
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+    } catch (err) {
+      console.error("Failed to revoke session:", err);
+      alert(err?.response?.data?.message || "Failed to revoke session.");
+    }
+  };
+
+  const handleRevokeOthers = async () => {
+    if (!window.confirm("Are you sure you want to sign out of all other devices?")) {
+      return;
+    }
+    try {
+      await revokeOtherSessions();
+      setSessions((prev) => prev.filter((s) => s.current));
+    } catch (err) {
+      console.error("Failed to revoke other sessions:", err);
+      alert(err?.response?.data?.message || "Failed to revoke other sessions.");
+    }
+  };
+
+  const handleToggleLoginAlerts = async (checked) => {
+    try {
+      setLoginAlerts(checked);
+      const data = await updateProfile({ loginAlerts: checked });
+      if (data?.profile && setUserProfile) {
+        setUserProfile((prev) => ({
+          ...prev,
+          loginAlerts: data.profile.loginAlerts !== false,
+        }));
+      }
+    } catch (err) {
+      console.error("Failed to update login alerts:", err);
+      // Rollback on failure
+      setLoginAlerts(!checked);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -515,75 +557,100 @@ export default function SecuritySection() {
         description="Devices currently signed in to your account."
       >
         <div className="px-6 py-2">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-muted-foreground">
-              {MOCK_SESSIONS.length} active sessions
-            </span>
-            <button className="text-xs font-semibold text-destructive hover:text-destructive/80 transition-colors">
-              Sign Out All Others
-            </button>
-          </div>
-
-          <div className="space-y-2">
-            {MOCK_SESSIONS.map((session) => (
-              <div
-                key={session.id}
-                className={`flex items-center gap-3 rounded-xl border p-3 transition-colors ${
-                  session.current
-                    ? "border-primary/20 bg-primary/[0.03]"
-                    : "border-border/60 bg-secondary/20 hover:bg-secondary/30"
-                }`}
-              >
-                <div
-                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${
-                    session.current
-                      ? "border-primary/20 bg-primary/10 text-primary"
-                      : "border-border bg-secondary/50 text-muted-foreground"
-                  }`}
-                >
-                  {session.os.includes("macOS") ||
-                  session.os.includes("iOS") ? (
-                    <Smartphone className="h-4 w-4" />
-                  ) : (
-                    <Monitor className="h-4 w-4" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-foreground truncate">
-                      {session.device}
-                    </span>
-                    {session.current && (
-                      <span className="rounded-md bg-primary/10 border border-primary/20 px-1.5 py-0.5 text-[9px] font-bold text-primary">
-                        This device
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
-                    <span>{session.browser}</span>
-                    <span>·</span>
-                    <span>{session.location}</span>
-                    <span>·</span>
-                    <span
-                      className={
-                        session.current ? "text-emerald-500 font-semibold" : ""
-                      }
-                    >
-                      {session.lastActive}
-                    </span>
-                  </div>
-                </div>
-                {!session.current && (
+          {loadingSessions ? (
+            <div className="flex flex-col items-center justify-center py-6 gap-2">
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              <span className="text-xs text-muted-foreground">Loading active sessions...</span>
+            </div>
+          ) : sessions.length === 0 ? (
+            <div className="text-center py-6 text-xs text-muted-foreground">
+              No active sessions found.
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-semibold text-muted-foreground">
+                  {sessions.length} active sessions
+                </span>
+                {sessions.some((s) => !s.current) && (
                   <button
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
-                    title="Revoke session"
+                    onClick={handleRevokeOthers}
+                    className="text-xs font-semibold text-destructive hover:text-destructive/80 transition-colors"
                   >
-                    <X className="h-3.5 w-3.5" />
+                    Sign Out All Others
                   </button>
                 )}
               </div>
-            ))}
-          </div>
+
+              <div className="space-y-2">
+                {sessions.map((session) => (
+                  <div
+                    key={session.id}
+                    className={`flex items-center gap-3 rounded-xl border p-3 transition-colors ${
+                      session.current
+                        ? "border-primary/20 bg-primary/[0.03]"
+                        : "border-border/60 bg-secondary/20 hover:bg-secondary/30"
+                    }`}
+                  >
+                    <div
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${
+                        session.current
+                          ? "border-primary/20 bg-primary/10 text-primary"
+                          : "border-border bg-secondary/50 text-muted-foreground"
+                      }`}
+                    >
+                      {session.os.toLowerCase().includes("mac") ||
+                      session.os.toLowerCase().includes("ios") ||
+                      session.device.toLowerCase().includes("iphone") ||
+                      session.device.toLowerCase().includes("ipad") ? (
+                        <Smartphone className="h-4 w-4" />
+                      ) : (
+                        <Monitor className="h-4 w-4" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-foreground truncate">
+                          {session.device}
+                        </span>
+                        {session.current && (
+                          <span className="rounded-md bg-primary/10 border border-primary/20 px-1.5 py-0.5 text-[9px] font-bold text-primary">
+                            This device
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
+                        <span>{session.browser}</span>
+                        <span>·</span>
+                        <span>{session.location}</span>
+                        <span>·</span>
+                        <span>IP: {session.ip}</span>
+                        <span>·</span>
+                        <span
+                          className={
+                            session.current ? "text-emerald-500 font-semibold" : ""
+                          }
+                        >
+                          {session.lastActive === "Active now"
+                            ? "Active now"
+                            : `Last active: ${new Date(session.lastActive).toLocaleString()}`}
+                        </span>
+                      </div>
+                    </div>
+                    {!session.current && (
+                      <button
+                        onClick={() => handleRevokeSession(session.id)}
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
+                        title="Revoke session"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </SettingSection>
 
@@ -594,29 +661,11 @@ export default function SecuritySection() {
         title="Login Settings"
         description="Configure session behavior and alerts."
       >
-        {/* <SettingRow
-          label="Session Timeout"
-          description="Auto-lock the dashboard after inactivity."
-        >
-          <SettingSelect
-            value={sessionTimeout}
-            onChange={setSessionTimeout}
-            options={[
-              { value: "15m", label: "15 minutes" },
-              { value: "30m", label: "30 minutes" },
-              { value: "1h", label: "1 hour" },
-              { value: "4h", label: "4 hours" },
-              { value: "8h", label: "8 hours" },
-              { value: "never", label: "Never" },
-            ]}
-          />
-        </SettingRow> */}
-
         <SettingRow
           label="Login Alerts"
           description="Get notified when your account is accessed from a new device."
         >
-          <SettingToggle checked={loginAlerts} onChange={setLoginAlerts} />
+          <SettingToggle checked={loginAlerts} onChange={handleToggleLoginAlerts} />
         </SettingRow>
       </SettingSection>
 
