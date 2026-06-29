@@ -19,6 +19,9 @@ import {
   Loader2,
   AlertTriangle,
   CheckCircle2,
+  QrCode,
+  Copy,
+  Download,
 } from "lucide-react";
 import {
   SettingSection,
@@ -388,13 +391,46 @@ export default function SecuritySection({ userProfile, setUserProfile }) {
   const [twoFAMethod, setTwoFAMethod] = useState(userProfile?.twoFAMethod || "totp");
   const [loginAlerts, setLoginAlerts] = useState(userProfile?.loginAlerts !== false);
 
-  const [is2FASetupOpen, setIs2FASetupOpen] = useState(false);
+  const [activeFlow, setActiveFlow] = useState(null); // null, 'setup_intro', 'setup_verify', 'setup_success', 'regenerate_verify', 'regenerate_success', 'disable_verify'
   const [manualEntryKey, setManualEntryKey] = useState("");
   const [otpauthUrl, setOtpauthUrl] = useState("");
   const [pending2FACode, setPending2FACode] = useState("");
   const [backupCodes, setBackupCodes] = useState([]);
   const [is2FASubmitting, setIs2FASubmitting] = useState(false);
   const [twoFAError, setTwoFAError] = useState("");
+  const [copiedKey, setCopiedKey] = useState(false);
+  const [copiedCodes, setCopiedCodes] = useState(false);
+
+  const handleCopyKey = () => {
+    if (!manualEntryKey) return;
+    navigator.clipboard.writeText(manualEntryKey);
+    setCopiedKey(true);
+    setTimeout(() => setCopiedKey(false), 2000);
+  };
+
+  const handleCopyCodes = () => {
+    if (backupCodes.length === 0) return;
+    navigator.clipboard.writeText(backupCodes.join("\n"));
+    setCopiedCodes(true);
+    setTimeout(() => setCopiedCodes(false), 2000);
+  };
+
+  const handleDownloadCodes = () => {
+    if (backupCodes.length === 0) return;
+    const element = document.createElement("a");
+    const file = new Blob([
+      "DRIVYA TWO-FACTOR AUTHENTICATION BACKUP CODES\n",
+      "=============================================\n",
+      "Keep these codes in a safe place. Each code can be used once.\n\n",
+      backupCodes.join("\n"),
+      "\n\nGenerated on: " + new Date().toLocaleString()
+    ], { type: "text/plain" });
+    element.href = URL.createObjectURL(file);
+    element.download = "drivya-backup-codes.txt";
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+  };
 
   const [sessionTimeout, setSessionTimeout] = useState("1h");
   const [encryptionLevel, setEncryptionLevel] = useState("standard");
@@ -517,321 +553,583 @@ export default function SecuritySection({ userProfile, setUserProfile }) {
           label="Enable 2FA"
           description="Require a second factor when signing in."
           badge={
-            twoFAEnabled && (
+            twoFAEnabled ? (
               <span className="rounded-md bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 text-[9px] font-bold text-emerald-600 dark:text-emerald-400">
                 Active
+              </span>
+            ) : (
+              <span className="rounded-md bg-secondary border border-border px-1.5 py-0.5 text-[9px] font-bold text-muted-foreground">
+                Inactive
               </span>
             )
           }
         >
           <SettingToggle
             checked={twoFAEnabled}
+            disabled={activeFlow !== null}
             onChange={(checked) => {
-              // Backend enable is not automatic; we must start setup/verify flow.
-              // When toggling ON, open the 2FA setup panel so we send /auth/2fa/setup + /auth/2fa/verify.
               if (checked) {
-                setTwoFAEnabled(true);
-                setIs2FASetupOpen(true);
+                setTwoFAError("");
+                setPending2FACode("");
+                setActiveFlow("setup_intro");
               } else {
-                // Keep UX consistent: open the panel so the user can disable with a TOTP code.
-                setTwoFAEnabled(false);
-                setIs2FASetupOpen(true);
+                setTwoFAError("");
+                setPending2FACode("");
+                setActiveFlow("disable_verify");
               }
             }}
           />
         </SettingRow>
 
-        {twoFAEnabled && (
-          <SettingRow
-            label="Authentication Method"
-            description="Choose your preferred 2FA method."
-            vertical
-          >
-            <SettingRadioGroup
-              value={twoFAMethod}
-              onChange={(v) => {
-                // Backend currently supports TOTP only; keep UI aligned.
-                setTwoFAMethod(v);
-              }}
-              options={[
-                {
-                  value: "totp",
-                  label: "Authenticator App",
-                  description:
-                    "Use Google Authenticator, Authy, or any TOTP app.",
-                },
-                {
-                  value: "sms",
-                  label: "SMS Code",
-                  description: "Not available in this build.",
-                },
-              ]}
-            />
-          </SettingRow>
+        {twoFAEnabled && activeFlow === null && (
+          <>
+            <SettingRow
+              label="Authentication Method"
+              description="Choose your preferred 2FA method."
+              vertical
+            >
+              <div className="flex gap-2 flex-col sm:flex-row">
+                <div className="flex-1 flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 p-3.5 text-left">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-primary bg-primary/10 text-primary">
+                    <Smartphone className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <span className="text-sm font-medium text-foreground">
+                      Authenticator App
+                    </span>
+                    <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+                      Use Google Authenticator, Authy, or any TOTP app to generate verification codes.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </SettingRow>
+
+            <SettingRow
+              label="Backup Codes"
+              description="10 single-use codes to access your account if you lose your device."
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setPending2FACode("");
+                  setTwoFAError("");
+                  setActiveFlow("regenerate_verify");
+                }}
+                className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-secondary/40 px-4 text-xs font-semibold text-foreground hover:bg-secondary/60 transition-colors"
+              >
+                <Key className="h-3.5 w-3.5" />
+                Regenerate Backup Codes
+              </button>
+            </SettingRow>
+          </>
         )}
 
-        <SettingRow
-          label="Backup Codes"
-          description="10 single-use codes for when you lose access to your 2FA device."
-        >
-          <button
-            onClick={async () => {
-              // If already enabled, user needs a new setup/verify flow to reveal codes.
-              // For now, open setup flow UI if 2FA is enabled; user can regenerate with a TOTP code.
-              if (!twoFAEnabled) {
-                setIs2FASetupOpen(true);
-                return;
-              }
-              setIs2FASetupOpen(true);
-            }}
-            className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-secondary/40 px-4 text-xs font-semibold text-foreground hover:bg-secondary/60 transition-colors"
-          >
-            {twoFAEnabled ? "Regenerate / View" : "View Backup Codes"}
-          </button>
-        </SettingRow>
-
-        {/* Enable / Disable / Backup codes panel */}
-        <AnimatePresence>
-          {is2FASetupOpen && (
+        <AnimatePresence mode="wait">
+          {activeFlow && (
             <motion.div
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              className="px-6 pb-4"
+              key={activeFlow}
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+              className="overflow-hidden"
             >
-              <div className="rounded-xl border bg-secondary/20 p-4 space-y-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">
-                      {twoFAEnabled ? "Manage Two-Factor" : "Enable Two-Factor"}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">
-                      {twoFAEnabled
-                        ? "Enter a TOTP code to regenerate backup codes or disable 2FA."
-                        : "Scan QR or enter the manual key, then verify with your authenticator app."}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setIs2FASetupOpen(false);
-                      setTwoFAError("");
-                      setPending2FACode("");
-                      setBackupCodes([]);
-                      setManualEntryKey("");
-                      setOtpauthUrl("");
-                    }}
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-secondary/40 hover:bg-secondary/60 text-muted-foreground"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-
-                {!twoFAEnabled && (
-                  <div className="space-y-2">
-                    <button
-                      disabled={is2FASubmitting}
-                      onClick={async () => {
-                        setTwoFAError("");
-                        setBackupCodes([]);
-                        setPending2FACode("");
-                        setIs2FASubmitting(true);
-                        try {
-                          const data = await setup2FA();
-                          setManualEntryKey(data.manualEntryKey);
-                          setOtpauthUrl(data.otpauthUrl);
-                        } catch (err) {
-                          setTwoFAError(
-                            err?.response?.data?.message ||
-                            "Failed to start 2FA setup.",
-                          );
-                        } finally {
-                          setIs2FASubmitting(false);
-                        }
-                      }}
-                      className="inline-flex h-9 items-center gap-2 rounded-xl bg-primary px-4 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Fingerprint className="h-3.5 w-3.5" />
-                      Start setup
-                    </button>
-
-                    {manualEntryKey && (
-                      <div className="rounded-lg border border-border bg-background/60 p-3 space-y-2">
-                        <div className="text-[11px] font-semibold text-muted-foreground">
-                          Manual entry key
-                        </div>
-                        <div className="font-mono text-xs break-all">
-                          {manualEntryKey}
-                        </div>
-                        {otpauthUrl && (
-                          <a
-                            href={otpauthUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-[11px] text-primary hover:underline break-all"
-                          >
-                            otpauth URL (opens in new tab)
-                          </a>
-                        )}
+              {/* Setup Intro */}
+              {activeFlow === "setup_intro" && (
+                <div className="px-6 py-5 border-t border-border/40 bg-secondary/10">
+                  <div className="space-y-4 max-w-xl">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        <Smartphone className="h-4 w-4" />
                       </div>
-                    )}
-                  </div>
-                )}
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-muted-foreground">
-                    Authenticator code
-                  </label>
-                  <SettingInput
-                    type="text"
-                    value={pending2FACode}
-                    onChange={setPending2FACode}
-                    placeholder="Enter 6-digit code"
-                    icon={ShieldCheck}
-                    className="max-w-sm"
-                  />
-                  {twoFAError && (
-                    <div className="text-[11px] font-medium text-destructive flex items-center gap-1">
-                      <AlertTriangle className="h-3 w-3 shrink-0" />
-                      {twoFAError}
+                      <div>
+                        <h4 className="text-sm font-semibold text-foreground">Set up an Authenticator App</h4>
+                        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                          Drivya uses Time-Based One-Time Passwords (TOTP) to protect your account. You will need an authenticator app like Google Authenticator, Microsoft Authenticator, Authy, or 1Password on your mobile device to scan the QR code and generate verification codes.
+                        </p>
+                      </div>
                     </div>
-                  )}
-                </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  {!twoFAEnabled ? (
-                    <button
-                      disabled={
-                        is2FASubmitting ||
-                        pending2FACode.trim().length === 0
-                      }
-                      onClick={async () => {
-                        setTwoFAError("");
-                        setBackupCodes([]);
-                        setIs2FASubmitting(true);
-                        try {
-                          const data = await verify2FA({
-                            code: pending2FACode.trim(),
-                          });
-                          setTwoFAEnabled(true);
-                          setBackupCodes(data.backupCodes || []);
-                        } catch (err) {
-                          if (
-                            err?.response?.data?.code === "TWOFA_REQUIRED"
-                          ) {
-                            setTwoFAError(
-                              "Please complete 2FA step-up first.",
-                            );
-                          } else {
-                            setTwoFAError(
-                              err?.response?.data?.message ||
-                              "Invalid 2FA code.",
-                            );
-                          }
-                        } finally {
-                          setIs2FASubmitting(false);
-                        }
-                      }}
-                      className="inline-flex h-9 items-center gap-2 rounded-xl bg-primary px-4 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Check className="h-3.5 w-3.5" />
-                      Verify & enable
-                    </button>
-                  ) : (
-                    <>
+                    <div className="flex gap-2 pt-2">
                       <button
-                        disabled={
-                          is2FASubmitting ||
-                          pending2FACode.trim().length === 0
-                        }
+                        type="button"
+                        disabled={is2FASubmitting}
                         onClick={async () => {
                           setTwoFAError("");
                           setBackupCodes([]);
+                          setPending2FACode("");
                           setIs2FASubmitting(true);
                           try {
-                            const data = await regenerateBackupCodes({
-                              code: pending2FACode.trim(),
-                            });
-                            setBackupCodes(data.backupCodes || []);
+                            const data = await setup2FA();
+                            setManualEntryKey(data.manualEntryKey);
+                            setOtpauthUrl(data.otpauthUrl);
+                            setActiveFlow("setup_verify");
                           } catch (err) {
                             setTwoFAError(
-                              err?.response?.data?.message ||
-                              "Failed to regenerate backup codes.",
+                              err?.response?.data?.message || "Failed to start 2FA setup."
                             );
                           } finally {
                             setIs2FASubmitting(false);
                           }
                         }}
-                        className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-secondary/40 px-4 text-xs font-semibold text-foreground hover:bg-secondary/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="inline-flex h-9 items-center gap-2 rounded-xl bg-primary px-4 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 transition-colors disabled:opacity-50"
                       >
-                        <Key className="h-3.5 w-3.5" />
-                        Regenerate backup codes
+                        {is2FASubmitting ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            Initializing...
+                          </>
+                        ) : (
+                          "Next: Scan QR Code"
+                        )}
                       </button>
-
                       <button
-                        disabled={
-                          is2FASubmitting ||
-                          pending2FACode.trim().length === 0
-                        }
-                        onClick={async () => {
-                          const ok = window.confirm(
-                            "Disable 2FA? This will reduce security.",
-                          );
-                          if (!ok) return;
-
-                          setTwoFAError("");
-                          setIs2FASubmitting(true);
-                          try {
-                            await disable2FA({
-                              code: pending2FACode.trim(),
-                            });
-                            setTwoFAEnabled(false);
-                            setBackupCodes([]);
-                            setPending2FACode("");
-                            setManualEntryKey("");
-                            setOtpauthUrl("");
-                            if (setUserProfile) {
-                              setUserProfile((prev) => ({
-                                ...prev,
-                                twoFAEnabled: false,
-                                twoFAMethod: null,
-                              }));
-                            }
-                          } catch (err) {
-                            setTwoFAError(
-                              err?.response?.data?.message ||
-                              "Failed to disable 2FA.",
-                            );
-                          } finally {
-                            setIs2FASubmitting(false);
-                          }
-                        }}
-                        className="inline-flex h-9 items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-4 text-xs font-semibold text-destructive hover:bg-destructive/15 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        type="button"
+                        onClick={() => setActiveFlow(null)}
+                        disabled={is2FASubmitting}
+                        className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-background px-4 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors disabled:opacity-50"
                       >
-                        <X className="h-3.5 w-3.5" />
-                        Disable 2FA
+                        Cancel
                       </button>
-                    </>
-                  )}
-                </div>
-
-                {backupCodes.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="text-[11px] font-semibold text-muted-foreground">
-                      Backup codes (save these — single use)
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {backupCodes.map((c) => (
-                        <div
-                          key={c}
-                          className="font-mono text-xs rounded-lg border border-border bg-background/60 p-2 break-all text-foreground"
-                        >
-                          {c}
+                    {twoFAError && (
+                      <div className="pt-2">
+                        <SettingBanner variant="destructive" icon={AlertTriangle}>
+                          {twoFAError}
+                        </SettingBanner>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Setup Verify */}
+              {activeFlow === "setup_verify" && (
+                <div className="px-6 py-5 border-t border-border/40 bg-secondary/10">
+                  <div className="space-y-5 max-w-xl">
+                    <div className="space-y-3">
+                      <h4 className="text-sm font-semibold text-foreground">Scan the QR Code</h4>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Open your authenticator app, select "Add account" or scan a barcode, and scan the QR code below.
+                      </p>
+                      
+                      <div className="flex flex-col sm:flex-row gap-5 items-center bg-background/60 p-4 rounded-xl border border-border/50">
+                        {otpauthUrl && (
+                          <div className="p-2.5 bg-white rounded-lg border border-border shrink-0 shadow-sm">
+                            <img
+                              src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(otpauthUrl)}`}
+                              alt="2FA QR Code"
+                              className="h-[150px] w-[150px]"
+                              loading="lazy"
+                            />
+                          </div>
+                        )}
+                        <div className="space-y-2.5 w-full">
+                          <div className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                            <QrCode className="h-3.5 w-3.5" />
+                            Or enter the manual key:
+                          </div>
+                          <div className="flex items-center gap-1.5 w-full">
+                            <code className="flex-1 font-mono text-xs select-all break-all rounded-lg border border-border/60 bg-secondary/30 p-2 text-foreground font-bold leading-normal">
+                              {manualEntryKey}
+                            </code>
+                            <button
+                              type="button"
+                              onClick={handleCopyKey}
+                              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-[11px] font-semibold text-foreground hover:bg-secondary/40 transition-colors shrink-0"
+                            >
+                              {copiedKey ? (
+                                <>
+                                  <Check className="h-3 w-3 text-emerald-500" />
+                                  Copied
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="h-3 w-3 text-muted-foreground" />
+                                  Copy
+                                  </>
+                              )}
+                            </button>
+                          </div>
+                          <p className="text-[10.5px] text-muted-foreground leading-normal">
+                            Account: <strong className="text-foreground">{userProfile?.email}</strong><br />
+                            Issuer: <strong className="text-foreground">Drivya</strong>
+                          </p>
                         </div>
-                      ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 border-t border-border/40 pt-4">
+                      <h4 className="text-sm font-semibold text-foreground">Verify Verification Code</h4>
+                      <p className="text-xs text-muted-foreground">
+                        Enter the 6-digit verification code generated by your authenticator app to complete setup.
+                      </p>
+                      <div className="flex gap-2 items-end max-w-sm">
+                        <div className="flex-1">
+                          <SettingInput
+                            type="text"
+                            value={pending2FACode}
+                            onChange={(val) => {
+                              setPending2FACode(val);
+                              if (twoFAError) setTwoFAError("");
+                            }}
+                            placeholder="000000"
+                            icon={ShieldCheck}
+                            maxLength={6}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          disabled={is2FASubmitting || pending2FACode.trim().length !== 6}
+                          onClick={async () => {
+                            setTwoFAError("");
+                            setBackupCodes([]);
+                            setIs2FASubmitting(true);
+                            try {
+                              const data = await verify2FA({
+                                code: pending2FACode.trim(),
+                              });
+                              setTwoFAEnabled(true);
+                              setBackupCodes(data.backupCodes || []);
+                              if (setUserProfile) {
+                                setUserProfile((prev) => ({
+                                  ...prev,
+                                  twoFAEnabled: true,
+                                  twoFAMethod: "totp",
+                                }));
+                              }
+                              setPending2FACode("");
+                              setActiveFlow("setup_success");
+                            } catch (err) {
+                              if (err?.response?.data?.code === "TWOFA_REQUIRED") {
+                                setTwoFAError("Please complete 2FA step-up first.");
+                              } else {
+                                setTwoFAError(
+                                  err?.response?.data?.message || "Invalid 2FA code."
+                                );
+                              }
+                            } finally {
+                              setIs2FASubmitting(false);
+                            }
+                          }}
+                          className="inline-flex h-9 items-center gap-2 rounded-xl bg-primary px-4 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+                        >
+                          {is2FASubmitting ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              Verifying...
+                            </>
+                          ) : (
+                            "Verify & Enable"
+                          )}
+                        </button>
+                      </div>
+                      {twoFAError && (
+                        <div className="text-[11px] font-medium text-destructive flex items-center gap-1 mt-1.5">
+                          <AlertTriangle className="h-3 w-3 shrink-0" />
+                          {twoFAError}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex gap-2 pt-1 border-t border-border/40 pt-4">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveFlow("setup_intro");
+                          setTwoFAError("");
+                          setPending2FACode("");
+                        }}
+                        disabled={is2FASubmitting}
+                        className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-background px-4 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors disabled:opacity-50"
+                      >
+                        Back
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveFlow(null);
+                          setTwoFAError("");
+                          setPending2FACode("");
+                        }}
+                        disabled={is2FASubmitting}
+                        className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-background px-4 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
                     </div>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
+
+              {/* Success Screen (Setup Success or Regenerate Success) */}
+              {(activeFlow === "setup_success" || activeFlow === "regenerate_success") && (
+                <div className="px-6 py-5 border-t border-border/40 bg-secondary/10">
+                  <div className="space-y-4 max-w-xl">
+                    <div className="flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3">
+                      <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
+                      <div>
+                        <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                          {activeFlow === "setup_success"
+                            ? "2FA Enabled Successfully!"
+                            : "New Backup Codes Generated!"}
+                        </p>
+                        <p className="text-[11px] text-emerald-600/70 dark:text-emerald-400/70 mt-0.5">
+                          {activeFlow === "setup_success"
+                            ? "Your account is now protected with two-factor authentication."
+                            : "Your previous backup codes are no longer valid."}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <h4 className="text-sm font-semibold text-foreground">Save Your Backup Codes</h4>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Backup codes allow you to access your account if you lose your 2FA device. Store these in a secure place — they will not be shown again. Each code can only be used once.
+                      </p>
+
+                      <div className="grid grid-cols-2 gap-2 bg-background/60 p-4 rounded-xl border border-border/50 font-mono text-xs font-semibold text-foreground tabular-nums select-all">
+                        {backupCodes.map((code, idx) => (
+                          <div
+                            key={code}
+                            className="flex items-center gap-2 border-b border-border/30 pb-1 last:border-0 sm:odd:pr-2 sm:even:pl-2"
+                          >
+                            <span className="text-[10px] text-muted-foreground/60 w-5 shrink-0">
+                              {idx + 1}.
+                            </span>
+                            <span>{code}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="flex flex-wrap gap-2 pt-2">
+                        <button
+                          type="button"
+                          onClick={handleCopyCodes}
+                          className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-background px-4 text-xs font-semibold text-foreground hover:bg-secondary/40 transition-colors"
+                        >
+                          {copiedCodes ? (
+                            <>
+                              <Check className="h-3.5 w-3.5 text-emerald-500" />
+                              Copied to Clipboard
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                              Copy Codes
+                            </>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleDownloadCodes}
+                          className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-background px-4 text-xs font-semibold text-foreground hover:bg-secondary/40 transition-colors"
+                        >
+                          <Download className="h-3.5 w-3.5 text-muted-foreground" />
+                          Download Codes (.txt)
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-border/40 pt-4">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveFlow(null);
+                          setBackupCodes([]);
+                        }}
+                        className="inline-flex h-9 items-center gap-2 rounded-xl bg-primary px-5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+                      >
+                        Done
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Regenerate Verification */}
+              {activeFlow === "regenerate_verify" && (
+                <div className="px-6 py-5 border-t border-border/40 bg-secondary/10">
+                  <div className="space-y-4 max-w-xl">
+                    <SettingBanner variant="warning" icon={AlertTriangle}>
+                      Regenerating backup codes will invalidate all your currently active backup codes. You will receive 10 new codes to save.
+                    </SettingBanner>
+
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-semibold text-foreground">Confirm with Authenticator Code</h4>
+                      <p className="text-xs text-muted-foreground">
+                        Enter the 6-digit code from your authenticator app to authorize code regeneration.
+                      </p>
+                      <div className="flex gap-2 items-end max-w-sm">
+                        <div className="flex-1">
+                          <SettingInput
+                            type="text"
+                            value={pending2FACode}
+                            onChange={(val) => {
+                              setPending2FACode(val);
+                              if (twoFAError) setTwoFAError("");
+                            }}
+                            placeholder="000000"
+                            icon={ShieldCheck}
+                            maxLength={6}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          disabled={is2FASubmitting || pending2FACode.trim().length !== 6}
+                          onClick={async () => {
+                            setTwoFAError("");
+                            setBackupCodes([]);
+                            setIs2FASubmitting(true);
+                            try {
+                              const data = await regenerateBackupCodes({
+                                code: pending2FACode.trim(),
+                              });
+                              setBackupCodes(data.backupCodes || []);
+                              setPending2FACode("");
+                              setActiveFlow("regenerate_success");
+                            } catch (err) {
+                              setTwoFAError(
+                                err?.response?.data?.message || "Failed to regenerate backup codes."
+                              );
+                            } finally {
+                              setIs2FASubmitting(false);
+                            }
+                          }}
+                          className="inline-flex h-9 items-center gap-2 rounded-xl bg-primary px-4 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+                        >
+                          {is2FASubmitting ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              Regenerating...
+                            </>
+                          ) : (
+                            "Regenerate Codes"
+                          )}
+                        </button>
+                      </div>
+                      {twoFAError && (
+                        <div className="text-[11px] font-medium text-destructive flex items-center gap-1 mt-1.5">
+                          <AlertTriangle className="h-3 w-3 shrink-0" />
+                          {twoFAError}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveFlow(null);
+                          setTwoFAError("");
+                          setPending2FACode("");
+                        }}
+                        disabled={is2FASubmitting}
+                        className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-background px-4 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Disable Verification */}
+              {activeFlow === "disable_verify" && (
+                <div className="px-6 py-5 border-t border-border/40 bg-destructive/[0.02]">
+                  <div className="space-y-4 max-w-xl">
+                    <SettingBanner variant="destructive" icon={AlertTriangle}>
+                      Warning: Disabling two-factor authentication significantly reduces your account security. You will only need your password to log in.
+                    </SettingBanner>
+
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-semibold text-foreground">Confirm Disabling 2FA</h4>
+                      <p className="text-xs text-muted-foreground">
+                        Enter the 6-digit code from your authenticator app to disable 2FA.
+                      </p>
+                      <div className="flex gap-2 items-end max-w-sm">
+                        <div className="flex-1">
+                          <SettingInput
+                            type="text"
+                            value={pending2FACode}
+                            onChange={(val) => {
+                              setPending2FACode(val);
+                              if (twoFAError) setTwoFAError("");
+                            }}
+                            placeholder="000000"
+                            icon={ShieldCheck}
+                            maxLength={6}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          disabled={is2FASubmitting || pending2FACode.trim().length !== 6}
+                          onClick={async () => {
+                            setTwoFAError("");
+                            setIs2FASubmitting(true);
+                            try {
+                              await disable2FA({
+                                code: pending2FACode.trim(),
+                              });
+                              setTwoFAEnabled(false);
+                              setBackupCodes([]);
+                              setPending2FACode("");
+                              setManualEntryKey("");
+                              setOtpauthUrl("");
+                              if (setUserProfile) {
+                                setUserProfile((prev) => ({
+                                  ...prev,
+                                  twoFAEnabled: false,
+                                  twoFAMethod: null,
+                                }));
+                              }
+                              setActiveFlow(null);
+                            } catch (err) {
+                              setTwoFAError(
+                                err?.response?.data?.message || "Failed to disable 2FA."
+                              );
+                            } finally {
+                              setIs2FASubmitting(false);
+                            }
+                          }}
+                          className="inline-flex h-9 items-center gap-2 rounded-xl bg-destructive px-4 text-xs font-semibold text-destructive-foreground hover:bg-destructive/90 transition-colors disabled:opacity-50"
+                        >
+                          {is2FASubmitting ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              Disabling...
+                            </>
+                          ) : (
+                            "Disable 2FA"
+                          )}
+                        </button>
+                      </div>
+                      {twoFAError && (
+                        <div className="text-[11px] font-medium text-destructive flex items-center gap-1 mt-1.5">
+                          <AlertTriangle className="h-3 w-3 shrink-0" />
+                          {twoFAError}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveFlow(null);
+                          setTwoFAError("");
+                          setPending2FACode("");
+                        }}
+                        disabled={is2FASubmitting}
+                        className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-background px-4 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
