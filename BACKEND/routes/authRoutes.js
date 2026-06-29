@@ -10,6 +10,7 @@ import {
   verify2FA,
   regenerateBackupCodes,
   disable2FA,
+  loginVerify2FA,
 } from "../controllers/authController.js";
 import { authenticate } from "../middlewares/authMiddleware.js";
 import {
@@ -43,6 +44,7 @@ router.post("/logout", logout);
  */
 router.post("/2fa/setup", authenticate, setup2FA);
 router.post("/2fa/verify", authenticate, verify2FA);
+router.post("/2fa/login-verify", authenticate, loginVerify2FA);
 router.post("/2fa/backup-codes/regenerate", authenticate, regenerateBackupCodes);
 router.post("/2fa/disable", authenticate, disable2FA);
 

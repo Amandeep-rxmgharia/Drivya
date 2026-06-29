@@ -116,12 +116,6 @@ const userSchema = new Schema(
       type: Boolean,
       default: false,
     },
-    twoFAMethod: {
-      type: String,
-      enum: ["totp", "sms"],
-      default: "totp",
-    },
-
     // Encrypted TOTP secret at rest (AES-256-GCM)
     // Stored as two separate fields to avoid accidental exposure in logs.
     twoFASecretEnc: {

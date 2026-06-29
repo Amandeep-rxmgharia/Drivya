@@ -39,7 +39,6 @@ export const getProfile = async (req, res, next) => {
         memberSince: user.createdAt,
         loginAlerts: user.loginAlerts !== false,
         twoFAEnabled: !!user.twoFAEnabled,
-        twoFAMethod: user.twoFAMethod || null,
       },
     });
   } catch (err) {

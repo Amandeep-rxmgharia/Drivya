@@ -388,7 +388,6 @@ export default function SecuritySection({ userProfile, setUserProfile }) {
   const [showPasswordForm, setShowPasswordForm] = useState(false);
 
   const [twoFAEnabled, setTwoFAEnabled] = useState(!!userProfile?.twoFAEnabled);
-  const [twoFAMethod, setTwoFAMethod] = useState(userProfile?.twoFAMethod || "totp");
   const [loginAlerts, setLoginAlerts] = useState(userProfile?.loginAlerts !== false);
 
   const [activeFlow, setActiveFlow] = useState(null); // null, 'setup_intro', 'setup_verify', 'setup_success', 'regenerate_verify', 'regenerate_success', 'disable_verify'
@@ -443,7 +442,6 @@ export default function SecuritySection({ userProfile, setUserProfile }) {
     if (!userProfile) return;
     setLoginAlerts(userProfile.loginAlerts !== false);
     if (userProfile.twoFAEnabled !== undefined) setTwoFAEnabled(!!userProfile.twoFAEnabled);
-    if (userProfile.twoFAMethod) setTwoFAMethod(userProfile.twoFAMethod);
   }, [userProfile]);
 
   // Fetch active sessions on mount
@@ -796,7 +794,6 @@ export default function SecuritySection({ userProfile, setUserProfile }) {
                                 setUserProfile((prev) => ({
                                   ...prev,
                                   twoFAEnabled: true,
-                                  twoFAMethod: "totp",
                                 }));
                               }
                               setPending2FACode("");
@@ -1081,7 +1078,6 @@ export default function SecuritySection({ userProfile, setUserProfile }) {
                                 setUserProfile((prev) => ({
                                   ...prev,
                                   twoFAEnabled: false,
-                                  twoFAMethod: null,
                                 }));
                               }
                               setActiveFlow(null);

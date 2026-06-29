@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
-import { loginUser, registerUser } from "../../api/auth";
+import { loginUser, registerUser, loginVerify2FA } from "../../api/auth";
 
 // Google Logo SVG
 const GoogleIcon = () => (
@@ -82,6 +82,50 @@ export default function Auth() {
   const [isSuccess, setIsSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
+  // 2FA login verification states
+  const [twoFARequired, setTwoFARequired] = useState(false);
+  const [twoFAVerifyCode, setTwoFAVerifyCode] = useState("");
+  const [isBackupMode, setIsBackupMode] = useState(false);
+  const [otpDigits, setOtpDigits] = useState(Array(6).fill(""));
+
+  const handleOtpChange = (index, value) => {
+    if (!/^\d*$/.test(value)) return;
+    const newDigits = [...otpDigits];
+    newDigits[index] = value.slice(-1);
+    setOtpDigits(newDigits);
+
+    // Auto-focus next input if value is filled
+    if (value && index < 5) {
+      const nextInput = document.getElementById(`otp-input-${index + 1}`);
+      if (nextInput) nextInput.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index, e) => {
+    if (e.key === "Backspace" && !otpDigits[index] && index > 0) {
+      const prevInput = document.getElementById(`otp-input-${index - 1}`);
+      if (prevInput) {
+        prevInput.focus();
+        const newDigits = [...otpDigits];
+        newDigits[index - 1] = "";
+        setOtpDigits(newDigits);
+      }
+    }
+  };
+
+  const handleOtpPaste = (e) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData("text").trim();
+    if (!/^\d{6}$/.test(pastedData)) return;
+
+    const newDigits = pastedData.split("");
+    setOtpDigits(newDigits);
+
+    // Focus last input
+    const lastInput = document.getElementById("otp-input-5");
+    if (lastInput) lastInput.focus();
+  };
+
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg("");
@@ -95,7 +139,13 @@ export default function Auth() {
     setLoadingStep("Verifying credentials...");
 
     try {
-      await loginUser({ email: loginEmail, password: loginPassword });
+      const data = await loginUser({ email: loginEmail, password: loginPassword });
+      if (data?.requiresTwoFA) {
+        setIsLoading(false);
+        setTwoFARequired(true);
+        setErrorMsg("");
+        return;
+      }
       setLoadingStep("Loading account data...");
       setIsSuccess(true);
       setIsLoading(false);
@@ -106,6 +156,47 @@ export default function Auth() {
         error.response?.data?.message ||
         error.response?.data?.errors?.[0]?.message ||
         "Login failed. Please try again.";
+      setErrorMsg(msg);
+      setIsSuccess(false);
+      setIsLoading(false);
+    }
+  };
+
+  const handle2FAVerify = async (e) => {
+    e.preventDefault();
+    setErrorMsg("");
+
+    let codeToVerify = "";
+    if (isBackupMode) {
+      if (!twoFAVerifyCode) {
+        setErrorMsg("Please enter your backup code.");
+        return;
+      }
+      codeToVerify = twoFAVerifyCode.trim();
+    } else {
+      const joinedDigits = otpDigits.join("");
+      if (joinedDigits.length < 6) {
+        setErrorMsg("Please enter a 6-digit TOTP code.");
+        return;
+      }
+      codeToVerify = joinedDigits;
+    }
+
+    setIsLoading(true);
+    setLoadingStep("Verifying 2FA code...");
+
+    try {
+      await loginVerify2FA({ code: codeToVerify });
+      setLoadingStep("Access granted! Loading dashboard...");
+      setIsSuccess(true);
+      setIsLoading(false);
+      const redirectTo = searchParams.get("redirect") || "/dashboard";
+      setTimeout(() => navigate(redirectTo), 600);
+    } catch (error) {
+      const msg =
+        error.response?.data?.message ||
+        error.response?.data?.errors?.[0]?.message ||
+        "Invalid 2FA verification code.";
       setErrorMsg(msg);
       setIsSuccess(false);
       setIsLoading(false);
@@ -500,385 +591,514 @@ export default function Auth() {
           {/* Glass Card Container */}
           <div className="glass mt-10 lg:mt-0 backdrop-blur-xl bg-card/45 shadow-elegant rounded-3xl border border-border/25 overflow-hidden">
             <div className="p-8 sm:p-10 space-y-6">
-              {/* Header Text & Toggle Tabs */}
-              <div className="space-y-4 text-center">
-                <h2 className="font-display text-2xl font-bold tracking-tight text-foreground">
-                  {activeTab === "login"
-                    ? "Welcome back"
-                    : "Create your account"}
-                </h2>
-                <p className="text-xs text-muted-foreground">
-                  {activeTab === "login"
-                    ? "Enter your details to access your dashboard"
-                    : "Join Drivya today and experience modern mobility"}
-                </p>
+              {twoFARequired ? (
+                // ─── 2FA Verification View ──────────────────────────
+                <motion.div
+                  key="twoFAForm"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ duration: 0.3, ease: "easeOut" }}
+                  className="space-y-6"
+                >
+                  <div className="space-y-3 text-center">
+                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 border border-primary/25 text-primary shadow-[0_0_20px_rgba(var(--primary-rgb),0.15)]">
+                      <ShieldCheck className="h-6 w-6" />
+                    </div>
+                    <h2 className="font-display text-2xl font-bold tracking-tight text-foreground">
+                      Two-Factor Security
+                    </h2>
+                    <p className="text-xs text-muted-foreground leading-relaxed max-w-sm mx-auto">
+                      {isBackupMode
+                        ? "Please enter one of your 12-character backup codes below to verify your identity."
+                        : "Please enter the 6-digit verification code from your authenticator app."}
+                    </p>
+                  </div>
 
-                {/* Sliding Segmented Tab Switcher */}
-                <div className="relative flex p-1 bg-muted/40 rounded-xl border border-border/20">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveTab("login");
-                      setErrorMsg("");
-                    }}
-                    className={`flex-1 py-2 text-xs font-semibold rounded-lg relative transition-colors focus-visible:outline-none ${
-                      activeTab === "login"
-                        ? "text-foreground"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {activeTab === "login" && (
+                  {/* Error messages */}
+                  <AnimatePresence>
+                    {errorMsg && (
                       <motion.div
-                        layoutId="activeAuthTab"
-                        className="absolute inset-0 bg-background shadow-sm rounded-lg border border-border/25 -z-10"
-                        transition={{
-                          type: "spring",
-                          stiffness: 400,
-                          damping: 30,
-                        }}
-                      />
-                    )}
-                    <span>Login</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveTab("register");
-                      setErrorMsg("");
-                    }}
-                    className={`flex-1 py-2 text-xs font-semibold rounded-lg relative transition-colors focus-visible:outline-none ${
-                      activeTab === "register"
-                        ? "text-foreground"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {activeTab === "register" && (
-                      <motion.div
-                        layoutId="activeAuthTab"
-                        className="absolute inset-0 bg-background shadow-sm rounded-lg border border-border/25 -z-10"
-                        transition={{
-                          type: "spring",
-                          stiffness: 400,
-                          damping: 30,
-                        }}
-                      />
-                    )}
-                    <span>Register</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Error messages */}
-              <AnimatePresence>
-                {errorMsg && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    className="p-3 text-xs bg-destructive/10 border border-destructive/20 text-destructive rounded-lg flex items-center gap-2 font-medium"
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-destructive flex-shrink-0 animate-pulse" />
-                    <span>{errorMsg}</span>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Form Forms Switcher Animation Container */}
-              <div className="relative">
-                <AnimatePresence mode="wait">
-                  {activeTab === "login" ? (
-                    // LOGIN FORM
-                    <motion.form
-                      key="login"
-                      onSubmit={handleLoginSubmit}
-                      initial={{ opacity: 0, x: -16 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 16 }}
-                      transition={{ duration: 0.25 }}
-                      className="space-y-4"
-                    >
-                      {/* Email Field */}
-                      <div className="space-y-1.5 relative">
-                        <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">
-                          Email Address
-                        </label>
-                        <div className="relative group">
-                          <Mail className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
-                          <input
-                            type="email"
-                            placeholder="name@example.com"
-                            value={loginEmail}
-                            onChange={(e) => setLoginEmail(e.target.value)}
-                            className="w-full bg-muted/15 border border-border/30 rounded-xl py-3 pl-10 pr-4 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/45 focus:bg-muted/10 transition-all font-medium text-foreground placeholder:text-muted-foreground/60"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Password Field */}
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                            Password
-                          </label>
-                        </div>
-                        <div className="relative group">
-                          <Lock className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
-                          <input
-                            type={showLoginPassword ? "text" : "password"}
-                            placeholder="••••••••••••"
-                            value={loginPassword}
-                            onChange={(e) => setLoginPassword(e.target.value)}
-                            className="w-full bg-muted/15 border border-border/30 rounded-xl py-3 pl-10 pr-10 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/45 focus:bg-muted/10 transition-all font-medium text-foreground placeholder:text-muted-foreground/60"
-                          />
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setShowLoginPassword(!showLoginPassword)
-                            }
-                            className="absolute right-3 top-3.5 text-muted-foreground hover:text-foreground transition-colors"
-                          >
-                            {showLoginPassword ? (
-                              <EyeOff className="h-4 w-4" />
-                            ) : (
-                              <Eye className="h-4 w-4" />
-                            )}
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Options: Remember Me & Forgot Password */}
-                      <div className="flex items-center justify-between text-xs pt-1 select-none">
-                        <label className="flex items-center gap-2 cursor-pointer group">
-                          <div className="relative flex items-center justify-center">
-                            <input
-                              type="checkbox"
-                              checked={rememberMe}
-                              onChange={(e) => setRememberMe(e.target.checked)}
-                              className="sr-only peer"
-                            />
-                            <div className="w-4 h-4 rounded border-[1.5px] border-border bg-muted/60 peer-checked:bg-primary peer-checked:border-primary transition-all flex items-center justify-center">
-                              {rememberMe && (
-                                <Check className="h-3 w-3 text-primary-foreground stroke-[3]" />
-                              )}
-                            </div>
-                          </div>
-                          <span className="text-muted-foreground group-hover:text-foreground transition-colors font-medium">
-                            Remember me
-                          </span>
-                        </label>
-
-                        <a
-                          href="#forgot"
-                          className="text-primary hover:underline font-semibold transition-colors"
-                        >
-                          Forgot password?
-                        </a>
-                      </div>
-
-                      {/* Submit button */}
-                      <motion.button
-                        whileHover={{ scale: 1.01 }}
-                        whileTap={{ scale: 0.99 }}
-                        type="submit"
-                        className="w-full cursor-pointer mt-2 bg-gradient-primary text-primary-foreground font-semibold py-3 rounded-xl hover:opacity-90 shadow-glow transition-all flex items-center justify-center gap-2"
+                        initial={{ opacity: 0, y: -8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -8 }}
+                        className="p-3 text-xs bg-destructive/10 border border-destructive/20 text-destructive rounded-lg flex items-center gap-2 font-medium"
                       >
-                        <span>Sign In</span>
-                      </motion.button>
-                    </motion.form>
-                  ) : (
-                    // REGISTER FORM
-                    <motion.form
-                      key="register"
-                      onSubmit={handleRegisterSubmit}
-                      initial={{ opacity: 0, x: 16 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -16 }}
-                      transition={{ duration: 0.25 }}
-                      className="space-y-4"
-                    >
-                      {/* Name Field */}
-                      <div className="space-y-1.5 relative">
-                        <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">
-                          Full Name
+                        <span className="w-1.5 h-1.5 rounded-full bg-destructive flex-shrink-0 animate-pulse" />
+                        <span>{errorMsg}</span>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <form onSubmit={handle2FAVerify} className="space-y-6">
+                    {isBackupMode ? (
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] ml-1 font-bold uppercase tracking-wider text-muted-foreground">
+                          Backup Code
                         </label>
-                        <div className="relative group">
-                          <User className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                        <div className="relative my-2 group">
+                          <Lock className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
                           <input
                             type="text"
-                            placeholder="John Doe"
-                            value={registerName}
-                            onChange={(e) => setRegisterName(e.target.value)}
+                            placeholder="XXXX-XXXX-XXXX"
+                            value={twoFAVerifyCode}
+                            onChange={(e) => setTwoFAVerifyCode(e.target.value)}
                             className="w-full bg-muted/15 border border-border/30 rounded-xl py-3 pl-10 pr-4 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/45 focus:bg-muted/10 transition-all font-medium text-foreground placeholder:text-muted-foreground/60"
                           />
                         </div>
                       </div>
-
-                      {/* Email Field */}
-                      <div className="space-y-1.5 relative">
-                        <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">
-                          Email Address
+                    ) : (
+                      <div className="space-y-3">
+                        <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block text-center">
+                          Verification Code
                         </label>
-                        <div className="relative group">
-                          <Mail className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
-                          <input
-                            type="email"
-                            placeholder="name@example.com"
-                            value={registerEmail}
-                            onChange={(e) => setRegisterEmail(e.target.value)}
-                            className="w-full bg-muted/15 border border-border/30 rounded-xl py-3 pl-10 pr-4 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/45 focus:bg-muted/10 transition-all font-medium text-foreground placeholder:text-muted-foreground/60"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Phone Field */}
-                      <div className="space-y-1.5 relative">
-                        <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">
-                          Phone Number
-                        </label>
-                        <div className="relative group">
-                          <Phone className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
-                          <input
-                            type="tel"
-                            placeholder="+1 (555) 000-0000"
-                            value={registerPhone}
-                            onChange={(e) => setRegisterPhone(e.target.value)}
-                            className="w-full bg-muted/15 border border-border/30 rounded-xl py-3 pl-10 pr-4 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/45 focus:bg-muted/10 transition-all font-medium text-foreground placeholder:text-muted-foreground/60"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Password Field */}
-                      <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                          Password
-                        </label>
-                        <div className="relative group">
-                          <Lock className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
-                          <input
-                            type={showRegisterPassword ? "text" : "password"}
-                            placeholder="••••••••••••"
-                            value={registerPassword}
-                            onChange={(e) =>
-                              setRegisterPassword(e.target.value)
-                            }
-                            className="w-full bg-muted/15 border border-border/30 rounded-xl py-3 pl-10 pr-10 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/45 focus:bg-muted/10 transition-all font-medium text-foreground placeholder:text-muted-foreground/60"
-                          />
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setShowRegisterPassword(!showRegisterPassword)
-                            }
-                            className="absolute right-3 top-3.5 text-muted-foreground hover:text-foreground transition-colors"
-                          >
-                            {showRegisterPassword ? (
-                              <EyeOff className="h-4 w-4" />
-                            ) : (
-                              <Eye className="h-4 w-4" />
-                            )}
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Confirm Password Field */}
-                      <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                          Confirm Password
-                        </label>
-                        <div className="relative group">
-                          <Lock className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
-                          <input
-                            type="password"
-                            placeholder="••••••••••••"
-                            value={registerConfirmPassword}
-                            onChange={(e) =>
-                              setRegisterConfirmPassword(e.target.value)
-                            }
-                            className="w-full bg-muted/15 border border-border/30 rounded-xl py-3 pl-10 pr-4 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/45 focus:bg-muted/10 transition-all font-medium text-foreground placeholder:text-muted-foreground/60"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Terms Acceptance */}
-                      <div className="pt-1">
-                        <label className="flex items-start gap-2.5 cursor-pointer group">
-                          <div className="relative flex items-center justify-center mt-0.5">
+                        <div className="flex justify-center gap-2" onPaste={handleOtpPaste}>
+                          {otpDigits.map((digit, idx) => (
                             <input
-                              type="checkbox"
-                              checked={acceptTerms}
-                              onChange={(e) => setAcceptTerms(e.target.checked)}
-                              className="sr-only peer"
+                              key={idx}
+                              id={`otp-input-${idx}`}
+                              type="text"
+                              maxLength={1}
+                              pattern="\d*"
+                              value={digit}
+                              onChange={(e) => handleOtpChange(idx, e.target.value)}
+                              onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                              className="w-11 h-12 text-center text-lg font-bold bg-primary/5 border border-primary/5 shadow-[0_0_20px_rgba(var(--primary-rgb),0.15)] rounded-xl outline-none focus:border-primary focus:ring-1 focus:ring-primary/45 focus:bg-muted/10 transition-all text-foreground"
                             />
-                            <div className="w-4 h-4 rounded  border-[1.5px] border-border bg-muted/80 peer-checked:bg-primary peer-checked:border-primary transition-all flex items-center justify-center">
-                              {acceptTerms && (
-                                <Check className="h-3 w-3 text-primary-foreground stroke-[3]" />
-                              )}
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <motion.button
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
+                      type="submit"
+                      className="w-full cursor-pointer bg-gradient-primary text-primary-foreground font-semibold py-3 rounded-xl hover:opacity-90 shadow-glow transition-all flex items-center justify-center gap-2"
+                    >
+                      <span>Verify Account</span>
+                    </motion.button>
+                  </form>
+
+                  <div className="flex flex-col gap-2 items-center text-xs">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsBackupMode(!isBackupMode);
+                        setErrorMsg("");
+                        setOtpDigits(Array(6).fill(""));
+                        setTwoFAVerifyCode("");
+                      }}
+                      className="text-primary hover:underline font-semibold"
+                    >
+                      {isBackupMode ? "Use Authenticator App" : "Use a Backup Code"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTwoFARequired(false);
+                        setErrorMsg("");
+                        setOtpDigits(Array(6).fill(""));
+                        setTwoFAVerifyCode("");
+                      }}
+                      className="text-muted-foreground hover:text-foreground transition-colors mt-2 flex items-center gap-1 font-medium"
+                    >
+                      <ArrowLeft className="h-3 w-3" />
+                      Back to sign in
+                    </button>
+                  </div>
+                </motion.div>
+              ) : (
+                // ─── Regular Login / Register View ──────────────────
+                <motion.div
+                  key="regularAuth"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="space-y-6"
+                >
+                  {/* Header Text & Toggle Tabs */}
+                  <div className="space-y-4 text-center">
+                    <h2 className="font-display text-2xl font-bold tracking-tight text-foreground">
+                      {activeTab === "login"
+                        ? "Welcome back"
+                        : "Create your account"}
+                    </h2>
+                    <p className="text-xs text-muted-foreground">
+                      {activeTab === "login"
+                        ? "Enter your details to access your dashboard"
+                        : "Join Drivya today and experience modern mobility"}
+                    </p>
+
+                    {/* Sliding Segmented Tab Switcher */}
+                    <div className="relative flex p-1 bg-muted/40 rounded-xl border border-border/20">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveTab("login");
+                          setErrorMsg("");
+                        }}
+                        className={`flex-1 py-2 text-xs font-semibold rounded-lg relative transition-colors focus-visible:outline-none ${
+                          activeTab === "login"
+                            ? "text-foreground"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {activeTab === "login" && (
+                          <motion.div
+                            layoutId="activeAuthTab"
+                            className="absolute inset-0 bg-background shadow-sm rounded-lg border border-border/25 -z-10"
+                            transition={{
+                              type: "spring",
+                              stiffness: 400,
+                              damping: 30,
+                            }}
+                          />
+                        )}
+                        <span>Login</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveTab("register");
+                          setErrorMsg("");
+                        }}
+                        className={`flex-1 py-2 text-xs font-semibold rounded-lg relative transition-colors focus-visible:outline-none ${
+                          activeTab === "register"
+                            ? "text-foreground"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {activeTab === "register" && (
+                          <motion.div
+                            layoutId="activeAuthTab"
+                            className="absolute inset-0 bg-background shadow-sm rounded-lg border border-border/25 -z-10"
+                            transition={{
+                              type: "spring",
+                              stiffness: 400,
+                              damping: 30,
+                            }}
+                          />
+                        )}
+                        <span>Register</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Error messages */}
+                  <AnimatePresence>
+                    {errorMsg && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -8 }}
+                        className="p-3 text-xs bg-destructive/10 border border-destructive/20 text-destructive rounded-lg flex items-center gap-2 font-medium"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-destructive flex-shrink-0 animate-pulse" />
+                        <span>{errorMsg}</span>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* Form Forms Switcher Animation Container */}
+                  <div className="relative">
+                    <AnimatePresence mode="wait">
+                      {activeTab === "login" ? (
+                        // LOGIN FORM
+                        <motion.form
+                          key="login"
+                          onSubmit={handleLoginSubmit}
+                          initial={{ opacity: 0, x: -16 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: 16 }}
+                          transition={{ duration: 0.25 }}
+                          className="space-y-4"
+                        >
+                          {/* Email Field */}
+                          <div className="space-y-1.5 relative">
+                            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">
+                              Email Address
+                            </label>
+                            <div className="relative group">
+                              <Mail className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                              <input
+                                type="email"
+                                placeholder="name@example.com"
+                                value={loginEmail}
+                                onChange={(e) => setLoginEmail(e.target.value)}
+                                className="w-full bg-muted/15 border border-border/30 rounded-xl py-3 pl-10 pr-4 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/45 focus:bg-muted/10 transition-all font-medium text-foreground placeholder:text-muted-foreground/60"
+                              />
                             </div>
                           </div>
-                          <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors leading-relaxed font-medium">
-                            I agree to the{" "}
+
+                          {/* Password Field */}
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                                Password
+                              </label>
+                            </div>
+                            <div className="relative group">
+                              <Lock className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                              <input
+                                type={showLoginPassword ? "text" : "password"}
+                                placeholder="••••••••••••"
+                                value={loginPassword}
+                                onChange={(e) => setLoginPassword(e.target.value)}
+                                className="w-full bg-muted/15 border border-border/30 rounded-xl py-3 pl-10 pr-10 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/45 focus:bg-muted/10 transition-all font-medium text-foreground placeholder:text-muted-foreground/60"
+                              />
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setShowLoginPassword(!showLoginPassword)
+                                }
+                                className="absolute right-3 top-3.5 text-muted-foreground hover:text-foreground transition-colors"
+                              >
+                                {showLoginPassword ? (
+                                  <EyeOff className="h-4 w-4" />
+                                ) : (
+                                  <Eye className="h-4 w-4" />
+                                )}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Options: Remember Me & Forgot Password */}
+                          <div className="flex items-center justify-between text-xs pt-1 select-none">
+                            <label className="flex items-center gap-2 cursor-pointer group">
+                              <div className="relative flex items-center justify-center">
+                                <input
+                                  type="checkbox"
+                                  checked={rememberMe}
+                                  onChange={(e) => setRememberMe(e.target.checked)}
+                                  className="sr-only peer"
+                                />
+                                <div className="w-4 h-4 rounded border-[1.5px] border-border bg-muted/60 peer-checked:bg-primary peer-checked:border-primary transition-all flex items-center justify-center">
+                                  {rememberMe && (
+                                    <Check className="h-3 w-3 text-primary-foreground stroke-[3]" />
+                                  )}
+                                </div>
+                              </div>
+                              <span className="text-muted-foreground group-hover:text-foreground transition-colors font-medium">
+                                Remember me
+                              </span>
+                            </label>
+
                             <a
-                              href="#terms"
-                              className="text-primary hover:underline font-semibold"
+                              href="#forgot"
+                              className="text-primary hover:underline font-semibold transition-colors"
                             >
-                              Terms of Service
-                            </a>{" "}
-                            and{" "}
-                            <a
-                              href="#privacy"
-                              className="text-primary hover:underline font-semibold"
-                            >
-                              Privacy Policy
+                              Forgot password?
                             </a>
-                            .
-                          </span>
-                        </label>
-                      </div>
+                          </div>
 
-                      {/* Submit button */}
-                      <motion.button
-                        whileHover={{ scale: 1.01 }}
-                        whileTap={{ scale: 0.99 }}
-                        type="submit"
-                        className="w-full mt-2 cursor-pointer bg-gradient-primary text-primary-foreground font-semibold py-3 rounded-xl hover:opacity-90 shadow-glow transition-all flex items-center justify-center gap-2"
-                      >
-                        <span>Create Account</span>
-                      </motion.button>
-                    </motion.form>
-                  )}
-                </AnimatePresence>
-              </div>
+                          {/* Submit button */}
+                          <motion.button
+                            whileHover={{ scale: 1.01 }}
+                            whileTap={{ scale: 0.99 }}
+                            type="submit"
+                            className="w-full cursor-pointer mt-2 bg-gradient-primary text-primary-foreground font-semibold py-3 rounded-xl hover:opacity-90 shadow-glow transition-all flex items-center justify-center gap-2"
+                          >
+                            <span>Sign In</span>
+                          </motion.button>
+                        </motion.form>
+                      ) : (
+                        // REGISTER FORM
+                        <motion.form
+                          key="register"
+                          onSubmit={handleRegisterSubmit}
+                          initial={{ opacity: 0, x: 16 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: -16 }}
+                          transition={{ duration: 0.25 }}
+                          className="space-y-4"
+                        >
+                          {/* Name Field */}
+                          <div className="space-y-1.5 relative">
+                            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">
+                              Full Name
+                            </label>
+                            <div className="relative group">
+                              <User className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                              <input
+                                type="text"
+                                placeholder="John Doe"
+                                value={registerName}
+                                onChange={(e) => setRegisterName(e.target.value)}
+                                className="w-full bg-muted/15 border border-border/30 rounded-xl py-3 pl-10 pr-4 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/45 focus:bg-muted/10 transition-all font-medium text-foreground placeholder:text-muted-foreground/60"
+                              />
+                            </div>
+                          </div>
 
-              {/* Divider or Continue With */}
-              <div className="relative flex items-center my-4">
-                <div className="flex-grow border-t border-border/20"></div>
-                <span className="flex-shrink mx-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest bg-transparent">
-                  or continue with
-                </span>
-                <div className="flex-grow border-t border-border/20"></div>
-              </div>
+                          {/* Email Field */}
+                          <div className="space-y-1.5 relative">
+                            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">
+                              Email Address
+                            </label>
+                            <div className="relative group">
+                              <Mail className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                              <input
+                                type="email"
+                                placeholder="name@example.com"
+                                value={registerEmail}
+                                onChange={(e) => setRegisterEmail(e.target.value)}
+                                className="w-full bg-muted/15 border border-border/30 rounded-xl py-3 pl-10 pr-4 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/45 focus:bg-muted/10 transition-all font-medium text-foreground placeholder:text-muted-foreground/60"
+                              />
+                            </div>
+                          </div>
 
-              {/* Social Login Buttons */}
-              <div className="grid grid-cols-2 gap-3">
-                <motion.button
-                  whileHover={{ scale: 1.02, y: -1 }}
-                  whileTap={{ scale: 0.98 }}
-                  type="button"
-                  className="flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl border border-border/30 bg-muted/10 hover:bg-muted/20 hover:border-border/60 text-sm font-semibold transition-all cursor-pointer"
-                >
-                  <GoogleIcon />
-                  <span>Google</span>
-                </motion.button>
+                          {/* Phone Number Field */}
+                          <div className="space-y-1.5 relative">
+                            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">
+                              Phone Number
+                            </label>
+                            <div className="relative group">
+                              <Phone className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                              <input
+                                type="tel"
+                                placeholder="+1 (555) 000-0000"
+                                value={registerPhone}
+                                onChange={(e) => setRegisterPhone(e.target.value)}
+                                className="w-full bg-muted/15 border border-border/30 rounded-xl py-3 pl-10 pr-4 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/45 focus:bg-muted/10 transition-all font-medium text-foreground placeholder:text-muted-foreground/60"
+                              />
+                            </div>
+                          </div>
 
-                <motion.button
-                  whileHover={{ scale: 1.02, y: -1 }}
-                  whileTap={{ scale: 0.98 }}
-                  type="button"
-                  className="flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl border border-border/30 bg-muted/10 hover:bg-muted/20 hover:border-border/60 text-sm font-semibold transition-all cursor-pointer"
-                >
-                  <AppleIcon />
-                  <span>Apple</span>
-                </motion.button>
-              </div>
+                          {/* Password Field */}
+                          <div className="space-y-1.5">
+                            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                              Password
+                            </label>
+                            <div className="relative group">
+                              <Lock className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                              <input
+                                type={showRegisterPassword ? "text" : "password"}
+                                placeholder="••••••••••••"
+                                value={registerPassword}
+                                onChange={(e) =>
+                                  setRegisterPassword(e.target.value)
+                                }
+                                className="w-full bg-muted/15 border border-border/30 rounded-xl py-3 pl-10 pr-10 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/45 focus:bg-muted/10 transition-all font-medium text-foreground placeholder:text-muted-foreground/60"
+                              />
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setShowRegisterPassword(!showRegisterPassword)
+                                }
+                                className="absolute right-3 top-3.5 text-muted-foreground hover:text-foreground transition-colors"
+                              >
+                                {showRegisterPassword ? (
+                                  <EyeOff className="h-4 w-4" />
+                                ) : (
+                                  <Eye className="h-4 w-4" />
+                                )}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Confirm Password Field */}
+                          <div className="space-y-1.5">
+                            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                              Confirm Password
+                            </label>
+                            <div className="relative group">
+                              <Lock className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                              <input
+                                type="password"
+                                placeholder="••••••••••••"
+                                value={registerConfirmPassword}
+                                onChange={(e) =>
+                                  setRegisterConfirmPassword(e.target.value)
+                                }
+                                className="w-full bg-muted/15 border border-border/30 rounded-xl py-3 pl-10 pr-4 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/45 focus:bg-muted/10 transition-all font-medium text-foreground placeholder:text-muted-foreground/60"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Terms Acceptance */}
+                          <div className="pt-1">
+                            <label className="flex items-start gap-2.5 cursor-pointer group">
+                              <div className="relative flex items-center justify-center mt-0.5">
+                                <input
+                                  type="checkbox"
+                                  checked={acceptTerms}
+                                  onChange={(e) => setAcceptTerms(e.target.checked)}
+                                  className="sr-only peer"
+                                />
+                                <div className="w-4 h-4 rounded  border-[1.5px] border-border bg-muted/80 peer-checked:bg-primary peer-checked:border-primary transition-all flex items-center justify-center">
+                                  {acceptTerms && (
+                                    <Check className="h-3 w-3 text-primary-foreground stroke-[3]" />
+                                  )}
+                                </div>
+                              </div>
+                              <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors leading-relaxed font-medium">
+                                I agree to the{" "}
+                                <a
+                                  href="#terms"
+                                  className="text-primary hover:underline font-semibold"
+                                >
+                                  Terms of Service
+                                </a>{" "}
+                                and{" "}
+                                <a
+                                  href="#privacy"
+                                  className="text-primary hover:underline font-semibold"
+                                >
+                                  Privacy Policy
+                                </a>
+                                .
+                              </span>
+                            </label>
+                          </div>
+
+                          {/* Submit button */}
+                          <motion.button
+                            whileHover={{ scale: 1.01 }}
+                            whileTap={{ scale: 0.99 }}
+                            type="submit"
+                            className="w-full mt-2 cursor-pointer bg-gradient-primary text-primary-foreground font-semibold py-3 rounded-xl hover:opacity-90 shadow-glow transition-all flex items-center justify-center gap-2"
+                          >
+                            <span>Create Account</span>
+                          </motion.button>
+                        </motion.form>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* Divider or Continue With */}
+                  <div className="relative flex items-center my-4">
+                    <div className="flex-grow border-t border-border/20"></div>
+                    <span className="flex-shrink mx-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest bg-transparent">
+                      or continue with
+                    </span>
+                    <div className="flex-grow border-t border-border/20"></div>
+                  </div>
+
+                  {/* Social Login Buttons */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <motion.button
+                      whileHover={{ scale: 1.02, y: -1 }}
+                      whileTap={{ scale: 0.98 }}
+                      type="button"
+                      className="flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl border border-border/30 bg-muted/10 hover:bg-muted/20 hover:border-border/60 text-sm font-semibold transition-all cursor-pointer"
+                    >
+                      <GoogleIcon />
+                      <span>Google</span>
+                    </motion.button>
+
+                    <motion.button
+                      whileHover={{ scale: 1.02, y: -1 }}
+                      whileTap={{ scale: 0.98 }}
+                      type="button"
+                      className="flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl border border-border/30 bg-muted/10 hover:bg-muted/20 hover:border-border/60 text-sm font-semibold transition-all cursor-pointer"
+                    >
+                      <AppleIcon />
+                      <span>Apple</span>
+                    </motion.button>
+                  </div>
+                </motion.div>
+              )}
             </div>
           </div>
         </motion.div>

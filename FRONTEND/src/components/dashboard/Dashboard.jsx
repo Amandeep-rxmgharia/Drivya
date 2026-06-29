@@ -1169,7 +1169,6 @@ export function DashboardLayout() {
             tier: data.user.storageLimit > 2 * 1024 * 1024 * 1024 ? "Pro" : "Free",
             loginAlerts: data.user.loginAlerts !== false,
             twoFAEnabled: data.user.twoFAEnabled,
-            twoFAMethod: data.user.twoFAMethod,
           }));
         }
       } catch (err) {

@@ -265,7 +265,7 @@ export const setup2FA = async (req, res, next) => {
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ message: "User not found." });
 
-    if (user.twoFAEnabled && user.twoFAMethod === "totp") {
+    if (user.twoFAEnabled) {
       return res.status(400).json({ message: "2FA is already enabled." });
     }
 
@@ -283,7 +283,7 @@ export const setup2FA = async (req, res, next) => {
     user.twoFASecretEnc = enc.ciphertextB64;
     user.twoFASecretIv = enc.ivB64;
     user.twoFASecretAuthTag = enc.authTagB64;
-    user.twoFAMethod = "totp";
+
 
     // Do not enable until verification.
     await user.save();
@@ -292,8 +292,6 @@ export const setup2FA = async (req, res, next) => {
       message: "2FA setup initiated.",
       otpauthUrl,
       manualEntryKey: secretBase32,
-      method: "totp",
-      // The frontend can display the QR / manual key
     });
   } catch (err) {
     next(err);
@@ -306,13 +304,9 @@ export const verify2FA = async (req, res, next) => {
     if (!code) return res.status(400).json({ message: "2FA code is required." });
 
     const user = await User.findById(req.user.id).select(
-      "twoFAEnabled twoFAMethod twoFASecretEnc twoFASecretIv twoFASecretAuthTag twoFABackupCodes",
+      "twoFAEnabled twoFASecretEnc twoFASecretIv twoFASecretAuthTag twoFABackupCodes",
     );
     if (!user) return res.status(404).json({ message: "User not found." });
-
-    if (user.twoFAMethod !== "totp") {
-      return res.status(400).json({ message: "Unsupported 2FA method." });
-    }
 
     if (!user.twoFASecretEnc || !user.twoFASecretIv || !user.twoFASecretAuthTag) {
       return res.status(400).json({ message: "2FA setup not initialized." });
@@ -349,7 +343,7 @@ export const verify2FA = async (req, res, next) => {
     }
 
     user.twoFAEnabled = true;
-    user.twoFAMethod = "totp";
+
     user.twoFABackupCodes = hashed;
     await user.save();
 
@@ -360,7 +354,6 @@ export const verify2FA = async (req, res, next) => {
 
     return res.json({
       message: "2FA enabled successfully.",
-      method: "totp",
       backupCodes: plaintextCodes, // shown once
     });
   } catch (err) {
@@ -433,7 +426,6 @@ export const disable2FA = async (req, res, next) => {
     if (!ok) return res.status(401).json({ message: "Invalid 2FA code." });
 
     user.twoFAEnabled = false;
-    user.twoFAMethod = "totp";
     user.twoFASecretEnc = "";
     user.twoFASecretIv = "";
     user.twoFASecretAuthTag = "";
@@ -446,6 +438,77 @@ export const disable2FA = async (req, res, next) => {
     }
 
     return res.json({ message: "2FA disabled successfully." });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── Login 2FA Verification (Step 2 of two-step login) ───────
+export const loginVerify2FA = async (req, res, next) => {
+  try {
+    const { code } = req.body;
+    if (!code) return res.status(400).json({ message: "2FA code is required." });
+
+    const user = await User.findById(req.user.id).select(
+      "name email rootDirId twoFAEnabled twoFASecretEnc twoFASecretIv twoFASecretAuthTag twoFABackupCodes",
+    );
+    if (!user) return res.status(404).json({ message: "User not found." });
+
+    if (!user.twoFAEnabled) {
+      return res.status(400).json({ message: "2FA is not enabled for this account." });
+    }
+
+    if (!user.twoFASecretEnc || !user.twoFASecretIv || !user.twoFASecretAuthTag) {
+      return res.status(400).json({ message: "2FA setup is incomplete." });
+    }
+
+    const secretBase32 = decryptStringAesGcm({
+      ciphertextB64: user.twoFASecretEnc,
+      ivB64: user.twoFASecretIv,
+      authTagB64: user.twoFASecretAuthTag,
+    });
+
+    const normalizedCode = String(code).trim();
+    let verified = false;
+
+    // 1. Try TOTP verification first
+    if (verifyTotpCode(secretBase32, normalizedCode, { window: 1 })) {
+      verified = true;
+    }
+
+    // 2. Fall back to backup code verification
+    if (!verified && user.twoFABackupCodes?.length > 0) {
+      for (const entry of user.twoFABackupCodes) {
+        if (entry.used) continue;
+        const isMatch = await bcrypt.compare(normalizedCode, entry.hash);
+        if (isMatch) {
+          entry.used = true;
+          entry.usedAt = new Date();
+          await user.save();
+          verified = true;
+          break;
+        }
+      }
+    }
+
+    if (!verified) {
+      return res.status(401).json({ message: "Invalid 2FA code." });
+    }
+
+    // Mark session as 2FA-verified
+    if (req.user.sessionId) {
+      await Session.findByIdAndUpdate(req.user.sessionId, { twoFAVerifiedAt: new Date() });
+    }
+
+    return res.json({
+      message: "2FA verification successful.",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        rootDirId: user.rootDirId,
+      },
+    });
   } catch (err) {
     next(err);
   }

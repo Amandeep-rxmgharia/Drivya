@@ -109,6 +109,11 @@ export const regenerateBackupCodes = async ({ code }) => {
   return response.data;
 };
 
+export const loginVerify2FA = async ({ code }) => {
+  const response = await api.post("/auth/2fa/login-verify", { code });
+  return response.data;
+};
+
 export const disable2FA = async ({ code }) => {
   const response = await api.post("/auth/2fa/disable", { code });
   return response.data;
