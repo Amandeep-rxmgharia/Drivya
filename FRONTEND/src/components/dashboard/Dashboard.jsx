@@ -37,7 +37,7 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { chip, iconBtn, primaryBtn, Kbd } from "./dashboard-tokens.jsx";
 import { FloatingActionButton } from "./FloatingActionButton.jsx";
 import { AiAssistantPanel } from "./AiAssistantPanel.jsx";
-import { getCurrentUser } from "../../../api/auth.js";
+import { getCurrentUser, logoutUser } from "../../../api/auth.js";
 import {
   listNotifications,
   getUnreadCount,
@@ -885,8 +885,13 @@ function Topbar({
 
                 {/* Sign out */}
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     setProfileOpen(false);
+                    try {
+                      await logoutUser();
+                    } catch (err) {
+                      console.error("Failed to sign out on server:", err);
+                    }
                     // Clear profile state and redirect to Auth
                     localStorage.removeItem("drivya-user-profile");
                     navigate("/auth");
@@ -1173,6 +1178,7 @@ export function DashboardLayout() {
         }
       } catch (err) {
         console.error("Failed to fetch user profile:", err);
+        navigate("/auth");
       }
     };
     fetchUser();
