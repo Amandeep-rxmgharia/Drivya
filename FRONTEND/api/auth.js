@@ -92,4 +92,26 @@ export const getCurrentUser = async () => {
   return response.data;
 };
 
+// ─── 2FA (TOTP) API Functions ────────────────────────────────
+
+export const setup2FA = async () => {
+  const response = await api.post("/auth/2fa/setup");
+  return response.data;
+};
+
+export const verify2FA = async ({ code }) => {
+  const response = await api.post("/auth/2fa/verify", { code });
+  return response.data;
+};
+
+export const regenerateBackupCodes = async ({ code }) => {
+  const response = await api.post("/auth/2fa/backup-codes/regenerate", { code });
+  return response.data;
+};
+
+export const disable2FA = async ({ code }) => {
+  const response = await api.post("/auth/2fa/disable", { code });
+  return response.data;
+};
+
 export default api;

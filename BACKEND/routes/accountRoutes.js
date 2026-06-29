@@ -17,6 +17,7 @@ import {
   revokeOtherSessions,
 } from "../controllers/sessionController.js";
 import { authenticate } from "../middlewares/authMiddleware.js";
+import { requireTwoFA } from "../middlewares/twoFAMiddleware.js";
 import {
   validateUpdateProfile,
   validateChangePassword,
@@ -33,7 +34,10 @@ const avatarUpload = multer({
 
 router.get("/avatar/:filename", getAvatar);
 
-// All remaining routes require authentication
+/**
+ * All remaining routes require authentication.
+ * Some sensitive endpoints additionally require step-up (2FA) via requireTwoFA.
+ */
 router.use(authenticate);
 
 /**
@@ -44,21 +48,26 @@ router.get("/sharing-defaults", getSharingDefaults);
 router.patch("/sharing-defaults", updateSharingDefaults);
 
 // ─── Profile ─────────────────────────────────────────────────
-router.get("/profile", getProfile);
+// Sensitive settings: require 2FA
+router.get("/profile", requireTwoFA, getProfile);
 router.patch(
   "/profile",
+  requireTwoFA,
   validateUpdateProfile,
   handleValidationErrors,
   updateProfile,
 );
 
 // ─── Avatar Upload / Delete ──────────────────────────────────
-router.post("/avatar", avatarUpload, uploadAvatar);
-router.delete("/avatar", deleteAvatar);
+// Not strictly required, but still sensitive: require 2FA
+router.post("/avatar", requireTwoFA, avatarUpload, uploadAvatar);
+router.delete("/avatar", requireTwoFA, deleteAvatar);
 
 // ─── Password ────────────────────────────────────────────────
+// Sensitive: require 2FA
 router.put(
   "/password",
+  requireTwoFA,
   validateChangePassword,
   handleValidationErrors,
   changePassword,
@@ -70,6 +79,7 @@ router.delete("/sessions/others", revokeOtherSessions);
 router.delete("/sessions/:id", revokeSession);
 
 // ─── Delete Account ──────────────────────────────────────────
-router.delete("/", deleteAccount);
+// Sensitive: require 2FA
+router.delete("/", requireTwoFA, deleteAccount);
 
 export default router;

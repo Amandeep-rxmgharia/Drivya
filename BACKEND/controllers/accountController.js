@@ -38,6 +38,8 @@ export const getProfile = async (req, res, next) => {
         storageLimit: user.storageLimit || 1024 * 1024 * 1024,
         memberSince: user.createdAt,
         loginAlerts: user.loginAlerts !== false,
+        twoFAEnabled: !!user.twoFAEnabled,
+        twoFAMethod: user.twoFAMethod || null,
       },
     });
   } catch (err) {

@@ -6,6 +6,10 @@ import {
   refresh,
   logout,
   getMe,
+  setup2FA,
+  verify2FA,
+  regenerateBackupCodes,
+  disable2FA,
 } from "../controllers/authController.js";
 import { authenticate } from "../middlewares/authMiddleware.js";
 import {
@@ -32,6 +36,15 @@ router.post("/register", validateRegister, handleValidationErrors, register);
 router.post("/login", loginLimiter, validateLogin, handleValidationErrors, login);
 router.post("/refresh", refresh);
 router.post("/logout", logout);
+
+/**
+ * 2FA (protected)
+ * All below routes require authentication.
+ */
+router.post("/2fa/setup", authenticate, setup2FA);
+router.post("/2fa/verify", authenticate, verify2FA);
+router.post("/2fa/backup-codes/regenerate", authenticate, regenerateBackupCodes);
+router.post("/2fa/disable", authenticate, disable2FA);
 
 // ─── Protected Routes ────────────────────────────────────────
 router.get("/me", authenticate, getMe);

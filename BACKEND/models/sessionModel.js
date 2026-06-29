@@ -31,6 +31,12 @@ const sessionSchema = new Schema(
       type: Date,
       default: Date.now,
     },
+
+    // If user has 2FA enabled, this is required to access sensitive routes.
+    twoFAVerifiedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

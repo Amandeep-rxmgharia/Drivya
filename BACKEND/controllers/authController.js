@@ -3,6 +3,7 @@ import Directory from "../models/directoryModel.js";
 import User from "../models/userModel.js";
 import Session from "../models/sessionModel.js";
 import { parseUserAgent, parseIpAndLocation } from "../utils/uaParser.js";
+import bcrypt from "bcrypt";
 import {
   generateAccessToken,
   generateRefreshToken,
@@ -12,6 +13,13 @@ import {
   verifyAccessToken,
 } from "../config/tokenUtils.js";
 import { createNotification } from "../services/notificationService.js";
+import crypto from "node:crypto";
+import { encryptStringAesGcm, decryptStringAesGcm } from "../utils/cryptoUtils.js";
+import {
+  generateTotpSecretBase32,
+  buildOtpauthUrl,
+  verifyTotpCode,
+} from "../utils/totpUtils.js";
 
 // ─── Register ────────────────────────────────────────────────
 export const register = async (req, res, next) => {
@@ -118,9 +126,10 @@ export const login = async (req, res, next) => {
       return res.status(401).json({ message: "Invalid credentials." });
     }
 
-    // Create active session
     const ua = parseUserAgent(req.headers["user-agent"]);
     const ipLoc = parseIpAndLocation(req);
+
+    // Create active session. If 2FA is enabled, keep session unverified.
     const sessionDoc = await Session.create({
       userId: user._id,
       device: ua.device,
@@ -129,9 +138,9 @@ export const login = async (req, res, next) => {
       ip: ipLoc.ip,
       location: ipLoc.location,
       lastActive: new Date(),
+      twoFAVerifiedAt: user.twoFAEnabled ? null : new Date(),
     });
 
-    // Generate tokens
     const accessToken = generateAccessToken(user._id.toString(), sessionDoc._id.toString());
     const refreshToken = generateRefreshToken(user._id.toString(), sessionDoc._id.toString());
     setTokenCookies(res, accessToken, refreshToken);
@@ -148,6 +157,7 @@ export const login = async (req, res, next) => {
 
     return res.json({
       message: "Login successful!",
+      requiresTwoFA: !!user.twoFAEnabled,
       user: {
         id: user._id,
         name: user.name,
@@ -218,7 +228,7 @@ export const logout = async (req, res, next) => {
           if (decoded.sid) {
             await Session.findByIdAndDelete(decoded.sid);
           }
-        } catch {}
+        } catch { }
       }
     }
   }
@@ -236,6 +246,206 @@ export const getMe = async (req, res, next) => {
     }
 
     return res.json({ user });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── 2FA Setup / Verify / Backup Codes / Disable ─────────────────────────────
+
+function formatBackupCodeForUser(code) {
+  // Create a human-friendly code like XXXX-XXXX-XXXX
+  const hex = crypto.createHash("sha256").update(code).digest("hex");
+  const raw = hex.slice(0, 12).toUpperCase();
+  return `${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}`;
+}
+
+export const setup2FA = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: "User not found." });
+
+    if (user.twoFAEnabled && user.twoFAMethod === "totp") {
+      return res.status(400).json({ message: "2FA is already enabled." });
+    }
+
+    const secretBase32 = generateTotpSecretBase32(32);
+    const otpauthUrl = buildOtpauthUrl({
+      secretBase32,
+      accountName: user.email,
+      issuer: "Drivya",
+    });
+
+    const enc = encryptStringAesGcm(secretBase32);
+
+    // Store pending secret by overwriting existing secret fields.
+    // The secret becomes active only after verify.
+    user.twoFASecretEnc = enc.ciphertextB64;
+    user.twoFASecretIv = enc.ivB64;
+    user.twoFASecretAuthTag = enc.authTagB64;
+    user.twoFAMethod = "totp";
+
+    // Do not enable until verification.
+    await user.save();
+
+    return res.json({
+      message: "2FA setup initiated.",
+      otpauthUrl,
+      manualEntryKey: secretBase32,
+      method: "totp",
+      // The frontend can display the QR / manual key
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const verify2FA = async (req, res, next) => {
+  try {
+    const { code } = req.body;
+    if (!code) return res.status(400).json({ message: "2FA code is required." });
+
+    const user = await User.findById(req.user.id).select(
+      "twoFAEnabled twoFAMethod twoFASecretEnc twoFASecretIv twoFASecretAuthTag twoFABackupCodes",
+    );
+    if (!user) return res.status(404).json({ message: "User not found." });
+
+    if (user.twoFAMethod !== "totp") {
+      return res.status(400).json({ message: "Unsupported 2FA method." });
+    }
+
+    if (!user.twoFASecretEnc || !user.twoFASecretIv || !user.twoFASecretAuthTag) {
+      return res.status(400).json({ message: "2FA setup not initialized." });
+    }
+
+    const secretBase32 = decryptStringAesGcm({
+      ciphertextB64: user.twoFASecretEnc,
+      ivB64: user.twoFASecretIv,
+      authTagB64: user.twoFASecretAuthTag,
+    });
+
+    const ok = verifyTotpCode(secretBase32, code, { window: 1 });
+    if (!ok) {
+      return res.status(401).json({ message: "Invalid 2FA code." });
+    }
+
+    // Generate backup codes (plaintext returned once)
+    const rawCodes = [];
+    const plaintextCodes = [];
+    for (let i = 0; i < 10; i++) {
+      const token = crypto.randomBytes(16).toString("hex");
+      plaintextCodes.push(formatBackupCodeForUser(token));
+      rawCodes.push(token);
+    }
+
+    const saltRounds = parseInt(process.env.BCRYPT_SALT_ROUNDS) || 12;
+
+    // Store hashes of the plaintext codes
+    const hashed = [];
+    for (const c of plaintextCodes) {
+      // Use bcrypt hash for single-use backup codes
+      const bcryptHash = await bcrypt.hash(c, saltRounds);
+      hashed.push({ hash: bcryptHash, used: false, usedAt: null });
+    }
+
+    user.twoFAEnabled = true;
+    user.twoFAMethod = "totp";
+    user.twoFABackupCodes = hashed;
+    await user.save();
+
+    // Mark current session verified
+    if (req.user.sessionId) {
+      await Session.findByIdAndUpdate(req.user.sessionId, { twoFAVerifiedAt: new Date() });
+    }
+
+    return res.json({
+      message: "2FA enabled successfully.",
+      method: "totp",
+      backupCodes: plaintextCodes, // shown once
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const regenerateBackupCodes = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: "User not found." });
+
+    if (!user.twoFAEnabled) {
+      return res.status(400).json({ message: "2FA is not enabled." });
+    }
+
+    const secretBase32 = decryptStringAesGcm({
+      ciphertextB64: user.twoFASecretEnc,
+      ivB64: user.twoFASecretIv,
+      authTagB64: user.twoFASecretAuthTag,
+    });
+
+    // Require current TOTP code for backup regeneration (step-up)
+    const { code } = req.body;
+    if (!code) return res.status(400).json({ message: "2FA code is required." });
+
+    const ok = verifyTotpCode(secretBase32, code, { window: 1 });
+    if (!ok) return res.status(401).json({ message: "Invalid 2FA code." });
+
+    const plaintextCodes = [];
+    for (let i = 0; i < 10; i++) {
+      const token = crypto.randomBytes(16).toString("hex");
+      plaintextCodes.push(formatBackupCodeForUser(token));
+    }
+
+    const saltRounds = parseInt(process.env.BCRYPT_SALT_ROUNDS) || 12;
+    const hashed = [];
+    for (const c of plaintextCodes) {
+      hashed.push({ hash: await bcrypt.hash(c, saltRounds), used: false, usedAt: null });
+    }
+
+    user.twoFABackupCodes = hashed;
+    await user.save();
+
+    return res.json({ message: "Backup codes regenerated.", backupCodes: plaintextCodes });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const disable2FA = async (req, res, next) => {
+  try {
+    const { code } = req.body;
+    if (!code) return res.status(400).json({ message: "2FA code is required." });
+
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: "User not found." });
+
+    if (!user.twoFAEnabled) {
+      return res.status(400).json({ message: "2FA is not enabled." });
+    }
+
+    const secretBase32 = decryptStringAesGcm({
+      ciphertextB64: user.twoFASecretEnc,
+      ivB64: user.twoFASecretIv,
+      authTagB64: user.twoFASecretAuthTag,
+    });
+
+    const ok = verifyTotpCode(secretBase32, code, { window: 1 });
+    if (!ok) return res.status(401).json({ message: "Invalid 2FA code." });
+
+    user.twoFAEnabled = false;
+    user.twoFAMethod = "totp";
+    user.twoFASecretEnc = "";
+    user.twoFASecretIv = "";
+    user.twoFASecretAuthTag = "";
+    user.twoFABackupCodes = [];
+
+    await user.save();
+
+    if (req.user.sessionId) {
+      await Session.findByIdAndUpdate(req.user.sessionId, { twoFAVerifiedAt: null });
+    }
+
+    return res.json({ message: "2FA disabled successfully." });
   } catch (err) {
     next(err);
   }

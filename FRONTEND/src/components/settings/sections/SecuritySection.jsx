@@ -39,6 +39,12 @@ import {
   revokeSession,
   revokeOtherSessions,
 } from "../../../../api/account.js";
+import {
+  setup2FA,
+  verify2FA,
+  regenerateBackupCodes,
+  disable2FA,
+} from "../../../../api/auth.js";
 
 /* ═══════════════════════ Password Strength ═══════════════════════ */
 
@@ -263,15 +269,14 @@ function PasswordChangeForm({ onClose }) {
                   />
                 </div>
                 <span
-                  className={`text-[10px] font-bold uppercase tracking-wider ${
-                    strength.score <= 20
-                      ? "text-red-500"
-                      : strength.score <= 40
-                        ? "text-amber-500"
-                        : strength.score <= 65
-                          ? "text-yellow-500"
-                          : "text-emerald-500"
-                  }`}
+                  className={`text-[10px] font-bold uppercase tracking-wider ${strength.score <= 20
+                    ? "text-red-500"
+                    : strength.score <= 40
+                      ? "text-amber-500"
+                      : strength.score <= 65
+                        ? "text-yellow-500"
+                        : "text-emerald-500"
+                    }`}
                 >
                   {strength.label}
                 </span>
@@ -282,11 +287,10 @@ function PasswordChangeForm({ onClose }) {
                 {rulesStatus.map((rule) => (
                   <span
                     key={rule.key}
-                    className={`inline-flex items-center gap-1 text-[11px] transition-colors duration-200 ${
-                      rule.passed
-                        ? "text-emerald-600 dark:text-emerald-400"
-                        : "text-muted-foreground/60"
-                    }`}
+                    className={`inline-flex items-center gap-1 text-[11px] transition-colors duration-200 ${rule.passed
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-muted-foreground/60"
+                      }`}
                   >
                     {rule.passed ? (
                       <Check className="h-3 w-3" />
@@ -379,20 +383,31 @@ function PasswordChangeForm({ onClose }) {
 
 export default function SecuritySection({ userProfile, setUserProfile }) {
   const [showPasswordForm, setShowPasswordForm] = useState(false);
-  const [twoFAEnabled, setTwoFAEnabled] = useState(true);
-  const [twoFAMethod, setTwoFAMethod] = useState("totp");
+
+  const [twoFAEnabled, setTwoFAEnabled] = useState(!!userProfile?.twoFAEnabled);
+  const [twoFAMethod, setTwoFAMethod] = useState(userProfile?.twoFAMethod || "totp");
   const [loginAlerts, setLoginAlerts] = useState(userProfile?.loginAlerts !== false);
+
+  const [is2FASetupOpen, setIs2FASetupOpen] = useState(false);
+  const [manualEntryKey, setManualEntryKey] = useState("");
+  const [otpauthUrl, setOtpauthUrl] = useState("");
+  const [pending2FACode, setPending2FACode] = useState("");
+  const [backupCodes, setBackupCodes] = useState([]);
+  const [is2FASubmitting, setIs2FASubmitting] = useState(false);
+  const [twoFAError, setTwoFAError] = useState("");
+
   const [sessionTimeout, setSessionTimeout] = useState("1h");
   const [encryptionLevel, setEncryptionLevel] = useState("standard");
 
   const [sessions, setSessions] = useState([]);
   const [loadingSessions, setLoadingSessions] = useState(true);
 
-  // Sync loginAlerts with userProfile context updates
+  // Sync 2FA + login alerts with userProfile context updates
   useEffect(() => {
-    if (userProfile) {
-      setLoginAlerts(userProfile.loginAlerts !== false);
-    }
+    if (!userProfile) return;
+    setLoginAlerts(userProfile.loginAlerts !== false);
+    if (userProfile.twoFAEnabled !== undefined) setTwoFAEnabled(!!userProfile.twoFAEnabled);
+    if (userProfile.twoFAMethod) setTwoFAMethod(userProfile.twoFAMethod);
   }, [userProfile]);
 
   // Fetch active sessions on mount
@@ -471,11 +486,10 @@ export default function SecuritySection({ userProfile, setUserProfile }) {
         >
           <button
             onClick={() => setShowPasswordForm((s) => !s)}
-            className={`inline-flex h-9 items-center gap-2 rounded-xl border px-4 text-xs font-semibold transition-all ${
-              showPasswordForm
-                ? "border-primary/30 bg-primary/10 text-primary"
-                : "border-border bg-secondary/40 text-foreground hover:bg-secondary/60"
-            }`}
+            className={`inline-flex h-9 items-center gap-2 rounded-xl border px-4 text-xs font-semibold transition-all ${showPasswordForm
+              ? "border-primary/30 bg-primary/10 text-primary"
+              : "border-border bg-secondary/40 text-foreground hover:bg-secondary/60"
+              }`}
           >
             <Key className="h-3.5 w-3.5" />
             {showPasswordForm ? "Hide Form" : "Change Password"}
@@ -510,7 +524,21 @@ export default function SecuritySection({ userProfile, setUserProfile }) {
             )
           }
         >
-          <SettingToggle checked={twoFAEnabled} onChange={setTwoFAEnabled} />
+          <SettingToggle
+            checked={twoFAEnabled}
+            onChange={(checked) => {
+              // Backend enable is not automatic; we must start setup/verify flow.
+              // When toggling ON, open the 2FA setup panel so we send /auth/2fa/setup + /auth/2fa/verify.
+              if (checked) {
+                setTwoFAEnabled(true);
+                setIs2FASetupOpen(true);
+              } else {
+                // Keep UX consistent: open the panel so the user can disable with a TOTP code.
+                setTwoFAEnabled(false);
+                setIs2FASetupOpen(true);
+              }
+            }}
+          />
         </SettingRow>
 
         {twoFAEnabled && (
@@ -521,7 +549,10 @@ export default function SecuritySection({ userProfile, setUserProfile }) {
           >
             <SettingRadioGroup
               value={twoFAMethod}
-              onChange={setTwoFAMethod}
+              onChange={(v) => {
+                // Backend currently supports TOTP only; keep UI aligned.
+                setTwoFAMethod(v);
+              }}
               options={[
                 {
                   value: "totp",
@@ -532,8 +563,8 @@ export default function SecuritySection({ userProfile, setUserProfile }) {
                 {
                   value: "sms",
                   label: "SMS Code",
-                  description: "Receive a verification code via text message.",
-                }
+                  description: "Not available in this build.",
+                },
               ]}
             />
           </SettingRow>
@@ -543,10 +574,267 @@ export default function SecuritySection({ userProfile, setUserProfile }) {
           label="Backup Codes"
           description="10 single-use codes for when you lose access to your 2FA device."
         >
-          <button className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-secondary/40 px-4 text-xs font-semibold text-foreground hover:bg-secondary/60 transition-colors">
-            View Backup Codes
+          <button
+            onClick={async () => {
+              // If already enabled, user needs a new setup/verify flow to reveal codes.
+              // For now, open setup flow UI if 2FA is enabled; user can regenerate with a TOTP code.
+              if (!twoFAEnabled) {
+                setIs2FASetupOpen(true);
+                return;
+              }
+              setIs2FASetupOpen(true);
+            }}
+            className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-secondary/40 px-4 text-xs font-semibold text-foreground hover:bg-secondary/60 transition-colors"
+          >
+            {twoFAEnabled ? "Regenerate / View" : "View Backup Codes"}
           </button>
         </SettingRow>
+
+        {/* Enable / Disable / Backup codes panel */}
+        <AnimatePresence>
+          {is2FASetupOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              className="px-6 pb-4"
+            >
+              <div className="rounded-xl border bg-secondary/20 p-4 space-y-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">
+                      {twoFAEnabled ? "Manage Two-Factor" : "Enable Two-Factor"}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      {twoFAEnabled
+                        ? "Enter a TOTP code to regenerate backup codes or disable 2FA."
+                        : "Scan QR or enter the manual key, then verify with your authenticator app."}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setIs2FASetupOpen(false);
+                      setTwoFAError("");
+                      setPending2FACode("");
+                      setBackupCodes([]);
+                      setManualEntryKey("");
+                      setOtpauthUrl("");
+                    }}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-secondary/40 hover:bg-secondary/60 text-muted-foreground"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+
+                {!twoFAEnabled && (
+                  <div className="space-y-2">
+                    <button
+                      disabled={is2FASubmitting}
+                      onClick={async () => {
+                        setTwoFAError("");
+                        setBackupCodes([]);
+                        setPending2FACode("");
+                        setIs2FASubmitting(true);
+                        try {
+                          const data = await setup2FA();
+                          setManualEntryKey(data.manualEntryKey);
+                          setOtpauthUrl(data.otpauthUrl);
+                        } catch (err) {
+                          setTwoFAError(
+                            err?.response?.data?.message ||
+                            "Failed to start 2FA setup.",
+                          );
+                        } finally {
+                          setIs2FASubmitting(false);
+                        }
+                      }}
+                      className="inline-flex h-9 items-center gap-2 rounded-xl bg-primary px-4 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Fingerprint className="h-3.5 w-3.5" />
+                      Start setup
+                    </button>
+
+                    {manualEntryKey && (
+                      <div className="rounded-lg border border-border bg-background/60 p-3 space-y-2">
+                        <div className="text-[11px] font-semibold text-muted-foreground">
+                          Manual entry key
+                        </div>
+                        <div className="font-mono text-xs break-all">
+                          {manualEntryKey}
+                        </div>
+                        {otpauthUrl && (
+                          <a
+                            href={otpauthUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[11px] text-primary hover:underline break-all"
+                          >
+                            otpauth URL (opens in new tab)
+                          </a>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Authenticator code
+                  </label>
+                  <SettingInput
+                    type="text"
+                    value={pending2FACode}
+                    onChange={setPending2FACode}
+                    placeholder="Enter 6-digit code"
+                    icon={ShieldCheck}
+                    className="max-w-sm"
+                  />
+                  {twoFAError && (
+                    <div className="text-[11px] font-medium text-destructive flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3 shrink-0" />
+                      {twoFAError}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {!twoFAEnabled ? (
+                    <button
+                      disabled={
+                        is2FASubmitting ||
+                        pending2FACode.trim().length === 0
+                      }
+                      onClick={async () => {
+                        setTwoFAError("");
+                        setBackupCodes([]);
+                        setIs2FASubmitting(true);
+                        try {
+                          const data = await verify2FA({
+                            code: pending2FACode.trim(),
+                          });
+                          setTwoFAEnabled(true);
+                          setBackupCodes(data.backupCodes || []);
+                        } catch (err) {
+                          if (
+                            err?.response?.data?.code === "TWOFA_REQUIRED"
+                          ) {
+                            setTwoFAError(
+                              "Please complete 2FA step-up first.",
+                            );
+                          } else {
+                            setTwoFAError(
+                              err?.response?.data?.message ||
+                              "Invalid 2FA code.",
+                            );
+                          }
+                        } finally {
+                          setIs2FASubmitting(false);
+                        }
+                      }}
+                      className="inline-flex h-9 items-center gap-2 rounded-xl bg-primary px-4 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                      Verify & enable
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        disabled={
+                          is2FASubmitting ||
+                          pending2FACode.trim().length === 0
+                        }
+                        onClick={async () => {
+                          setTwoFAError("");
+                          setBackupCodes([]);
+                          setIs2FASubmitting(true);
+                          try {
+                            const data = await regenerateBackupCodes({
+                              code: pending2FACode.trim(),
+                            });
+                            setBackupCodes(data.backupCodes || []);
+                          } catch (err) {
+                            setTwoFAError(
+                              err?.response?.data?.message ||
+                              "Failed to regenerate backup codes.",
+                            );
+                          } finally {
+                            setIs2FASubmitting(false);
+                          }
+                        }}
+                        className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-secondary/40 px-4 text-xs font-semibold text-foreground hover:bg-secondary/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Key className="h-3.5 w-3.5" />
+                        Regenerate backup codes
+                      </button>
+
+                      <button
+                        disabled={
+                          is2FASubmitting ||
+                          pending2FACode.trim().length === 0
+                        }
+                        onClick={async () => {
+                          const ok = window.confirm(
+                            "Disable 2FA? This will reduce security.",
+                          );
+                          if (!ok) return;
+
+                          setTwoFAError("");
+                          setIs2FASubmitting(true);
+                          try {
+                            await disable2FA({
+                              code: pending2FACode.trim(),
+                            });
+                            setTwoFAEnabled(false);
+                            setBackupCodes([]);
+                            setPending2FACode("");
+                            setManualEntryKey("");
+                            setOtpauthUrl("");
+                            if (setUserProfile) {
+                              setUserProfile((prev) => ({
+                                ...prev,
+                                twoFAEnabled: false,
+                                twoFAMethod: null,
+                              }));
+                            }
+                          } catch (err) {
+                            setTwoFAError(
+                              err?.response?.data?.message ||
+                              "Failed to disable 2FA.",
+                            );
+                          } finally {
+                            setIs2FASubmitting(false);
+                          }
+                        }}
+                        className="inline-flex h-9 items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-4 text-xs font-semibold text-destructive hover:bg-destructive/15 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                        Disable 2FA
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                {backupCodes.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-[11px] font-semibold text-muted-foreground">
+                      Backup codes (save these — single use)
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {backupCodes.map((c) => (
+                        <div
+                          key={c}
+                          className="font-mono text-xs rounded-lg border border-border bg-background/60 p-2 break-all text-foreground"
+                        >
+                          {c}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </SettingSection>
 
       {/* Active Sessions */}
@@ -586,23 +874,21 @@ export default function SecuritySection({ userProfile, setUserProfile }) {
                 {sessions.map((session) => (
                   <div
                     key={session.id}
-                    className={`flex items-center gap-3 rounded-xl border p-3 transition-colors ${
-                      session.current
-                        ? "border-primary/20 bg-primary/[0.03]"
-                        : "border-border/60 bg-secondary/20 hover:bg-secondary/30"
-                    }`}
+                    className={`flex items-center gap-3 rounded-xl border p-3 transition-colors ${session.current
+                      ? "border-primary/20 bg-primary/[0.03]"
+                      : "border-border/60 bg-secondary/20 hover:bg-secondary/30"
+                      }`}
                   >
                     <div
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${
-                        session.current
-                          ? "border-primary/20 bg-primary/10 text-primary"
-                          : "border-border bg-secondary/50 text-muted-foreground"
-                      }`}
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${session.current
+                        ? "border-primary/20 bg-primary/10 text-primary"
+                        : "border-border bg-secondary/50 text-muted-foreground"
+                        }`}
                     >
                       {session.os.toLowerCase().includes("mac") ||
-                      session.os.toLowerCase().includes("ios") ||
-                      session.device.toLowerCase().includes("iphone") ||
-                      session.device.toLowerCase().includes("ipad") ? (
+                        session.os.toLowerCase().includes("ios") ||
+                        session.device.toLowerCase().includes("iphone") ||
+                        session.device.toLowerCase().includes("ipad") ? (
                         <Smartphone className="h-4 w-4" />
                       ) : (
                         <Monitor className="h-4 w-4" />
@@ -711,6 +997,6 @@ export default function SecuritySection({ userProfile, setUserProfile }) {
           </div>
         )}
       </SettingSection> */}
-    </div>
+    </div >
   );
 }

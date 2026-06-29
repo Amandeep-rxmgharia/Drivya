@@ -110,6 +110,42 @@ const userSchema = new Schema(
       type: Boolean,
       default: true,
     },
+
+    // ─── Two-Factor Authentication (2FA / TOTP) ─────────────────────
+    twoFAEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    twoFAMethod: {
+      type: String,
+      enum: ["totp", "sms"],
+      default: "totp",
+    },
+
+    // Encrypted TOTP secret at rest (AES-256-GCM)
+    // Stored as two separate fields to avoid accidental exposure in logs.
+    twoFASecretEnc: {
+      type: String,
+      default: "",
+    },
+    twoFASecretIv: {
+      type: String,
+      default: "",
+    },
+    twoFASecretAuthTag: {
+      type: String,
+      default: "",
+    },
+
+    // Backup codes: store only bcrypt hashes.
+    // Each code can be used once.
+    twoFABackupCodes: [
+      {
+        hash: { type: String, required: true },
+        used: { type: Boolean, default: false },
+        usedAt: { type: Date, default: null },
+      },
+    ],
   },
   {
     strict: "throw",
