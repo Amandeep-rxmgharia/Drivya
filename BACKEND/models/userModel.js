@@ -1,5 +1,6 @@
 import { model, Schema } from "mongoose";
 import bcrypt from "bcrypt";
+import { ROLES } from "../constants/rbacConstants.js";
 
 const SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS) || 12;
 
@@ -25,6 +26,16 @@ const userSchema = new Schema(
         /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
         "please enter a valid email",
       ],
+    },
+    role: {
+      type: String,
+      enum: Object.values(ROLES),
+      default: ROLES.USER,
+      index: true,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
     },
     contact: {
       type: String,

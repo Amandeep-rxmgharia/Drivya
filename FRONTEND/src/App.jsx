@@ -24,6 +24,8 @@ const TrashFiles = lazy(() => import("./pages/TrashFiles"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Payment = lazy(() => import("./pages/Payment"));
 const PublicShare = lazy(() => import("./pages/PublicShare"));
+const AdminPanel = lazy(() => import("./pages/AdminPanel"));
+import { RequireRole } from "@/components/auth/RouteGuard";
 
 export default function App() {
   const router = createBrowserRouter([
@@ -130,6 +132,16 @@ export default function App() {
                 <Suspense fallback={null}>
                   <Payment />
                 </Suspense>
+              ),
+            },
+            {
+              path: "admin",
+              element: (
+                <RequireRole roles={["admin", "moderator"]}>
+                  <Suspense fallback={null}>
+                    <AdminPanel />
+                  </Suspense>
+                </RequireRole>
               ),
             },
           ],

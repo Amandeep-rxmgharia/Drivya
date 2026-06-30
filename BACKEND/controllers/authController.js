@@ -79,7 +79,7 @@ export const register = async (req, res, next) => {
       );
 
       // Generate tokens
-      const accessToken = generateAccessToken(user._id.toString(), sessionDoc._id.toString());
+      const accessToken = generateAccessToken(user._id.toString(), sessionDoc._id.toString(), user.role);
       const refreshToken = generateRefreshToken(user._id.toString(), sessionDoc._id.toString());
       setTokenCookies(res, accessToken, refreshToken);
 
@@ -141,7 +141,7 @@ export const login = async (req, res, next) => {
       twoFAVerifiedAt: user.twoFAEnabled ? null : new Date(),
     });
 
-    const accessToken = generateAccessToken(user._id.toString(), sessionDoc._id.toString());
+    const accessToken = generateAccessToken(user._id.toString(), sessionDoc._id.toString(), user.role);
     const refreshToken = generateRefreshToken(user._id.toString(), sessionDoc._id.toString());
     setTokenCookies(res, accessToken, refreshToken);
 
@@ -181,9 +181,12 @@ export const refresh = async (req, res, next) => {
   try {
     const decoded = verifyRefreshToken(token);
     // Verify user still exists
-    const user = await User.findById(decoded.id).lean().select("_id");
+    const user = await User.findById(decoded.id).select("role isActive").lean();
     if (!user) {
       return res.status(401).json({ message: "User no longer exists." });
+    }
+    if (!user.isActive) {
+      return res.status(403).json({ message: "Account suspended.", code: "ACCOUNT_SUSPENDED" });
     }
 
     // Verify session still exists
@@ -197,7 +200,7 @@ export const refresh = async (req, res, next) => {
     }
 
     // Issue new access token (token rotation)
-    const newAccessToken = generateAccessToken(decoded.id, decoded.sid);
+    const newAccessToken = generateAccessToken(decoded.id, decoded.sid, user.role);
     const newRefreshToken = generateRefreshToken(decoded.id, decoded.sid);
     setTokenCookies(res, newAccessToken, newRefreshToken);
 

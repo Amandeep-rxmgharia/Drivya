@@ -17,8 +17,8 @@ const SHARE_SECRET = JWT_SHARE_SECRET || JWT_ACCESS_SECRET;
  * @param {string} userId
  * @returns {string}
  */
-export function generateAccessToken(userId, sessionId) {
-  return jwt.sign({ id: userId, sid: sessionId }, JWT_ACCESS_SECRET, {
+export function generateAccessToken(userId, sessionId, role = "user") {
+  return jwt.sign({ id: userId, sid: sessionId, role }, JWT_ACCESS_SECRET, {
     expiresIn: ACCESS_TOKEN_EXPIRY,
   });
 }

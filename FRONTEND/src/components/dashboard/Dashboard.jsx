@@ -38,6 +38,7 @@ import { chip, iconBtn, primaryBtn, Kbd } from "./dashboard-tokens.jsx";
 import { FloatingActionButton } from "./FloatingActionButton.jsx";
 import { AiAssistantPanel } from "./AiAssistantPanel.jsx";
 import { getCurrentUser, logoutUser } from "../../../api/auth.js";
+import { AuthProvider } from "@/lib/AuthContext";
 import {
   listNotifications,
   getUnreadCount,
@@ -59,6 +60,7 @@ const navMain = [
   { icon: Clock, label: "Recent", to: "recent" },
   { icon: Star, label: "Starred", to: "starred" },
   { icon: Trash2, label: "Trash", to: "trash" },
+  { icon: ShieldCheck, label: "Admin Panel", to: "admin" },
 ];
 
 function formatBytes(bytes) {
@@ -75,6 +77,13 @@ function Sidebar({ collapsed, onClose, mobileOpen, userProfile }) {
   // Extract the active segment from URL: /dashboard/home → "home"
   const activeSegment =
     location.pathname.split("/").filter(Boolean).pop() || "home";
+
+  const filteredNavMain = navMain.filter((it) => {
+    if (it.to === "admin") {
+      return ["admin", "moderator"].includes(userProfile?.role);
+    }
+    return true;
+  });
 
   return (
     <>
@@ -133,7 +142,7 @@ function Sidebar({ collapsed, onClose, mobileOpen, userProfile }) {
           <SidebarGroup
             onClose={onClose}
             label="Library"
-            items={navMain}
+            items={filteredNavMain}
             active={activeSegment}
             collapsed={collapsed}
           />
@@ -775,8 +784,13 @@ function Topbar({
                     <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ring-2 ring-popover ${STATUS_META[currentStatus]?.color}`} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-semibold text-foreground truncate">
+                    <div className="text-sm font-semibold text-foreground truncate flex items-center gap-1.5">
                       {userProfile?.displayName}
+                      {userProfile?.role && userProfile.role !== "user" && (
+                        <span className="text-[9px] font-bold bg-primary/15 text-primary px-1.5 py-0.5 rounded uppercase">
+                          {userProfile.role}
+                        </span>
+                      )}
                     </div>
                     <div className="text-xs text-muted-foreground truncate">
                       {userProfile?.email}
@@ -1147,6 +1161,8 @@ export function DashboardLayout() {
       status: "active",
       tier: "Free",
       avatarUrl: "",
+      role: "user",
+      isActive: true,
     };
   });
 
@@ -1174,6 +1190,8 @@ export function DashboardLayout() {
             tier: data.user.storageLimit > 2 * 1024 * 1024 * 1024 ? "Pro" : "Free",
             loginAlerts: data.user.loginAlerts !== false,
             twoFAEnabled: data.user.twoFAEnabled,
+            role: data.user.role || "user",
+            isActive: data.user.isActive !== false,
           }));
         }
       } catch (err) {
@@ -1200,103 +1218,105 @@ export function DashboardLayout() {
   }, []);
 
   return (
-    <div className="relative flex h-dvh w-full flex-col overflow-hidden text-foreground">
-      {/* ambient page glow */}
-      <div
-        className="pointer-events-none fixed inset-0 -z-10"
-        style={{
-          backgroundImage:
-            "radial-gradient(ellipse 80% 50% at 50% -10%, var(--ambient-radial-large), transparent), radial-gradient(ellipse 60% 40% at 90% 30%, var(--ambient-blob-b), transparent)",
-        }}
-      />
-
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        <Sidebar
-          collapsed={collapsed}
-          mobileOpen={mobileOpen}
-          onClose={() => setMobileOpen(false)}
-          userProfile={userProfile}
+    <AuthProvider userProfile={userProfile} setUserProfile={setUserProfile}>
+      <div className="relative flex h-dvh w-full flex-col overflow-hidden text-foreground">
+        {/* ambient page glow */}
+        <div
+          className="pointer-events-none fixed inset-0 -z-10"
+          style={{
+            backgroundImage:
+              "radial-gradient(ellipse 80% 50% at 50% -10%, var(--ambient-radial-large), transparent), radial-gradient(ellipse 60% 40% at 90% 30%, var(--ambient-blob-b), transparent)",
+          }}
         />
-        <motion.div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <Topbar
-            sidebarCollapsed={collapsed}
-            onToggleSidebar={() => setCollapsed((c) => !c)}
-            onMobileMenu={() => setMobileOpen(true)}
-            onOpenAiAssistant={() => {
-              setAiAssistantOpen(true);
-              setAiRequest(null);
-            }}
-            userProfile={userProfile}
-            setUserProfile={setUserProfile}
-            notifications={notifications}
-            markAsRead={markAsRead}
-            toggleRead={toggleRead}
-            deleteNotification={deleteNotification}
-            markAllRead={markAllRead}
-            clearAllNotifications={clearAllNotifications}
-            onBellToggle={() => {
-              fetchNotifications().then((items) => {
-                if (items) setNotifications(items);
-              });
-            }}
-          />
-          <main
-            className="dashboard-main min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 lg:p-8 space-y-6"
-            style={{ scrollbarGutter: "stable" }}
-          >
-            <Outlet context={{ userProfile, setUserProfile }} />
-          </main>
-        </motion.div>
-      </div>
-      <FloatingActionButton />
-      <AiAssistantPanel
-        isOpen={aiAssistantOpen}
-        onClose={() => setAiAssistantOpen(false)}
-        initialRequest={aiRequest}
-        clearInitialRequest={() => setAiRequest(null)}
-      />
-      <AnimatePresence>
-        {shortcutHelpOpen && (
-          <ShortcutHelpModal onClose={() => setShortcutHelpOpen(false)} />
-        )}
-      </AnimatePresence>
 
-      {/* Floating toasts container */}
-      <div className="fixed bottom-24 right-6 z-[100] pointer-events-none flex flex-col gap-2.5 max-w-sm w-full">
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <Sidebar
+            collapsed={collapsed}
+            mobileOpen={mobileOpen}
+            onClose={() => setMobileOpen(false)}
+            userProfile={userProfile}
+          />
+          <motion.div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <Topbar
+              sidebarCollapsed={collapsed}
+              onToggleSidebar={() => setCollapsed((c) => !c)}
+              onMobileMenu={() => setMobileOpen(true)}
+              onOpenAiAssistant={() => {
+                setAiAssistantOpen(true);
+                setAiRequest(null);
+              }}
+              userProfile={userProfile}
+              setUserProfile={setUserProfile}
+              notifications={notifications}
+              markAsRead={markAsRead}
+              toggleRead={toggleRead}
+              deleteNotification={deleteNotification}
+              markAllRead={markAllRead}
+              clearAllNotifications={clearAllNotifications}
+              onBellToggle={() => {
+                fetchNotifications().then((items) => {
+                  if (items) setNotifications(items);
+                });
+              }}
+            />
+            <main
+              className="dashboard-main min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 lg:p-8 space-y-6"
+              style={{ scrollbarGutter: "stable" }}
+            >
+              <Outlet context={{ userProfile, setUserProfile }} />
+            </main>
+          </motion.div>
+        </div>
+        <FloatingActionButton />
+        <AiAssistantPanel
+          isOpen={aiAssistantOpen}
+          onClose={() => setAiAssistantOpen(false)}
+          initialRequest={aiRequest}
+          clearInitialRequest={() => setAiRequest(null)}
+        />
         <AnimatePresence>
-          {toasts.map((toast) => {
-            const typeConfig = NOTIFICATION_TYPES[toast.type] || NOTIFICATION_TYPES.system;
-            return (
-              <motion.div
-                key={toast.id}
-                initial={{ opacity: 0, y: 50, scale: 0.9 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.85, transition: { duration: 0.2 } }}
-                className="pointer-events-auto flex w-full gap-3 rounded-2xl glass shadow-elegant border border-border/80 bg-popover/90 p-4"
-              >
-                <div className={`h-9 w-9 shrink-0 rounded-xl flex items-center justify-center ${typeConfig.bgColor}`}>
-                  <typeConfig.icon className={`h-4 w-4 ${typeConfig.iconColor}`} />
-                </div>
-                <div className="flex-1 min-w-0 pr-2">
-                  <span className="text-xs font-semibold text-foreground block">
-                    {toast.title}
-                  </span>
-                  <p className="text-[11px] leading-relaxed text-muted-foreground mt-0.5">
-                    {toast.description}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setToasts((prev) => prev.filter((t) => t.id !== toast.id))}
-                  className="h-6 w-6 shrink-0 inline-flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/65 transition-colors"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </motion.div>
-            );
-          })}
+          {shortcutHelpOpen && (
+            <ShortcutHelpModal onClose={() => setShortcutHelpOpen(false)} />
+          )}
         </AnimatePresence>
+
+        {/* Floating toasts container */}
+        <div className="fixed bottom-24 right-6 z-[100] pointer-events-none flex flex-col gap-2.5 max-w-sm w-full">
+          <AnimatePresence>
+            {toasts.map((toast) => {
+              const typeConfig = NOTIFICATION_TYPES[toast.type] || NOTIFICATION_TYPES.system;
+              return (
+                <motion.div
+                  key={toast.id}
+                  initial={{ opacity: 0, y: 50, scale: 0.9 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.85, transition: { duration: 0.2 } }}
+                  className="pointer-events-auto flex w-full gap-3 rounded-2xl glass shadow-elegant border border-border/80 bg-popover/90 p-4"
+                >
+                  <div className={`h-9 w-9 shrink-0 rounded-xl flex items-center justify-center ${typeConfig.bgColor}`}>
+                    <typeConfig.icon className={`h-4 w-4 ${typeConfig.iconColor}`} />
+                  </div>
+                  <div className="flex-1 min-w-0 pr-2">
+                    <span className="text-xs font-semibold text-foreground block">
+                      {toast.title}
+                    </span>
+                    <p className="text-[11px] leading-relaxed text-muted-foreground mt-0.5">
+                      {toast.description}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setToasts((prev) => prev.filter((t) => t.id !== toast.id))}
+                    className="h-6 w-6 shrink-0 inline-flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/65 transition-colors"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </div>
       </div>
-    </div>
+    </AuthProvider>
   );
 }
 

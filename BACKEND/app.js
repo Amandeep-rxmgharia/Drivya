@@ -5,6 +5,7 @@ import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
 import authRoutes from "./routes/authRoutes.js";
+import adminRoutes from "./routes/adminRoutes.js";
 import directoryRoutes from "./routes/directoryRoutes.js";
 import fileRoutes from "./routes/fileRoutes.js";
 import shareRoutes from "./routes/shareRoutes.js";
@@ -79,6 +80,7 @@ app.use(cookieParser());
 
 // ─── Routes ──────────────────────────────────────────────────
 app.use("/auth", authRoutes);
+app.use("/api/admin", adminRoutes);
 app.use("/api/directories", directoryRoutes);
 app.use("/api/files", fileRoutes);
 app.use("/api/shares", shareRoutes);
