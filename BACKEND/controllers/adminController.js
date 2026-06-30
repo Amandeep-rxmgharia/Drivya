@@ -39,8 +39,17 @@ export const listUsers = async (req, res, next) => {
       User.countDocuments(query),
     ]);
 
+    const userIds = users.map(u => u._id);
+    const activeSessions = await Session.find({ userId: { $in: userIds } }).distinct("userId");
+    const activeSessionSet = new Set(activeSessions.map(id => id.toString()));
+
+    const items = users.map(u => ({
+      ...u,
+      hasActiveSession: activeSessionSet.has(u._id.toString()),
+    }));
+
     return res.json({
-      items: users,
+      items,
       pagination: {
         page: pageNum,
         limit: limitNum,
