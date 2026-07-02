@@ -60,11 +60,37 @@ export async function getTokensFromCode(code) {
 /**
  * Create a Drive v3 client authenticated with user tokens.
  * @param {import("googleapis").Auth.Credentials} tokens
+ * @param {string} [userId] - Optional user ID to enable auto-saving refreshed tokens to DB
  * @returns {{ drive: import("googleapis").drive_v3.Drive, oauth2Client: import("googleapis").Auth.OAuth2Client }}
  */
-export function createDriveClient(tokens) {
+export function createDriveClient(tokens, userId = null) {
   const oauth2Client = createOAuth2Client();
   oauth2Client.setCredentials(tokens);
+
+  if (userId) {
+    oauth2Client.on("tokens", async (newTokens) => {
+      try {
+        const { default: User } = await import("../models/userModel.js");
+        const { encryptTokens } = await import("../services/google/googleTokenCrypto.js");
+
+        const mergedTokens = { ...tokens, ...newTokens };
+        const encrypted = encryptTokens(mergedTokens);
+        await User.updateOne(
+          { _id: userId },
+          {
+            googleTokensEnc: encrypted.enc,
+            googleTokensIv: encrypted.iv,
+            googleTokensAuthTag: encrypted.authTag,
+          }
+        );
+        // Sync local reference
+        Object.assign(tokens, newTokens);
+      } catch (err) {
+        console.error("Failed to save auto-refreshed Google tokens:", err);
+      }
+    });
+  }
+
   const drive = google.drive({ version: "v3", auth: oauth2Client });
   return { drive, oauth2Client };
 }

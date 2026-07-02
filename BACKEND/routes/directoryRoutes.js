@@ -5,6 +5,7 @@ import {
   renameDirectory,
   deleteDirectory,
   getBreadcrumb,
+  getAllDirectories,
 } from "../controllers/directoryController.js";
 import { authenticate } from "../middlewares/authMiddleware.js";
 import {
@@ -19,6 +20,7 @@ const router = express.Router();
 router.use(authenticate);
 
 // ─── Directory Routes ────────────────────────────────────────────
+router.get("/all", getAllDirectories);
 router.get("/", listDirectory);
 router.get("/:parentId", listDirectory);
 router.get("/:id/breadcrumb", getBreadcrumb);

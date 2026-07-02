@@ -23,6 +23,10 @@ export const listDirectory = async (req, res, next) => {
       parentId = user.rootDirId.toString();
     }
 
+    if (!mongoose.Types.ObjectId.isValid(parentId)) {
+      return res.status(400).json({ message: "Invalid directory ID." });
+    }
+
     // Verify the parent directory exists and belongs to the user
     const parentDir = await Directory.findOne({
       _id: parentId,
@@ -60,6 +64,10 @@ export const getBreadcrumb = async (req, res, next) => {
   try {
     const userId = req.user.id;
     const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid directory ID." });
+    }
 
     const dir = await Directory.findOne({ _id: id, userId }).lean();
     if (!dir) {
@@ -149,6 +157,10 @@ export const renameDirectory = async (req, res, next) => {
     const { id } = req.params;
     const { name } = req.body;
 
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid directory ID." });
+    }
+
     const dir = await Directory.findOne({
       _id: id,
       userId,
@@ -190,6 +202,11 @@ export const deleteDirectory = async (req, res, next) => {
     const userId = req.user.id;
     const { id } = req.params;
     let dirName;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      await session.endSession();
+      return res.status(400).json({ message: "Invalid directory ID." });
+    }
 
     await session.withTransaction(async () => {
       // Find the directory to delete
@@ -279,5 +296,16 @@ export const deleteDirectory = async (req, res, next) => {
     next(err);
   } finally {
     await session.endSession();
+  }
+};
+
+// ─── Get All User Directories (Flat List) ────────────────────────
+export const getAllDirectories = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const directories = await Directory.find({ userId }).lean();
+    return res.json({ directories });
+  } catch (err) {
+    next(err);
   }
 };

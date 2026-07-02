@@ -222,7 +222,7 @@ export const listGoogleFiles = async (req, res, next) => {
     }
 
     const { pageToken, query, folderId } = req.query;
-    const result = await listFiles(tokens, { pageToken, query, folderId });
+    const result = await listFiles(tokens, { pageToken, query, folderId }, req.user.id);
 
     return res.json(result);
   } catch (err) {
@@ -310,7 +310,7 @@ export const importGoogleFiles = async (req, res, next) => {
 
     for (const fileId of fileIds) {
       try {
-        const meta = await getFileMetadata(tokens, fileId);
+        const meta = await getFileMetadata(tokens, fileId, userId);
         if (meta.isFolder || !meta.canDownload) continue;
         metadataList.push(meta);
         // Google Docs have no size, estimate 1MB
@@ -397,6 +397,7 @@ export const importGoogleFiles = async (req, res, next) => {
               percent,
             });
           },
+          userId
         );
 
         // Create file record in DB (with duplicate name handling)
@@ -535,5 +536,59 @@ export const importGoogleFiles = async (req, res, next) => {
     }
   } finally {
     activeImports.delete(userId);
+  }
+};
+
+// ─── Get Google Drive File Thumbnail Proxy ─────────────────────
+export const getGoogleThumbnail = async (req, res, next) => {
+  try {
+    const tokens = await getUserTokens(req.user.id);
+    if (!tokens) {
+      return res.status(400).json({ message: "Google Drive not connected." });
+    }
+
+    const { fileId } = req.params;
+    if (!fileId) {
+      return res.status(400).json({ message: "File ID is required." });
+    }
+
+    const { drive, oauth2Client } = createDriveClient(tokens, req.user.id);
+    const metaRes = await drive.files.get({
+      fileId,
+      fields: "thumbnailLink",
+      supportsAllDrives: true,
+    });
+
+    const thumbnailLink = metaRes.data.thumbnailLink;
+    if (!thumbnailLink) {
+      return res.status(404).json({ message: "Thumbnail not available for this file." });
+    }
+
+    // Google Drive thumbnails default to 220px; replace with 400px for crisp display
+    const highResThumbnail = thumbnailLink.replace(/=s\d+$/, "=s400");
+
+    // Fetch the fresh access token (auto-refreshes if expired)
+    const { token: freshAccessToken } = await oauth2Client.getAccessToken();
+
+    // Fetch the thumbnail using global fetch with Bearer token authentication
+    const response = await fetch(highResThumbnail, {
+      headers: {
+        Authorization: `Bearer ${freshAccessToken || tokens.access_token}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch thumbnail: ${response.statusText}`);
+    }
+
+    const contentType = response.headers.get("content-type") || "image/jpeg";
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Cache-Control", "public, max-age=86400");
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    return res.send(buffer);
+  } catch (err) {
+    next(err);
   }
 };

@@ -15,6 +15,14 @@ export const listDirectory = async (parentId) => {
 };
 
 /**
+ * List all directories (for choosing targets recursively).
+ */
+export const listAllDirectories = async () => {
+  const response = await api.get("/api/directories/all");
+  return response.data;
+};
+
+/**
  * Get breadcrumb trail from root to a directory.
  * @param {string} dirId
  */

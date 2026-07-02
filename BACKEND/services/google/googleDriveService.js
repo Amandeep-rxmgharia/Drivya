@@ -46,8 +46,8 @@ const SKIP_MIME_TYPES = new Set([
  * @param {{ pageToken?: string, query?: string, folderId?: string }} options
  * @returns {Promise<{ files: object[], nextPageToken?: string }>}
  */
-export async function listFiles(tokens, { pageToken, query, folderId } = {}) {
-  const { drive } = createDriveClient(tokens);
+export async function listFiles(tokens, { pageToken, query, folderId } = {}, userId = null) {
+  const { drive } = createDriveClient(tokens, userId);
 
   // Build query string
   const qParts = ["trashed = false"];
@@ -65,7 +65,7 @@ export async function listFiles(tokens, { pageToken, query, folderId } = {}) {
     pageSize: 100,
     pageToken: pageToken || undefined,
     fields:
-      "nextPageToken,files(id,name,mimeType,size,modifiedTime,iconLink,parents)",
+      "nextPageToken,files(id,name,mimeType,size,modifiedTime,iconLink,thumbnailLink,parents)",
     orderBy: "folder,name",
     supportsAllDrives: true,
     includeItemsFromAllDrives: true,
@@ -78,6 +78,7 @@ export async function listFiles(tokens, { pageToken, query, folderId } = {}) {
     size: f.size ? parseInt(f.size, 10) : null,
     modifiedTime: f.modifiedTime,
     iconLink: f.iconLink,
+    thumbnailLink: f.thumbnailLink || null,
     isFolder: f.mimeType === "application/vnd.google-apps.folder",
     isGoogleDoc: f.mimeType?.startsWith("application/vnd.google-apps."),
     canDownload: !SKIP_MIME_TYPES.has(f.mimeType),
@@ -96,8 +97,8 @@ export async function listFiles(tokens, { pageToken, query, folderId } = {}) {
  * @param {string} fileId
  * @returns {Promise<object>}
  */
-export async function getFileMetadata(tokens, fileId) {
-  const { drive } = createDriveClient(tokens);
+export async function getFileMetadata(tokens, fileId, userId = null) {
+  const { drive } = createDriveClient(tokens, userId);
 
   const res = await drive.files.get({
     fileId,
@@ -136,8 +137,9 @@ export async function streamImportFile(
   googleFileId,
   destPath,
   onProgress,
+  userId = null,
 ) {
-  const { drive } = createDriveClient(tokens);
+  const { drive } = createDriveClient(tokens, userId);
 
   // Fetch metadata first to determine download strategy
   const metaRes = await drive.files.get({
