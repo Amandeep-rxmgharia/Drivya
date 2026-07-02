@@ -14,7 +14,6 @@ import {
   CheckCircle2,
   AlertTriangle,
   HardDrive,
-  ExternalLink,
   LayoutGrid,
   List,
   RefreshCw,
@@ -26,13 +25,26 @@ import {
   Presentation,
   FileCode,
   Download,
-  ChevronDown,
   ChevronRight,
+  ChevronDown,
+  Trash2,
+  Import,
+  FolderTree,
+  Inbox,
+  Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getGoogleStatus, disconnectGoogle, listGoogleFiles, importGoogleFiles, getGoogleAuthUrl } from "../../../api/googleDrive";
+import {
+  getGoogleStatus,
+  disconnectGoogle,
+  listGoogleFiles,
+  importGoogleFiles,
+  getGoogleAuthUrl,
+} from "../../../api/googleDrive";
 import { listAllDirectories } from "../../../api/drive";
 import api from "../../../api/auth";
+
+// ─── Utilities ───────────────────────────────────────────────────────────────
 
 function formatSize(bytes) {
   if (bytes == null) return "Unknown size";
@@ -42,6 +54,35 @@ function formatSize(bytes) {
   return (bytes / (1024 * 1024 * 1024)).toFixed(2) + " GB";
 }
 
+function getFileVisuals(file) {
+  const mime = file?.mimeType || "";
+  const nameLower = (file?.name || "").toLowerCase();
+  const isFolder = file?.isFolder;
+
+  if (isFolder) {
+    return { Icon: Folder, color: "text-amber-500", bg: "from-amber-500/15 to-amber-600/5", badge: "text-amber-500 bg-amber-500/10", label: "Folder" };
+  } else if (mime.startsWith("image/") || /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(nameLower)) {
+    return { Icon: Image, color: "text-pink-400", bg: "from-pink-500/20 to-purple-600/10", badge: "text-pink-400 bg-pink-400/10", label: "Image" };
+  } else if (mime.startsWith("video/") || /\.(mp4|mkv|mov|avi|wmv|flv)$/i.test(nameLower)) {
+    return { Icon: Video, color: "text-purple-400", bg: "from-purple-500/20 to-indigo-600/10", badge: "text-purple-400 bg-purple-400/10", label: "Video" };
+  } else if (mime.startsWith("audio/") || /\.(mp3|wav|ogg|flac|m4a|aac)$/i.test(nameLower)) {
+    return { Icon: Music, color: "text-emerald-400", bg: "from-emerald-500/20 to-teal-600/10", badge: "text-emerald-400 bg-emerald-400/10", label: "Audio" };
+  } else if (mime === "application/pdf" || nameLower.endsWith(".pdf")) {
+    return { Icon: FileText, color: "text-rose-400", bg: "from-red-500/20 to-rose-600/10", badge: "text-rose-400 bg-rose-400/10", label: "PDF" };
+  } else if (mime.includes("spreadsheet") || mime.includes("excel") || /\.(xls|xlsx|csv)$/i.test(nameLower)) {
+    return { Icon: FileSpreadsheet, color: "text-green-400", bg: "from-green-500/20 to-emerald-600/10", badge: "text-green-400 bg-green-400/10", label: "Sheet" };
+  } else if (mime.includes("presentation") || mime.includes("powerpoint") || /\.(ppt|pptx)$/i.test(nameLower)) {
+    return { Icon: Presentation, color: "text-orange-400", bg: "from-orange-500/20 to-amber-600/10", badge: "text-orange-400 bg-orange-400/10", label: "Slide" };
+  } else if (mime.includes("json") || mime.includes("javascript") || mime.includes("html") || /\.(js|jsx|ts|tsx|json|html|css|py|go|cpp|c|java|sh)$/i.test(nameLower)) {
+    return { Icon: FileCode, color: "text-cyan-400", bg: "from-cyan-500/20 to-blue-600/10", badge: "text-cyan-400 bg-cyan-400/10", label: "Code" };
+  } else if (file?.isGoogleDoc) {
+    return { Icon: FileText, color: "text-blue-400", bg: "from-blue-500/20 to-indigo-600/10", badge: "text-blue-400 bg-blue-400/10", label: "Doc" };
+  }
+  return { Icon: File, color: "text-slate-400", bg: "from-slate-700/20 to-slate-900/10", badge: "text-slate-400 bg-slate-400/10", label: "File" };
+}
+
+// ─── Thumbnail Component ──────────────────────────────────────────────────────
+
 function GoogleDriveThumbnail({ fileId, alt, fallbackIcon: FallbackIcon, className, iconClass, labelColor, labelText, isFolder }) {
   const [src, setSrc] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -50,37 +91,25 @@ function GoogleDriveThumbnail({ fileId, alt, fallbackIcon: FallbackIcon, classNa
   useEffect(() => {
     let active = true;
     let objectUrl = null;
-
     const loadThumbnail = async () => {
       try {
         setLoading(true);
         setError(false);
-        const response = await api.get(`/api/google/thumbnail/${fileId}`, {
-          responseType: "blob",
-        });
-
+        const response = await api.get(`/api/google/thumbnail/${fileId}`, { responseType: "blob" });
         if (active) {
           objectUrl = URL.createObjectURL(response.data);
           setSrc(objectUrl);
         }
-      } catch (err) {
-        if (active) {
-          setError(true);
-        }
+      } catch {
+        if (active) setError(true);
       } finally {
-        if (active) {
-          setLoading(false);
-        }
+        if (active) setLoading(false);
       }
     };
-
     loadThumbnail();
-
     return () => {
       active = false;
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [fileId]);
 
@@ -94,102 +123,95 @@ function GoogleDriveThumbnail({ fileId, alt, fallbackIcon: FallbackIcon, classNa
 
   if (error || !src) {
     return (
-      <div className="fallback-icon flex flex-col items-center justify-center gap-1.5 w-full h-full">
-        <FallbackIcon className={cn("h-8 w-8 transition-transform duration-300 group-hover:scale-110",
-          isFolder ? "text-amber-500 fill-amber-500/20" : iconClass
-        )} />
-        <span className={cn("text-[9px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider", labelColor)}>
-          {labelText}
-        </span>
+      <div className="flex flex-col items-center justify-center gap-1.5 w-full h-full">
+        <FallbackIcon className={cn("h-8 w-8 transition-transform duration-300 group-hover:scale-110", isFolder ? "text-amber-500 fill-amber-500/20" : iconClass)} />
+        <span className={cn("text-[9px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider", labelColor)}>{labelText}</span>
       </div>
     );
   }
 
-  return (
-    <img
-      src={src}
-      alt={alt}
-      className={className}
-    />
-  );
+  return <img src={src} alt={alt} className={className} />;
 }
 
+// ─── Main Modal ───────────────────────────────────────────────────────────────
+
 export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, onRefresh }) {
-  // Connection states
+  // ── Auth state ───────────────────────────────────────────────
   const [isConnected, setIsConnected] = useState(false);
   const [googleEmail, setGoogleEmail] = useState("");
   const [authLoading, setAuthLoading] = useState(true);
 
-  // File explorer states
+  // ── Drive browser state ──────────────────────────────────────
   const [files, setFiles] = useState([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [folderStack, setFolderStack] = useState([{ id: "root", name: "Google Drive" }]);
   const [searchQuery, setSearchQuery] = useState("");
   const [nextPageToken, setNextPageToken] = useState(null);
   const [loadMoreLoading, setLoadMoreLoading] = useState(false);
-  const [viewMode, setViewMode] = useState("grid"); // 'grid' | 'list'
+  const [viewMode, setViewMode] = useState("grid");
 
-  // Selection states
-  const [selectedFiles, setSelectedFiles] = useState({}); // fileId -> fileObj
-  const [drivyaDirs, setDrivyaDirs] = useState([]); // Folders in current workspace to pick destination
-  const [targetDir, setTargetDir] = useState(currentDirId || "root");
+  // ── Selection state ──────────────────────────────────────────
+  const [selectedFiles, setSelectedFiles] = useState({});
 
-  // Drivya hierarchical folder picker states
+  // ── Drivya destination folder state ─────────────────────────
   const [rawDrivyaDirs, setRawDrivyaDirs] = useState([]);
-  const [pickerFolderStack, setPickerFolderStack] = useState([{ id: "root", name: "My Drive" }]);
-  const [isPickerOpen, setIsPickerOpen] = useState(false);
-  const pickerRef = useRef(null);
+  const [drivyaFolderStack, setDrivyaFolderStack] = useState([{ id: "root", name: "My Drive" }]);
+  const [targetDirId, setTargetDirId] = useState(currentDirId || "root");
+  const [targetDirName, setTargetDirName] = useState("My Drive (Root)");
 
-  // Import/SSE states
+  // ── Mobile tab state ─────────────────────────────────────────
+  const [mobileTab, setMobileTab] = useState("browse"); // 'browse' | 'queue'
+
+  // ── Import / SSE state ───────────────────────────────────────
   const [isImporting, setIsImporting] = useState(false);
   const [importSummary, setImportSummary] = useState(null);
-  const [fileProgress, setFileProgress] = useState({}); // fileId -> { percent, status, error, name }
+  const [fileProgress, setFileProgress] = useState({});
   const [error, setError] = useState(null);
 
   const currentFolderId = folderStack[folderStack.length - 1].id;
 
-  // Resolve Drivya folder path name and hierarchy
-  const selectedTargetDirName = useMemo(() => {
-    if (targetDir === "root") return "My Drive (Root)";
-    const dir = rawDrivyaDirs.find(d => d._id?.toString() === targetDir);
-    return dir ? dir.name : "My Drive (Root)";
-  }, [targetDir, rawDrivyaDirs]);
+  // ── Derived ──────────────────────────────────────────────────
+  const importableFiles = useMemo(() => files.filter((f) => !f.isFolder && f.canDownload), [files]);
+  const selectedCount = Object.keys(selectedFiles).length;
+  const selectedList = useMemo(() => Object.values(selectedFiles), [selectedFiles]);
+  const isAllSelected = useMemo(() => importableFiles.length > 0 && importableFiles.every((f) => selectedFiles[f.id]), [importableFiles, selectedFiles]);
 
-  const selectedTargetDirPath = useMemo(() => {
-    if (targetDir === "root") return "My Drive (Root)";
-    const dir = rawDrivyaDirs.find(d => d._id?.toString() === targetDir);
-    if (!dir) return "My Drive (Root)";
+  const selectedTotalSize = useMemo(() => selectedList.reduce((s, f) => s + (f.size || 1024 * 1024), 0), [selectedList]);
+  const storageRemaining = useMemo(() => {
+    if (!userProfile) return 0;
+    return Math.max(0, userProfile.storageLimit - userProfile.storageUsed);
+  }, [userProfile]);
+  const isOverQuota = selectedTotalSize > storageRemaining;
 
-    const dirMap = {};
-    rawDrivyaDirs.forEach(d => {
-      dirMap[d._id.toString()] = d.name;
-    });
+  const getDrivyaChildren = useCallback((parentId) => {
+    const rootDir = rawDrivyaDirs.find((d) => d.parentDirId === null || d.depth === 0);
+    const rootId = rootDir?._id?.toString();
 
-    const pathNames = dir.path
-      .map(parentId => dirMap[parentId.toString()])
-      .filter(Boolean);
-
-    return [...pathNames, dir.name].join(" / ");
-  }, [targetDir, rawDrivyaDirs]);
-
-  // Click outside handler for Drivya folder picker popover
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (pickerRef.current && !pickerRef.current.contains(event.target)) {
-        setIsPickerOpen(false);
+    return rawDrivyaDirs.filter((d) => {
+      if (parentId === "root") {
+        return d.parentDirId?.toString() === rootId;
       }
-    };
-    if (isPickerOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [isPickerOpen]);
+      return d.parentDirId?.toString() === parentId;
+    });
+  }, [rawDrivyaDirs]);
 
-  // Initialize folder picker stack when opening modal with a pre-selected directory
+  const failedFileIds = useMemo(() => Object.keys(fileProgress).filter((id) => fileProgress[id].status === "failed"), [fileProgress]);
+
+  // ── On open ──────────────────────────────────────────────────
   useEffect(() => {
-    if (!isOpen || !currentDirId || rawDrivyaDirs.length === 0) return;
+    if (!isOpen) return;
+    checkStatus();
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || rawDrivyaDirs.length === 0) return;
+
+    if (!currentDirId || currentDirId === "root") {
+      setDrivyaFolderStack([{ id: "root", name: "My Drive" }]);
+      setTargetDirId("root");
+      setTargetDirName("My Drive (Root)");
+      return;
+    }
 
     const currentFolder = rawDrivyaDirs.find(d => d._id?.toString() === currentDirId);
     if (!currentFolder) return;
@@ -210,29 +232,12 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
 
     stack.push({ id: currentFolder._id.toString(), name: currentFolder.name });
     
-    setPickerFolderStack(stack);
-    setTargetDir(currentDirId);
+    setDrivyaFolderStack(stack);
+    setTargetDirId(currentDirId);
+    setTargetDirName(currentFolder.name);
   }, [isOpen, currentDirId, rawDrivyaDirs]);
 
-  // Helper to resolve Drivya subfolders in current picker level
-  const getPickerChildren = useCallback((parentId) => {
-    const rootDir = rawDrivyaDirs.find(d => d.parentDirId === null || d.depth === 0);
-    const rootId = rootDir?._id?.toString();
-
-    return rawDrivyaDirs.filter(d => {
-      if (parentId === "root") {
-        return d.parentDirId?.toString() === rootId;
-      }
-      return d.parentDirId?.toString() === parentId;
-    });
-  }, [rawDrivyaDirs]);
-
-  // Fetch connection status on mount
-  useEffect(() => {
-    if (!isOpen) return;
-    checkStatus();
-  }, [isOpen]);
-
+  // ── Status check ─────────────────────────────────────────────
   const checkStatus = async () => {
     setAuthLoading(true);
     setError(null);
@@ -244,77 +249,37 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
         fetchFiles("root");
         fetchDrivyaDirectories();
       }
-    } catch (err) {
-      console.error("Failed to check Google status:", err);
+    } catch {
       setError("Unable to connect to service. Please try again.");
     } finally {
       setAuthLoading(false);
     }
   };
 
-  // Fetch Drivya directories for target destination selection recursively
+  // ── Drivya dirs ───────────────────────────────────────────────
   const fetchDrivyaDirectories = async () => {
     try {
       const data = await listAllDirectories();
-      if (data && data.directories) {
-        setRawDrivyaDirs(data.directories);
-        // Build a map of directory ID to directory Name
-        const dirMap = {};
-        data.directories.forEach((d) => {
-          dirMap[d._id.toString()] = d.name;
-        });
-
-        // Filter out the root directory (which has parentDirId = null or depth = 0)
-        // because we already have a hardcoded "My Drive (Root)" option
-        const subDirs = data.directories.filter((d) => d.parentDirId !== null);
-
-        // Format hierarchical paths
-        const formattedDirs = subDirs.map((d) => {
-          const pathNames = d.path
-            .map((parentId) => dirMap[parentId.toString()])
-            .filter(Boolean); // Keep only resolved names
-
-          const fullPath = [...pathNames, d.name].join(" / ");
-          return {
-            _id: d._id,
-            name: fullPath,
-          };
-        });
-
-        // Sort folders alphabetically
-        formattedDirs.sort((a, b) => a.name.localeCompare(b.name));
-
-        setDrivyaDirs(formattedDirs);
-      }
+      if (data?.directories) setRawDrivyaDirs(data.directories);
     } catch (err) {
       console.warn("Failed to load destination directories:", err);
     }
   };
 
-  // Fetch Google Drive files
+  // ── Google Drive file listing ─────────────────────────────────
   const fetchFiles = async (folderId, pageToken = null, append = false, query = "") => {
-    if (append) {
-      setLoadMoreLoading(true);
-    } else {
-      setLoadingFiles(true);
-      setError(null);
-    }
-
+    if (append) setLoadMoreLoading(true);
+    else { setLoadingFiles(true); setError(null); }
     try {
       const data = await listGoogleFiles({
         folderId: query ? null : (folderId === "root" ? "root" : folderId),
         pageToken,
         query: query || null,
       });
-
-      if (append) {
-        setFiles((prev) => [...prev, ...data.files]);
-      } else {
-        setFiles(data.files || []);
-      }
+      if (append) setFiles((prev) => [...prev, ...data.files]);
+      else setFiles(data.files || []);
       setNextPageToken(data.nextPageToken || null);
     } catch (err) {
-      console.error("Failed to list Google Drive files:", err);
       if (err.response?.status === 401 || err.code === "GOOGLE_TOKEN_EXPIRED") {
         setIsConnected(false);
         setGoogleEmail("");
@@ -327,34 +292,28 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
     }
   };
 
-  // Handle Search
+  // ── Debounced search ──────────────────────────────────────────
   useEffect(() => {
     if (!isConnected || !isOpen) return;
-    const delayDebounceFn = setTimeout(() => {
-      if (searchQuery.trim()) {
-        fetchFiles(null, null, false, searchQuery);
-      } else {
-        fetchFiles(currentFolderId);
-      }
+    const t = setTimeout(() => {
+      if (searchQuery.trim()) fetchFiles(null, null, false, searchQuery);
+      else fetchFiles(currentFolderId);
     }, 450);
-
-    return () => clearTimeout(delayDebounceFn);
+    return () => clearTimeout(t);
   }, [searchQuery, currentFolderId, isConnected]);
 
-  // Connect Google account
+  // ── Auth handlers ─────────────────────────────────────────────
   const handleConnect = async () => {
     try {
       setAuthLoading(true);
       const { url } = await getGoogleAuthUrl();
       window.location.href = url;
-    } catch (err) {
-      console.error("Failed to fetch auth url:", err);
+    } catch {
       setError("Could not launch Google authentication.");
       setAuthLoading(false);
     }
   };
 
-  // Disconnect Google account
   const handleDisconnect = async () => {
     if (!confirm("Are you sure you want to disconnect your Google Drive?")) return;
     try {
@@ -363,229 +322,131 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
       setGoogleEmail("");
       setFiles([]);
       setSelectedFiles({});
-    } catch (err) {
-      console.error("Failed to disconnect:", err);
+    } catch {
       setError("Failed to revoke Google access.");
     }
   };
 
-  // Navigate into folder
+  // ── Navigation ────────────────────────────────────────────────
   const handleFolderClick = (folder) => {
-    if (searchQuery) {
-      setSearchQuery("");
-    }
-    const newStack = [...folderStack, { id: folder.id, name: folder.name }];
-    setFolderStack(newStack);
+    if (searchQuery) setSearchQuery("");
+    setFolderStack((prev) => [...prev, { id: folder.id, name: folder.name }]);
     fetchFiles(folder.id);
   };
 
-  // Navigate back
-  const handleGoBack = () => {
-    if (folderStack.length <= 1) return;
-    const newStack = [...folderStack];
-    newStack.pop();
+  const handleBreadcrumbNav = (index) => {
+    if (index === folderStack.length - 1) return;
+    const newStack = folderStack.slice(0, index + 1);
     setFolderStack(newStack);
-    const parentFolder = newStack[newStack.length - 1];
-    fetchFiles(parentFolder.id);
+    fetchFiles(newStack[newStack.length - 1].id);
   };
 
-  // Toggle file selection
+  const handleGoBack = () => {
+    if (folderStack.length <= 1) return;
+    const newStack = folderStack.slice(0, -1);
+    setFolderStack(newStack);
+    fetchFiles(newStack[newStack.length - 1].id);
+  };
+
+  // ── Selection ─────────────────────────────────────────────────
   const handleToggleFile = (file) => {
     setSelectedFiles((prev) => {
       const next = { ...prev };
-      if (next[file.id]) {
-        delete next[file.id];
-      } else {
-        next[file.id] = file;
-      }
+      if (next[file.id]) delete next[file.id];
+      else next[file.id] = file;
       return next;
     });
   };
 
-  // Select/Deselect all files in current view
-  const importableFiles = useMemo(() => {
-    return files.filter(f => !f.isFolder && f.canDownload);
-  }, [files]);
-
-  const isAllSelected = useMemo(() => {
-    if (importableFiles.length === 0) return false;
-    return importableFiles.every(f => selectedFiles[f.id]);
-  }, [importableFiles, selectedFiles]);
+  const handleRemoveFromQueue = (fileId) => {
+    setSelectedFiles((prev) => {
+      const next = { ...prev };
+      delete next[fileId];
+      return next;
+    });
+  };
 
   const handleSelectAllToggle = () => {
     setSelectedFiles((prev) => {
       const next = { ...prev };
-      if (isAllSelected) {
-        importableFiles.forEach(f => {
-          delete next[f.id];
-        });
-      } else {
-        importableFiles.forEach(f => {
-          next[f.id] = f;
-        });
-      }
+      if (isAllSelected) importableFiles.forEach((f) => delete next[f.id]);
+      else importableFiles.forEach((f) => (next[f.id] = f));
       return next;
     });
   };
 
-  // Calculate total selected size and count
-  const selectedCount = Object.keys(selectedFiles).length;
-  const selectedTotalSize = useMemo(() => {
-    return Object.values(selectedFiles).reduce((sum, f) => sum + (f.size || 1024 * 1024), 0);
-  }, [selectedFiles]);
-
-  const storageRemaining = useMemo(() => {
-    if (!userProfile) return 0;
-    return Math.max(0, userProfile.storageLimit - userProfile.storageUsed);
-  }, [userProfile]);
-
-  const isOverQuota = selectedTotalSize > storageRemaining;
-
-  // Handle Import submission
+  // ── Import ─────────────────────────────────────────────────────
   const handleImport = async () => {
     if (selectedCount === 0) return;
-    if (isOverQuota) {
-      alert("Selected files exceed your available storage quota.");
-      return;
-    }
-
+    if (isOverQuota) { alert("Selected files exceed your available storage quota."); return; }
     const fileIds = Object.keys(selectedFiles);
     setIsImporting(true);
     setImportSummary(null);
     setFileProgress({});
     setError(null);
-
-    // Populate initial progress list
     const initialProgress = {};
-    fileIds.forEach((id) => {
-      initialProgress[id] = {
-        percent: 0,
-        status: "waiting",
-        name: selectedFiles[id].name,
-      };
-    });
+    fileIds.forEach((id) => { initialProgress[id] = { percent: 0, status: "waiting", name: selectedFiles[id].name }; });
     setFileProgress(initialProgress);
-
     try {
-      await importGoogleFiles(fileIds, targetDir === "root" ? null : targetDir, {
-        onStart: (data) => {
-          console.log("[Import Started]", data);
-        },
+      await importGoogleFiles(fileIds, targetDirId === "root" ? null : targetDirId, {
         onProgress: (data) => {
-          setFileProgress((prev) => ({
-            ...prev,
-            [data.fileId]: {
-              percent: data.percent,
-              status: data.status,
-              name: data.fileName,
-              error: data.error || null,
-            },
-          }));
+          setFileProgress((prev) => ({ ...prev, [data.fileId]: { percent: data.percent, status: data.status, name: data.fileName, error: data.error || null } }));
         },
         onDone: (data) => {
           setImportSummary(data);
           window.dispatchEvent(new CustomEvent("refresh-drive"));
           if (onRefresh) onRefresh();
         },
-        onError: (data) => {
-          setError(data.error || "An error occurred during import.");
-        },
+        onError: (data) => setError(data.error || "An error occurred during import."),
       });
     } catch (err) {
-      console.error("[Import stream error]", err);
       setError(err.message || "Failed to import files.");
     }
   };
 
-  // Handle Retry of specific failed files
   const handleRetry = async (retryFileIds) => {
-    if (!retryFileIds || retryFileIds.length === 0) return;
-
+    if (!retryFileIds?.length) return;
     setIsImporting(true);
     setImportSummary(null);
     setError(null);
-
-    // Reset only the selected retrying files in progress state
     setFileProgress((prev) => {
       const next = { ...prev };
-      retryFileIds.forEach((id) => {
-        next[id] = {
-          ...next[id],
-          percent: 0,
-          status: "waiting",
-          error: null,
-        };
-      });
+      retryFileIds.forEach((id) => { next[id] = { ...next[id], percent: 0, status: "waiting", error: null }; });
       return next;
     });
-
     try {
-      await importGoogleFiles(retryFileIds, targetDir === "root" ? null : targetDir, {
-        onStart: (data) => {
-          console.log("[Import Retry Started]", data);
-        },
+      await importGoogleFiles(retryFileIds, targetDirId === "root" ? null : targetDirId, {
         onProgress: (data) => {
-          setFileProgress((prev) => ({
-            ...prev,
-            [data.fileId]: {
-              percent: data.percent,
-              status: data.status,
-              name: data.fileName,
-              error: data.error || null,
-            },
-          }));
+          setFileProgress((prev) => ({ ...prev, [data.fileId]: { percent: data.percent, status: data.status, name: data.fileName, error: data.error || null } }));
         },
-        onDone: (data) => {
-          // Re-calculate global import summary based on all file progress states
+        onDone: () => {
           setFileProgress((currentProgress) => {
-            const progressEntries = Object.entries(currentProgress);
-            const importedCount = progressEntries.filter(([_, p]) => p.status === "complete").length;
-            const failedCount = progressEntries.filter(([_, p]) => p.status === "failed").length;
-
-            const totalSize = Object.values(selectedFiles).reduce((sum, f) => {
-              if (currentProgress[f.id]?.status === "complete") {
-                return sum + (f.size || 1024 * 1024);
-              }
-              return sum;
-            }, 0);
-
+            const entries = Object.entries(currentProgress);
+            const importedCount = entries.filter(([, p]) => p.status === "complete").length;
+            const failedCount = entries.filter(([, p]) => p.status === "failed").length;
+            const totalSize = Object.values(selectedFiles).reduce((s, f) => currentProgress[f.id]?.status === "complete" ? s + (f.size || 1024 * 1024) : s, 0);
             setImportSummary({
-              imported: importedCount,
-              failed: failedCount,
-              totalSize,
-              files: progressEntries.filter(([_, p]) => p.status === "complete").map(([id, p]) => ({ fileId: id, fileName: p.name })),
-              errors: progressEntries.filter(([_, p]) => p.status === "failed").map(([id, p]) => ({ fileId: id, fileName: p.name, error: p.error })),
+              imported: importedCount, failed: failedCount, totalSize,
+              files: entries.filter(([, p]) => p.status === "complete").map(([id, p]) => ({ fileId: id, fileName: p.name })),
+              errors: entries.filter(([, p]) => p.status === "failed").map(([id, p]) => ({ fileId: id, fileName: p.name, error: p.error })),
             });
-
             return currentProgress;
           });
-
           window.dispatchEvent(new CustomEvent("refresh-drive"));
           if (onRefresh) onRefresh();
         },
-        onError: (data) => {
-          setError(data.error || "An error occurred during retry.");
-        },
+        onError: (data) => setError(data.error || "An error occurred during retry."),
       });
     } catch (err) {
-      console.error("[Retry stream error]", err);
       setError(err.message || "Failed to retry import.");
     }
   };
 
-  // Find all currently failed imports
-  const failedFileIds = useMemo(() => {
-    return Object.keys(fileProgress).filter(id => fileProgress[id].status === "failed");
-  }, [fileProgress]);
-
-  // Clean up and close
+  // ── Close ─────────────────────────────────────────────────────
   const handleClose = () => {
     if (isImporting && !importSummary) {
-      if (!confirm("An import is in progress. Closing this modal will run it in the background. Proceed?")) {
-        return;
-      }
+      if (!confirm("An import is in progress. Closing will run it in the background. Proceed?")) return;
     }
-    // Reset states
     setSelectedFiles({});
     setFolderStack([{ id: "root", name: "Google Drive" }]);
     setSearchQuery("");
@@ -593,272 +454,641 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
     setImportSummary(null);
     setFileProgress({});
     setError(null);
+    setMobileTab("browse");
     onClose();
   };
 
   if (!isOpen) return null;
 
-  // Grid/List file skeleton loading
-  const renderSkeletons = () => {
-    if (viewMode === "grid") {
-      return (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="flex flex-col h-[180px] bg-[#12162E]/40 border border-[#22284D]/40 rounded-2xl overflow-hidden animate-pulse">
-              <div className="w-full h-[110px] bg-slate-800/40" />
-              <div className="flex-1 p-3 flex flex-col justify-between">
-                <div className="h-3.5 bg-slate-800/40 rounded-md w-3/4" />
-                <div className="flex items-center justify-between">
-                  <div className="h-2.5 bg-slate-800/30 rounded-md w-1/3" />
-                  <div className="h-2.5 bg-slate-800/30 rounded-md w-1/4" />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      );
-    }
-
-    return (
-      <div className="space-y-2">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="flex items-center justify-between py-3.5 px-4 border-b border-[#22284D]/25 animate-pulse">
-            <div className="flex items-center gap-3 w-1/2">
-              <div className="h-5 w-5 bg-slate-800/40 rounded-md shrink-0" />
-              <div className="h-3.5 bg-slate-800/40 rounded-md w-2/3" />
-            </div>
-            <div className="h-3 bg-slate-800/30 rounded-md w-1/4" />
-            <div className="h-3 bg-slate-800/30 rounded-md w-12" />
+  // ─── Skeletons ─────────────────────────────────────────────────
+  const renderSkeletons = () => viewMode === "grid" ? (
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="flex flex-col h-[160px] bg-secondary/20 border border-border/40 rounded-xl overflow-hidden animate-pulse">
+          <div className="w-full h-[95px] bg-slate-800/30" />
+          <div className="flex-1 p-2.5 flex flex-col justify-between">
+            <div className="h-3 bg-slate-800/30 rounded w-3/4" />
+            <div className="h-2.5 bg-slate-800/20 rounded w-1/2" />
           </div>
-        ))}
-      </div>
-    );
-  };
+        </div>
+      ))}
+    </div>
+  ) : (
+    <div className="space-y-1.5">
+      {Array.from({ length: 7 }).map((_, i) => (
+        <div key={i} className="flex items-center gap-3 py-2.5 px-2 border-b border-border/20 animate-pulse">
+          <div className="h-4 w-4 bg-slate-800/30 rounded shrink-0" />
+          <div className="h-4 w-4 bg-slate-800/30 rounded shrink-0" />
+          <div className="h-3 bg-slate-800/30 rounded w-1/2" />
+          <div className="h-2.5 bg-slate-800/20 rounded w-16 ml-auto" />
+        </div>
+      ))}
+    </div>
+  );
 
-  // Render file in Grid View
+  // ─── Grid card ─────────────────────────────────────────────────
   const renderGridItem = (file) => {
+    const { Icon, color, bg, badge, label } = getFileVisuals(file);
     const isFolder = file.isFolder;
     const isSelected = !!selectedFiles[file.id];
-    const dateString = file.modifiedTime
-      ? new Date(file.modifiedTime).toLocaleDateString(undefined, {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-        })
-      : "—";
-
-    let fallbackColor = "from-slate-700 to-slate-900";
-    let IconComponent = File;
-    let labelColor = "text-slate-400 bg-slate-400/10";
-    let labelText = "File";
-
-    const mime = file.mimeType || "";
-    const nameLower = file.name.toLowerCase();
-
-    if (isFolder) {
-      fallbackColor = "from-amber-500/10 to-amber-600/5";
-      IconComponent = Folder;
-      labelColor = "text-amber-500 bg-amber-500/10";
-      labelText = "Folder";
-    } else if (mime.startsWith("image/") || /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(nameLower)) {
-      fallbackColor = "from-pink-500/20 to-purple-600/10";
-      IconComponent = Image;
-      labelColor = "text-pink-400 bg-pink-400/10";
-      labelText = "Image";
-    } else if (mime.startsWith("video/") || /\.(mp4|mkv|mov|avi|wmv|flv)$/i.test(nameLower)) {
-      fallbackColor = "from-purple-500/20 to-indigo-600/10";
-      IconComponent = Video;
-      labelColor = "text-purple-400 bg-purple-400/10";
-      labelText = "Video";
-    } else if (mime.startsWith("audio/") || /\.(mp3|wav|ogg|flac|m4a|aac)$/i.test(nameLower)) {
-      fallbackColor = "from-emerald-500/20 to-teal-600/10";
-      IconComponent = Music;
-      labelColor = "text-emerald-400 bg-emerald-400/10";
-      labelText = "Audio";
-    } else if (mime === "application/pdf" || nameLower.endsWith(".pdf")) {
-      fallbackColor = "from-red-500/20 to-rose-600/10";
-      IconComponent = FileText;
-      labelColor = "text-rose-400 bg-rose-400/10";
-      labelText = "PDF";
-    } else if (mime.includes("spreadsheet") || mime.includes("excel") || /\.(xls|xlsx|csv)$/i.test(nameLower)) {
-      fallbackColor = "from-green-500/20 to-emerald-600/10";
-      IconComponent = FileSpreadsheet;
-      labelColor = "text-green-400 bg-green-400/10";
-      labelText = "Sheet";
-    } else if (mime.includes("presentation") || mime.includes("powerpoint") || /\.(ppt|pptx)$/i.test(nameLower)) {
-      fallbackColor = "from-orange-500/20 to-amber-600/10";
-      IconComponent = Presentation;
-      labelColor = "text-orange-400 bg-orange-400/10";
-      labelText = "Slide";
-    } else if (mime.includes("json") || mime.includes("javascript") || mime.includes("html") || mime.includes("css") || /\.(js|jsx|ts|tsx|json|html|css|py|go|cpp|c|h|java|sh)$/i.test(nameLower)) {
-      fallbackColor = "from-cyan-500/20 to-blue-600/10";
-      IconComponent = FileCode;
-      labelColor = "text-cyan-400 bg-cyan-400/10";
-      labelText = "Code";
-    } else if (file.isGoogleDoc) {
-      fallbackColor = "from-blue-500/20 to-indigo-600/10";
-      IconComponent = FileText;
-      labelColor = "text-blue-400 bg-blue-400/10";
-      labelText = "Doc";
-    }
+    const dateStr = file.modifiedTime ? new Date(file.modifiedTime).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "—";
 
     return (
-      <div
+      <motion.div
         key={file.id}
-        onClick={() => {
-          if (isFolder) {
-            handleFolderClick(file);
-          } else {
-            handleToggleFile(file);
-          }
-        }}
+        layout
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.15 }}
+        onClick={() => isFolder ? handleFolderClick(file) : handleToggleFile(file)}
         className={cn(
-          "group relative flex flex-col h-[180px] bg-secondary/20 dark:bg-secondary/10 border border-border/85 rounded-2xl overflow-hidden transition-all duration-300 select-none cursor-pointer hover:border-primary/50 hover:shadow-glow hover:-translate-y-0.5",
-          isSelected && "border-primary bg-primary/5 shadow-glow ring-1 ring-primary/30"
+          "group relative flex flex-col h-[160px] bg-secondary/20 border border-border/70 rounded-xl overflow-hidden transition-all duration-200 select-none cursor-pointer hover:border-primary/40 hover:-translate-y-0.5 hover:shadow-glow",
+          isSelected && "border-primary bg-primary/5 ring-1 ring-primary/20 shadow-glow"
         )}
       >
-        {/* Card Preview / Thumbnail Header */}
-        <div className={cn("relative w-full h-[110px] flex items-center justify-center bg-gradient-to-br overflow-hidden rounded-t-2xl", fallbackColor)}>
+        {/* Thumbnail area */}
+        <div className={cn("relative w-full h-[95px] flex items-center justify-center bg-gradient-to-br overflow-hidden rounded-t-xl", bg)}>
           {file.thumbnailLink ? (
             <GoogleDriveThumbnail
               fileId={file.id}
               alt={file.name}
-              fallbackIcon={IconComponent}
+              fallbackIcon={Icon}
               className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-              iconClass={labelColor.split(" ")[0]}
-              labelColor={labelColor}
-              labelText={labelText}
+              iconClass={color}
+              labelColor={badge}
+              labelText={label}
               isFolder={isFolder}
             />
           ) : (
-            /* Fallback Icon */
-            <div className="fallback-icon flex flex-col items-center justify-center gap-1.5 w-full h-full">
-              <IconComponent className={cn("h-8 w-8 transition-transform duration-300 group-hover:scale-110",
-                isFolder ? "text-amber-500 fill-amber-500/20" : labelColor.split(" ")[0]
-              )} />
-              <span className={cn("text-[9px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider", labelColor)}>
-                {labelText}
-              </span>
+            <div className="flex flex-col items-center justify-center gap-1.5 w-full h-full">
+              <Icon className={cn("h-7 w-7 transition-transform duration-300 group-hover:scale-110", isFolder ? "text-amber-500 fill-amber-500/20" : color)} />
+              <span className={cn("text-[9px] px-1.5 py-0.5 rounded-full font-semibold uppercase tracking-wider", badge)}>{label}</span>
             </div>
           )}
-
-          {/* Selection indicator */}
+          {/* Checkbox */}
           {!isFolder && file.canDownload && (
             <div
-              onClick={(e) => {
-                e.stopPropagation();
-                handleToggleFile(file);
-              }}
+              onClick={(e) => { e.stopPropagation(); handleToggleFile(file); }}
               className={cn(
-                "absolute top-2.5 right-2.5 h-5.5 w-5.5 flex items-center justify-center rounded-lg border backdrop-blur-md transition-all duration-200 cursor-pointer shadow-sm z-10",
+                "absolute top-2 right-2 h-5 w-5 flex items-center justify-center rounded-md border backdrop-blur-sm transition-all duration-200 cursor-pointer shadow-sm z-10",
                 isSelected
                   ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border bg-secondary/80 text-transparent hover:border-muted-foreground hover:text-muted-foreground group-hover:opacity-100 opacity-0"
+                  : "border-white/30 bg-black/20 text-transparent hover:border-white/60 hover:bg-black/40"
               )}
             >
-              <Check className="h-3.5 w-3.5 stroke-[3.5]" />
+              <Check className="h-3 w-3 stroke-[3]" />
             </div>
           )}
         </div>
-
-        {/* Card Details Footer */}
-        <div className="flex-1 p-3 flex flex-col justify-between bg-secondary/5">
-          <div className="text-xs font-semibold text-foreground line-clamp-1 truncate group-hover:text-primary transition-colors" title={file.name}>
-            {file.name}
-          </div>
+        {/* Footer */}
+        <div className="flex-1 px-2.5 py-2 flex flex-col justify-between bg-secondary/5">
+          <p className="text-[11px] font-semibold text-foreground line-clamp-1 group-hover:text-primary transition-colors" title={file.name}>{file.name}</p>
           <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-            <span>{dateString}</span>
-            <span className="font-sans">
-              {isFolder
-                ? "Folder"
-                : file.size
-                ? formatSize(file.size)
-                : file.isGoogleDoc
-                ? "Google Doc"
-                : "—"}
-            </span>
+            <span>{dateStr}</span>
+            <span>{isFolder ? "Folder" : file.size ? formatSize(file.size) : file.isGoogleDoc ? "Doc" : "—"}</span>
           </div>
         </div>
-      </div>
+      </motion.div>
     );
   };
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop blur overlay */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={handleClose}
-        className="absolute inset-0 bg-background/60 dark:bg-black/60 backdrop-blur-md"
-      />
+  // ─── List row ──────────────────────────────────────────────────
+  const renderListRow = (file) => {
+    const { Icon, color, badge, label } = getFileVisuals(file);
+    const isFolder = file.isFolder;
+    const isSelected = !!selectedFiles[file.id];
+    const dateStr = file.modifiedTime ? new Date(file.modifiedTime).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—";
 
-      {/* Main modal container */}
+    return (
+      <tr
+        key={file.id}
+        onClick={() => isFolder ? handleFolderClick(file) : handleToggleFile(file)}
+        className={cn(
+          "border-b border-border/20 group hover:bg-secondary/15 transition-colors cursor-pointer",
+          isSelected && "bg-primary/5 hover:bg-primary/10"
+        )}
+      >
+        <td className="py-2.5 pl-2 pr-1 w-8" onClick={(e) => e.stopPropagation()}>
+          {!isFolder && file.canDownload ? (
+            <button
+              type="button"
+              onClick={() => handleToggleFile(file)}
+              className={cn(
+                "flex h-4.5 w-4.5 items-center justify-center rounded border transition-colors cursor-pointer",
+                isSelected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-secondary/35 hover:border-primary/60"
+              )}
+            >
+              {isSelected && <Check className="h-2.5 w-2.5 stroke-[3.5]" />}
+            </button>
+          ) : <div className="h-4.5 w-4.5" />}
+        </td>
+        <td className="py-2.5 pr-2">
+          <div className="flex items-center gap-2 text-foreground group-hover:text-primary transition-colors">
+            <Icon className={cn("h-4 w-4 shrink-0", isFolder ? "text-amber-500 fill-amber-500/20" : color)} />
+            <span className="text-xs font-semibold truncate max-w-[180px]">{file.name}</span>
+            {file.isGoogleDoc && <span className={cn("text-[9px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider shrink-0", badge)}>Doc</span>}
+          </div>
+        </td>
+        <td className="py-2.5 text-[11px] text-muted-foreground w-24">{dateStr}</td>
+        <td className="py-2.5 text-[11px] text-muted-foreground text-right pr-2 w-20">
+          {isFolder ? "Folder" : file.size ? formatSize(file.size) : file.isGoogleDoc ? "Doc" : "—"}
+        </td>
+      </tr>
+    );
+  };
+
+  // ─── LEFT PANEL: Drive Browser ──────────────────────────────────
+  const DrivePanel = (
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Breadcrumbs + controls */}
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border/60 bg-secondary/10 shrink-0 flex-wrap gap-y-2">
+        <div className="flex items-center gap-1 text-xs overflow-x-auto flex-1 min-w-0">
+          {folderStack.length > 1 && (
+            <button
+              type="button"
+              onClick={handleGoBack}
+              className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground font-semibold transition-colors cursor-pointer shrink-0 mr-1"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {folderStack.map((folder, idx) => {
+            const isLast = idx === folderStack.length - 1;
+            return (
+              <div key={folder.id} className="flex items-center shrink-0">
+                {idx > 0 && <span className="text-muted-foreground/40 mx-1">/</span>}
+                <button
+                  type="button"
+                  onClick={() => handleBreadcrumbNav(idx)}
+                  className={cn(
+                    "font-semibold transition-colors cursor-pointer",
+                    isLast ? "text-primary cursor-default" : "text-muted-foreground hover:text-foreground"
+                  )}
+                  disabled={isLast}
+                >
+                  {folder.name}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          {/* View toggle */}
+          <div className="flex items-center bg-secondary/30 border border-border rounded-lg p-0.5">
+            <button type="button" onClick={() => setViewMode("grid")} className={cn("p-1.5 rounded-md transition-all cursor-pointer", viewMode === "grid" ? "bg-secondary/80 text-primary shadow-sm" : "text-muted-foreground hover:text-foreground")}>
+              <LayoutGrid className="h-3.5 w-3.5" />
+            </button>
+            <button type="button" onClick={() => setViewMode("list")} className={cn("p-1.5 rounded-md transition-all cursor-pointer", viewMode === "list" ? "bg-secondary/80 text-primary shadow-sm" : "text-muted-foreground hover:text-foreground")}>
+              <List className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/60" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search files..."
+              className="pl-8 pr-3 py-1.5 text-xs bg-secondary/15 border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary transition-all w-44 text-foreground placeholder:text-muted-foreground/50"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Select All bar */}
+      {!loadingFiles && importableFiles.length > 0 && (
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-border/30 bg-secondary/5 shrink-0">
+          <button
+            type="button"
+            onClick={handleSelectAllToggle}
+            className={cn(
+              "flex h-4.5 w-4.5 items-center justify-center rounded border transition-colors cursor-pointer shrink-0",
+              isAllSelected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-secondary/35 hover:border-primary/60"
+            )}
+          >
+            {isAllSelected && <Check className="h-2.5 w-2.5 stroke-[3.5]" />}
+          </button>
+          <span className="text-xs text-muted-foreground">
+            {isAllSelected ? "Deselect all" : `Select all ${importableFiles.length} files`}
+          </span>
+        </div>
+      )}
+
+      {/* File grid / list */}
+      <div className="flex-1 overflow-y-auto p-4 min-h-0">
+        {error && (
+          <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/20 text-destructive text-xs rounded-xl mb-3">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+        {loadingFiles ? renderSkeletons() : files.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center p-8 text-center text-muted-foreground min-h-[200px]">
+            <Folder className="h-10 w-10 text-muted-foreground/40 mb-3" />
+            <p className="text-sm font-semibold">No files found</p>
+            <p className="text-xs text-muted-foreground/50 mt-1">This folder is empty or no search matches.</p>
+          </div>
+        ) : (
+          <>
+            {viewMode === "grid" ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {files.map((file) => renderGridItem(file))}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-border/40 text-muted-foreground">
+                      <th className="w-8 py-2 pl-2">
+                        <button type="button" onClick={handleSelectAllToggle} className={cn("flex h-4.5 w-4.5 items-center justify-center rounded border transition-colors cursor-pointer", isAllSelected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-secondary/35 hover:border-primary/60")}>
+                          {isAllSelected && <Check className="h-2.5 w-2.5 stroke-[3.5]" />}
+                        </button>
+                      </th>
+                      <th className="py-2 font-semibold">Name</th>
+                      <th className="py-2 font-semibold w-24">Modified</th>
+                      <th className="py-2 font-semibold w-20 text-right pr-2">Size</th>
+                    </tr>
+                  </thead>
+                  <tbody>{files.map((file) => renderListRow(file))}</tbody>
+                </table>
+              </div>
+            )}
+            {nextPageToken && (
+              <div className="flex justify-center mt-4">
+                <button
+                  type="button"
+                  disabled={loadMoreLoading}
+                  onClick={() => fetchFiles(currentFolderId, nextPageToken, true, searchQuery)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-border bg-secondary/30 hover:bg-secondary/50 px-5 py-2 text-xs font-semibold text-foreground transition-all cursor-pointer disabled:opacity-40 shadow-sm"
+                >
+                  {loadMoreLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                  {loadMoreLoading ? "Loading..." : "Load More"}
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+
+  // ─── RIGHT PANEL: Queue + Folder Tree ──────────────────────────────
+  const QueuePanel = (
+    <div className="flex flex-col h-full overflow-hidden bg-secondary/5 border-l border-border/60">
+
+      {/* Storage bar */}
+      {userProfile && (
+        <div className="px-4 pt-3.5 pb-2 border-b border-border/40 shrink-0">
+          <div className="flex items-center justify-between text-[11px] mb-1.5">
+            <span className="flex items-center gap-1.5 text-muted-foreground font-medium">
+              <HardDrive className="h-3 w-3" />
+              Drivya Storage
+            </span>
+            <span className={cn("font-bold", isOverQuota ? "text-destructive animate-pulse" : "text-foreground")}>
+              {formatSize(Math.max(0, storageRemaining))} free
+            </span>
+          </div>
+          <div className="h-1 bg-secondary/50 rounded-full overflow-hidden">
+            <div
+              className={cn("h-full rounded-full transition-all duration-500", isOverQuota ? "bg-destructive" : "bg-primary")}
+              style={{ width: `${Math.min(100, (userProfile.storageUsed / userProfile.storageLimit) * 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Selected count pill */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border/40 shrink-0">
+        <div className="flex items-center gap-2">
+          <div className={cn("h-5 w-5 rounded-md flex items-center justify-center text-[10px] font-bold shrink-0", selectedCount > 0 ? "bg-primary text-primary-foreground" : "bg-secondary/50 text-muted-foreground")}>
+            {selectedCount}
+          </div>
+          <span className="text-xs font-semibold text-foreground">
+            {selectedCount === 0 ? "No files selected" : selectedCount === 1 ? "1 file queued" : `${selectedCount} files queued`}
+          </span>
+        </div>
+        {selectedCount > 0 && (
+          <span className={cn("text-[11px] font-semibold", isOverQuota ? "text-destructive" : "text-primary")}>
+            {formatSize(selectedTotalSize)}
+          </span>
+        )}
+      </div>
+
+      {/* Queue list */}
+      <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
+        {selectedList.length === 0 ? (
+          <div className="flex flex-col items-center justify-center flex-1 p-6 text-center text-muted-foreground">
+            <Inbox className="h-9 w-9 text-muted-foreground/30 mb-2.5" />
+            <p className="text-xs font-semibold">Import queue is empty</p>
+            <p className="text-[11px] text-muted-foreground/50 mt-1">Click files on the left to queue them</p>
+          </div>
+        ) : (
+          <div className="px-3 py-2 space-y-1">
+            <AnimatePresence>
+              {selectedList.map((file) => {
+                const { Icon, color } = getFileVisuals(file);
+                return (
+                  <motion.div
+                    key={file.id}
+                    initial={{ opacity: 0, x: 10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 10, scale: 0.95 }}
+                    transition={{ duration: 0.15 }}
+                    className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-secondary/20 border border-border/40 group/queue"
+                  >
+                    <Icon className={cn("h-3.5 w-3.5 shrink-0", color)} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-semibold text-foreground truncate">{file.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{file.size ? formatSize(file.size) : "—"}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveFromQueue(file.id)}
+                      className="h-5 w-5 rounded flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all cursor-pointer opacity-0 group-hover/queue:opacity-100 shrink-0"
+                      title="Remove from queue"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </div>
+        )}
+      </div>
+
+      {/* Destination folder section */}
+      <div className="border-t border-border/60 shrink-0 flex flex-col min-h-[180px]">
+        <div className="px-4 py-2 flex items-center justify-between bg-secondary/10 shrink-0">
+          <div className="flex items-center gap-2">
+            <FolderTree className="h-3.5 w-3.5 text-primary shrink-0" />
+            <span className="text-xs font-semibold text-foreground">Import Destination</span>
+          </div>
+          {drivyaFolderStack.length > 1 && (
+            <button
+              type="button"
+              onClick={() => {
+                const nextStack = drivyaFolderStack.slice(0, -1);
+                setDrivyaFolderStack(nextStack);
+                const parent = nextStack[nextStack.length - 1];
+                setTargetDirId(parent.id);
+                setTargetDirName(parent.name === "My Drive" ? "My Drive (Root)" : parent.name);
+              }}
+              className="text-[10px] font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <ArrowLeft className="h-2.5 w-2.5" /> Back
+            </button>
+          )}
+        </div>
+
+        {/* Dynamic breadcrumb path display */}
+        <div className="px-4 py-1.5 border-b border-border/20 bg-secondary/5 flex items-center gap-1 overflow-x-auto scrollbar-hide shrink-0 text-[10.5px]">
+          {drivyaFolderStack.map((f, idx) => {
+            const isLast = idx === drivyaFolderStack.length - 1;
+            return (
+              <div key={f.id} className="flex items-center shrink-0">
+                {idx > 0 && <span className="text-muted-foreground/30 mx-1">/</span>}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isLast) return;
+                    const nextStack = drivyaFolderStack.slice(0, idx + 1);
+                    setDrivyaFolderStack(nextStack);
+                    setTargetDirId(f.id);
+                    setTargetDirName(f.name === "My Drive" ? "My Drive (Root)" : f.name);
+                  }}
+                  className={cn(
+                    "font-medium transition-colors hover:text-primary cursor-pointer max-w-[80px] truncate",
+                    isLast ? "text-foreground font-semibold pointer-events-none" : "text-muted-foreground"
+                  )}
+                >
+                  {f.name}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Scrollable list of child subfolders */}
+        <div className="flex-1 overflow-y-auto max-h-[140px] min-h-[90px] px-2 py-1 space-y-0.5 bg-secondary/5">
+          {getDrivyaChildren(drivyaFolderStack[drivyaFolderStack.length - 1].id).length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-6 text-center text-muted-foreground/45">
+              <FolderOpen className="h-5 w-5 stroke-[1.5] mb-1 text-muted-foreground/30" />
+              <p className="text-[10px] font-medium">No nested folders here</p>
+            </div>
+          ) : (
+            getDrivyaChildren(drivyaFolderStack[drivyaFolderStack.length - 1].id).map((dir) => (
+              <div
+                key={dir._id}
+                onClick={() => {
+                  const newFolder = { id: dir._id.toString(), name: dir.name };
+                  const nextStack = [...drivyaFolderStack, newFolder];
+                  setDrivyaFolderStack(nextStack);
+                  setTargetDirId(dir._id.toString());
+                  setTargetDirName(dir.name);
+                }}
+                className="flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-secondary/60 text-foreground cursor-pointer transition-colors group/item"
+              >
+                <div className="flex items-center gap-2 overflow-hidden">
+                  <Folder className="h-3.5 w-3.5 text-amber-500 fill-amber-500/10 shrink-0" />
+                  <span className="truncate text-[11px] font-medium">{dir.name}</span>
+                </div>
+                <ChevronRight className="h-3 w-3 text-muted-foreground/30 group-hover/item:text-foreground transition-colors shrink-0" />
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Destination indicator + Import button */}
+        <div className="px-4 pt-2 pb-4 border-t border-border/40 bg-secondary/10 space-y-2.5">
+          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+            <Folder className="h-3 w-3 text-amber-500 shrink-0" />
+            <span className="truncate font-medium">{targetDirName}</span>
+          </div>
+
+          {isOverQuota && (
+            <div className="flex items-center gap-1.5 text-[11px] text-destructive font-semibold">
+              <AlertTriangle className="h-3 w-3 shrink-0" />
+              Exceeds available storage
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={handleImport}
+            disabled={selectedCount === 0 || isOverQuota}
+            id="gdrive-import-btn"
+            className={cn(
+              "w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-primary h-10 text-sm font-semibold text-primary-foreground shadow-glow hover:opacity-90 active:translate-y-px transition-all cursor-pointer",
+              (selectedCount === 0 || isOverQuota) && "opacity-40 cursor-not-allowed active:translate-y-0 shadow-none hover:opacity-40"
+            )}
+          >
+            <Import className="h-4 w-4" />
+            {selectedCount === 0 ? "Select files to import" : `Import ${selectedCount} file${selectedCount !== 1 ? "s" : ""}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // ─── Import Progress View ───────────────────────────────────────
+  const ProgressView = (
+    <div className="flex-1 overflow-y-auto p-5 space-y-5">
+      {!importSummary ? (
+        <div className="flex items-center justify-between pb-4 border-b border-border/40">
+          <div className="flex items-center gap-3">
+            <Loader2 className="h-5 w-5 text-primary animate-spin" />
+            <div>
+              <h4 className="text-sm font-semibold text-foreground">Streaming files to Drivya...</h4>
+              <p className="text-xs text-muted-foreground mt-0.5">Transferring directly from Google servers.</p>
+            </div>
+          </div>
+          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-secondary/35 border border-border/60 text-primary animate-pulse">Keep tab open</span>
+        </div>
+      ) : (
+        <div className={cn(
+          "flex flex-col items-center text-center p-5 border rounded-2xl backdrop-blur-md",
+          failedFileIds.length === 0 ? "bg-emerald-500/5 border-emerald-500/25" : importSummary.imported > 0 ? "bg-amber-500/5 border-amber-500/25" : "bg-destructive/5 border-destructive/25"
+        )}>
+          <div className={cn("h-12 w-12 rounded-full flex items-center justify-center mb-3 shadow-glow", failedFileIds.length === 0 ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-500" : importSummary.imported > 0 ? "bg-amber-500/10 border border-amber-500/20 text-amber-500" : "bg-destructive/10 border border-destructive/20 text-destructive")}>
+            {failedFileIds.length === 0 ? <CheckCircle2 className="h-6 w-6" /> : <AlertTriangle className="h-6 w-6" />}
+          </div>
+          <h4 className="text-sm font-semibold font-display text-foreground">
+            {failedFileIds.length === 0 ? "Import Completed!" : importSummary.imported > 0 ? "Completed with Errors" : "Import Failed"}
+          </h4>
+          <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+            {importSummary.imported} of {importSummary.imported + importSummary.failed} file(s) imported successfully. Total: {formatSize(importSummary.totalSize)}
+          </p>
+          {failedFileIds.length > 0 && (
+            <button type="button" onClick={() => handleRetry(failedFileIds)}
+              className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary/10 hover:bg-primary/20 border border-primary/30 px-4 h-9 text-xs font-semibold text-primary transition-all cursor-pointer">
+              <RefreshCw className="h-3.5 w-3.5" /> Retry {failedFileIds.length} Failed
+            </button>
+          )}
+        </div>
+      )}
+
+      {error && (
+        <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/20 text-destructive text-xs rounded-xl">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {Object.keys(fileProgress).map((id) => {
+          const item = fileProgress[id];
+          const isDone = item.status === "complete";
+          const isFailed = item.status === "failed";
+          const isDownloading = item.status === "downloading";
+          return (
+            <div key={id} className={cn("p-3.5 border border-border/50 bg-secondary/15 rounded-xl flex flex-col gap-2.5 transition-all", isFailed && "border-destructive/20 bg-destructive/5", isDone && "border-emerald-500/20 bg-emerald-500/5")}>
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-foreground truncate max-w-[65%]">{item.name}</span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className={cn("font-bold uppercase tracking-wider text-[9px] px-2 py-0.5 rounded-full", isDone && "bg-emerald-500/10 text-emerald-400", isFailed && "bg-destructive/10 text-destructive", isDownloading && "bg-primary/10 text-primary animate-pulse", item.status === "waiting" && "bg-muted text-muted-foreground")}>{item.status}</span>
+                  {isFailed && (
+                    <button type="button" onClick={() => handleRetry([id])} className="inline-flex h-6 w-6 items-center justify-center rounded-lg bg-secondary/80 hover:bg-secondary border border-border text-primary transition-all cursor-pointer" title="Retry">
+                      <RefreshCw className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="w-full h-1.5 bg-secondary/30 rounded-full overflow-hidden">
+                <motion.div initial={{ width: 0 }} animate={{ width: `${item.percent}%` }} transition={{ duration: 0.3 }}
+                  className={cn("h-full rounded-full", isFailed ? "bg-destructive" : isDone ? "bg-emerald-500" : "bg-primary")} />
+              </div>
+              {isFailed && item.error && <p className="text-[10px] text-destructive italic">Error: {item.error}</p>}
+              {isDownloading && <p className="text-[10px] text-primary text-right tabular-nums">{item.percent}%</p>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  // ─── RENDER ──────────────────────────────────────────────────────
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5">
+      {/* Backdrop */}
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        onClick={handleClose}
+        className="absolute inset-0 bg-background/60 dark:bg-black/65 backdrop-blur-md" />
+
+      {/* Modal */}
       <motion.div
-        initial={{ opacity: 0, scale: 0.96, y: 12 }}
+        initial={{ opacity: 0, scale: 0.96, y: 16 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: 12 }}
-        transition={{ type: "spring", stiffness: 380, damping: 28 }}
-        className="relative flex flex-col w-full max-w-4xl h-[85vh] bg-background/95 dark:bg-card/90 text-foreground border border-border/80 rounded-3xl shadow-elegant backdrop-blur-lg noise overflow-hidden z-10"
+        transition={{ type: "spring", stiffness: 360, damping: 28 }}
+        className="relative flex flex-col w-full max-w-5xl h-[90vh] bg-background/97 dark:bg-card/95 text-foreground border border-border/80 rounded-2xl shadow-elegant backdrop-blur-lg noise overflow-hidden z-10"
       >
-        {/* Decorative background glows */}
-        <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] bg-primary/10 rounded-full blur-[100px] pointer-events-none" />
-        <div className="absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] bg-accent/8 rounded-full blur-[100px] pointer-events-none" />
+        {/* Decorative glows */}
+        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-primary/8 rounded-full blur-[80px] pointer-events-none" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-accent/6 rounded-full blur-[80px] pointer-events-none" />
 
-        {/* Modal Header */}
-        <div className="relative flex items-center justify-between px-6 py-5 border-b border-border bg-secondary/10 backdrop-blur-md z-10">
-          <div className="flex items-center gap-3.5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 border border-primary/20 shadow-md">
-              <svg className="h-5.5 w-5.5 text-primary" viewBox="0 0 24 24" fill="currentColor">
+        {/* ── Header ── */}
+        <div className="relative flex items-center justify-between px-5 py-4 border-b border-border/70 bg-secondary/10 z-10 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 border border-primary/20 shadow-sm">
+              <svg className="h-5 w-5 text-primary" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M7.71 3.5L1.15 15l3.43 6 6.55-11.5M9.73 3.5h13.12l-3.43 6H6.28M15.66 15H2.55l3.43 6h13.11" />
               </svg>
             </div>
             <div>
-              <h2 className="text-base font-bold tracking-tight text-foreground font-display">
-                Import from Google Drive
-              </h2>
+              <h2 className="text-sm font-bold tracking-tight text-foreground font-display">Import from Google Drive</h2>
               {isConnected && googleEmail && (
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Connected as: <span className="text-foreground font-medium">{googleEmail}</span>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Connected as <span className="text-foreground font-semibold">{googleEmail}</span>
                 </p>
               )}
             </div>
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Mobile tab switcher */}
             {isConnected && !isImporting && (
-              <button
-                type="button"
-                onClick={handleDisconnect}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-destructive hover:bg-destructive/10 transition-colors cursor-pointer border border-transparent hover:border-destructive/20"
-                title="Disconnect Google account"
-              >
-                <LogOut className="h-4.5 w-4.5" />
+              <div className="flex md:hidden items-center bg-secondary/30 border border-border rounded-lg p-0.5">
+                <button type="button" onClick={() => setMobileTab("browse")} className={cn("px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer", mobileTab === "browse" ? "bg-secondary/80 text-primary shadow-sm" : "text-muted-foreground")}>
+                  Browse
+                </button>
+                <button type="button" onClick={() => setMobileTab("queue")} className={cn("px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer relative", mobileTab === "queue" ? "bg-secondary/80 text-primary shadow-sm" : "text-muted-foreground")}>
+                  Queue
+                  {selectedCount > 0 && (
+                    <span className="absolute -top-1 -right-1 h-4 w-4 bg-primary text-primary-foreground rounded-full text-[9px] flex items-center justify-center font-bold">{selectedCount}</span>
+                  )}
+                </button>
+              </div>
+            )}
+
+            {isConnected && !isImporting && (
+              <button type="button" onClick={handleDisconnect}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-destructive hover:bg-destructive/10 transition-colors cursor-pointer border border-transparent hover:border-destructive/20"
+                title="Disconnect Google account">
+                <LogOut className="h-4 w-4" />
               </button>
             )}
-            <button
-              type="button"
-              onClick={handleClose}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary/40 border border-transparent hover:border-border transition-colors cursor-pointer"
-            >
-              <X className="h-5 w-5" />
+            <button type="button" onClick={handleClose}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary/40 border border-transparent hover:border-border transition-colors cursor-pointer">
+              <X className="h-4.5 w-4.5" />
             </button>
           </div>
         </div>
 
-        {/* Modal Inner Body */}
+        {/* ── Body ── */}
         <div className="flex-1 overflow-hidden flex flex-col relative z-10">
           {authLoading ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-3">
               <Loader2 className="h-8 w-8 text-primary animate-spin" />
-              <p className="text-xs text-muted-foreground font-sans">Checking Google connection status...</p>
+              <p className="text-xs text-muted-foreground">Checking Google connection...</p>
             </div>
           ) : !isConnected ? (
-            /* Connect Prompt Screen */
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center max-w-md mx-auto relative z-10">
+            /* Connect Screen */
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center max-w-sm mx-auto">
               <div className="relative mb-6">
-                <div className="absolute -inset-1 rounded-full bg-gradient-primary opacity-30 blur-lg animate-pulse" />
+                <div className="absolute -inset-2 rounded-full bg-gradient-primary opacity-25 blur-xl animate-pulse" />
                 <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl bg-secondary/30 border border-border shadow-xl">
                   <svg className="h-10 w-10 text-primary" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M7.71 3.5L1.15 15l3.43 6 6.55-11.5M9.73 3.5h13.12l-3.43 6H6.28M15.66 15H2.55l3.43 6h13.11" />
@@ -866,560 +1096,43 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
                 </div>
               </div>
               <h3 className="text-lg font-bold font-display text-foreground mb-2">Connect Google Drive</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed mb-6 font-sans">
-                Connect your Google account safely. Drivya only requests read access to list and download files you select to import.
+              <p className="text-sm text-muted-foreground leading-relaxed mb-6">
+                Drivya only requests read access to list and download the files you select.
               </p>
               {error && (
-                <div className="w-full flex items-center gap-2.5 p-3.5 bg-destructive/10 border border-destructive/20 text-destructive text-xs rounded-xl mb-4 text-left">
+                <div className="w-full flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/20 text-destructive text-xs rounded-xl mb-4 text-left">
                   <AlertTriangle className="h-4 w-4 shrink-0" />
                   <span>{error}</span>
                 </div>
               )}
-              <button
-                type="button"
-                onClick={handleConnect}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-primary px-5 h-11 text-sm font-semibold text-primary-foreground shadow-glow hover:opacity-90 active:translate-y-px transition-all cursor-pointer"
-              >
+              <button type="button" onClick={handleConnect} id="gdrive-connect-btn"
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-primary px-5 h-11 text-sm font-semibold text-primary-foreground shadow-glow hover:opacity-90 active:translate-y-px transition-all cursor-pointer">
                 Connect Google Account
               </button>
             </div>
           ) : isImporting ? (
-            /* Import Streaming Progress Screen */
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-               {!importSummary ? (
-                <div className="flex items-center justify-between pb-4 border-b border-border/40">
-                  <div className="flex items-center gap-3">
-                    <Loader2 className="h-5 w-5 text-primary animate-spin" />
-                    <div>
-                      <h4 className="text-sm font-semibold text-foreground">Streaming files to Drivya...</h4>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Transferring directly from Google servers to secure storage.
-                      </p>
-                    </div>
-                  </div>
-                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-secondary/35 border border-border/60 text-primary animate-pulse">
-                    Keep tab open
-                  </span>
-                </div>
-              ) : (
-                <div className={cn(
-                  "flex flex-col items-center text-center p-6 border rounded-2xl mb-6 max-w-2xl mx-auto backdrop-blur-md",
-                  failedFileIds.length === 0
-                    ? "bg-emerald-500/5 border-emerald-500/25 text-emerald-400"
-                    : importSummary.imported > 0
-                    ? "bg-amber-500/5 border-amber-500/25 text-amber-400"
-                    : "bg-destructive/5 border-destructive/25 text-destructive"
-                )}>
-                  <div className={cn(
-                    "h-12 w-12 rounded-full flex items-center justify-center mb-3.5 shadow-glow",
-                    failedFileIds.length === 0
-                      ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-500"
-                      : importSummary.imported > 0
-                      ? "bg-amber-500/10 border border-amber-500/20 text-amber-550"
-                      : "bg-destructive/10 border border-destructive/20 text-destructive"
-                  )}>
-                    {failedFileIds.length === 0 ? (
-                      <CheckCircle2 className="h-6 w-6" />
-                    ) : importSummary.imported > 0 ? (
-                      <AlertTriangle className="h-6 w-6" />
-                    ) : (
-                      <X className="h-6 w-6" />
-                    )}
-                  </div>
-                  <h4 className="text-base font-semibold font-display text-foreground">
-                    {failedFileIds.length === 0
-                      ? "Import Completed Successfully"
-                      : importSummary.imported > 0
-                      ? "Import Completed with Errors"
-                      : "Import Failed"}
-                  </h4>
-                  <p className="text-xs text-muted-foreground mt-1.5 max-w-md leading-relaxed font-sans">
-                    Successfully imported {importSummary.imported} of {importSummary.imported + importSummary.failed} file(s).
-                    Total size: {formatSize(importSummary.totalSize)}.
-                  </p>
-
-                  {failedFileIds.length > 0 && (
-                    <div className="mt-4 flex gap-3">
-                      <button
-                        type="button"
-                        onClick={() => handleRetry(failedFileIds)}
-                        className="inline-flex items-center gap-2 rounded-xl bg-primary/10 hover:bg-primary/20 border border-primary/30 px-4 h-9 text-xs font-semibold text-primary transition-all cursor-pointer shadow-glow"
-                      >
-                        <RefreshCw className="h-3.5 w-3.5 animate-pulse" />
-                        Retry Failed Imports ({failedFileIds.length})
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {error && (
-                <div className="flex items-center gap-2.5 p-3.5 bg-destructive/10 border border-destructive/20 text-destructive text-xs rounded-xl">
-                  <AlertTriangle className="h-4 w-4 shrink-0" />
-                  <span>{error}</span>
-                </div>
-              )}
-
-              {/* Progress list container */}
-              <div className="space-y-3.5 max-w-2xl mx-auto">
-                {Object.keys(fileProgress).map((id) => {
-                  const item = fileProgress[id];
-                  const isDone = item.status === "complete";
-                  const isFailed = item.status === "failed";
-                  const isDownloading = item.status === "downloading";
-
-                  return (
-                    <div
-                      key={id}
-                      className={cn(
-                        "p-4 border border-border/50 bg-secondary/15 rounded-2xl flex flex-col gap-3 transition-all duration-300",
-                        isFailed && "border-destructive/20 bg-destructive/5",
-                        isDone && "border-emerald-500/20 bg-emerald-500/5"
-                      )}
-                    >
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-semibold text-foreground truncate max-w-[65%]" title={item.name}>
-                          {item.name}
-                        </span>
-                        <div className="flex items-center gap-2.5 shrink-0">
-                          <span
-                            className={cn(
-                              "font-bold uppercase tracking-wider text-[9px] px-2 py-0.5 rounded-full font-sans",
-                              isDone && "bg-emerald-500/10 text-emerald-400",
-                              isFailed && "bg-destructive/10 text-destructive",
-                              isDownloading && "bg-primary/10 text-primary animate-pulse",
-                              item.status === "waiting" && "bg-muted text-muted-foreground"
-                            )}
-                          >
-                            {item.status}
-                          </span>
-                          {isFailed && (
-                            <button
-                              type="button"
-                              onClick={() => handleRetry([id])}
-                              className="inline-flex h-6.5 w-6.5 items-center justify-center rounded-lg bg-secondary/80 hover:bg-secondary border border-border text-primary transition-all cursor-pointer shadow-sm"
-                              title="Retry this file import"
-                            >
-                              <RefreshCw className="h-3 w-3" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Progress bar container */}
-                      <div className="w-full h-1.5 bg-secondary/30 rounded-full overflow-hidden relative">
-                        <motion.div
-                          initial={{ width: 0 }}
-                          animate={{ width: `${item.percent}%` }}
-                          transition={{ duration: 0.3 }}
-                          className={cn(
-                            "h-full rounded-full",
-                            isFailed ? "bg-destructive" : isDone ? "bg-emerald-500" : "bg-primary"
-                          )}
-                        />
-                      </div>
-
-                      {/* Status subtext */}
-                      {isFailed && item.error && (
-                        <p className="text-[10px] text-destructive italic">
-                          Error: {item.error}
-                        </p>
-                      )}
-                      {isDownloading && (
-                        <p className="text-[10px] text-primary text-right tabular-nums">
-                          {item.percent}% downloaded
-                        </p>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            /* Import progress */
+            ProgressView
           ) : (
-            /* File Explorer Main Screen */
-            <div className="flex-1 flex flex-col overflow-hidden">
-              {/* Search, view switcher and Breadcrumbs bar */}
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 px-6 py-3 bg-secondary/10 border-b border-border backdrop-blur-md">
-                {/* Breadcrumbs stack */}
-                <div className="flex items-center gap-1.5 text-xs overflow-x-auto py-1.5 shrink-0 max-w-full">
-                  {folderStack.map((folder, index) => {
-                    const isLast = index === folderStack.length - 1;
-                    return (
-                      <div key={folder.id} className="flex items-center shrink-0">
-                        {index > 0 && <span className="text-muted-foreground/60 mx-1">/</span>}
-                        {index === 0 && folderStack.length > 1 ? (
-                          <button
-                            type="button"
-                            onClick={handleGoBack}
-                            className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground font-semibold cursor-pointer"
-                          >
-                            <ArrowLeft className="h-3.5 w-3.5" />
-                            Back
-                          </button>
-                        ) : (
-                          <span
-                            className={cn(
-                              "font-semibold",
-                              isLast ? "text-primary" : "text-muted-foreground"
-                            )}
-                          >
-                            {folder.name}
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Right controls: View toggle and Search */}
-                <div className="flex items-center gap-3 shrink-0 ml-auto max-w-full">
-                  {/* Grid / List View Toggle */}
-                  <div className="flex items-center gap-1 bg-secondary/35 border border-border p-1 rounded-xl shrink-0 select-none">
-                    <button
-                      type="button"
-                      onClick={() => setViewMode("grid")}
-                      className={cn(
-                        "p-1.5 rounded-lg transition-all cursor-pointer",
-                        viewMode === "grid"
-                          ? "bg-secondary/80 text-primary shadow-sm"
-                          : "text-muted-foreground hover:text-foreground"
-                      )}
-                      title="Grid View (thumbnails)"
-                    >
-                      <LayoutGrid className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setViewMode("list")}
-                      className={cn(
-                        "p-1.5 rounded-lg transition-all cursor-pointer",
-                        viewMode === "list"
-                          ? "bg-secondary/80 text-primary shadow-sm"
-                          : "text-muted-foreground hover:text-foreground"
-                      )}
-                      title="List View (details)"
-                    >
-                      <List className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-
-                  {/* Search box */}
-                  <div className="relative max-w-xs w-48 sm:w-60">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/60" />
-                    <input
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search files..."
-                      className="w-full pl-9 pr-4 py-1.5 text-xs bg-secondary/15 border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary transition-all text-foreground placeholder:text-muted-foreground/60"
-                    />
-                  </div>
-                </div>
+            /* Split-panel explorer */
+            <div className="flex-1 overflow-hidden flex">
+              {/* LEFT: Drive browser */}
+              <div className={cn("flex-[3] min-w-0 overflow-hidden flex flex-col", "hidden md:flex", mobileTab === "browse" && "flex! md:flex!")}>
+                {DrivePanel}
               </div>
-
-              {/* Main files browser container */}
-              <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
-                {error && (
-                  <div className="flex items-center gap-2.5 p-3.5 bg-destructive/10 border border-destructive/20 text-destructive text-xs rounded-xl mb-4">
-                    <AlertTriangle className="h-4 w-4 shrink-0" />
-                    <span>{error}</span>
-                  </div>
-                )}
-
-                {loadingFiles ? (
-                  renderSkeletons()
-                ) : files.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center p-8 text-center text-muted-foreground min-h-[300px]">
-                    <Folder className="h-12 w-12 text-muted-foreground/60 mb-3" />
-                    <p className="text-sm font-semibold">No files or folders found</p>
-                    <p className="text-xs text-muted-foreground/50 mt-1 max-w-[200px]">This directory is empty or no search matches found.</p>
-                  </div>
-                ) : (
-                  <>
-                    {viewMode === "grid" ? (
-                      /* Grid layout rendering */
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                        {files.map((file) => renderGridItem(file))}
-                      </div>
-                    ) : (
-                      /* List layout rendering */
-                      <div className="overflow-x-auto min-w-full">
-                        <table className="w-full text-left text-xs border-collapse">
-                          <thead>
-                            <tr className="border-b border-border/40 text-muted-foreground">
-                              <th className="w-10 py-3 pl-1">
-                                <button
-                                  type="button"
-                                  onClick={handleSelectAllToggle}
-                                  className="flex h-5 w-5 items-center justify-center rounded-md border border-border bg-secondary/35 hover:border-primary transition-colors cursor-pointer"
-                                >
-                                  {isAllSelected && <Check className="h-3 w-3 text-primary stroke-[3.5]" />}
-                                </button>
-                              </th>
-                              <th className="py-3 font-semibold">Name</th>
-                              <th className="py-3 font-semibold w-36">Modified</th>
-                              <th className="py-3 font-semibold w-28 text-right pr-2">Size</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {files.map((file) => {
-                              const isFolder = file.isFolder;
-                              const isSelected = !!selectedFiles[file.id];
-                              const dateString = file.modifiedTime
-                                ? new Date(file.modifiedTime).toLocaleDateString(undefined, {
-                                    year: "numeric",
-                                    month: "short",
-                                    day: "numeric",
-                                  })
-                                : "—";
-
-                              let IconComponent = File;
-                              let iconColor = "text-primary";
-                              if (isFolder) {
-                                IconComponent = Folder;
-                                iconColor = "text-amber-500 fill-amber-500/20";
-                              } else {
-                                const nameLower = file.name.toLowerCase();
-                                const mime = file.mimeType || "";
-                                if (mime.startsWith("image/") || /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(nameLower)) {
-                                  IconComponent = Image;
-                                  iconColor = "text-pink-400";
-                                } else if (mime.startsWith("video/") || /\.(mp4|mkv|mov|avi|wmv|flv)$/i.test(nameLower)) {
-                                  IconComponent = Video;
-                                  iconColor = "text-purple-400";
-                                } else if (mime.startsWith("audio/") || /\.(mp3|wav|ogg|flac|m4a|aac)$/i.test(nameLower)) {
-                                  IconComponent = Music;
-                                  iconColor = "text-emerald-400";
-                                } else if (mime === "application/pdf" || nameLower.endsWith(".pdf")) {
-                                  IconComponent = FileText;
-                                  iconColor = "text-rose-400";
-                                } else if (mime.includes("spreadsheet") || mime.includes("excel") || /\.(xls|xlsx|csv)$/i.test(nameLower)) {
-                                  IconComponent = FileSpreadsheet;
-                                  iconColor = "text-green-400";
-                                } else if (file.isGoogleDoc) {
-                                  IconComponent = FileText;
-                                  iconColor = "text-blue-400";
-                                }
-                              }
-
-                              return (
-                                <tr
-                                  key={file.id}
-                                  onClick={() => {
-                                    if (isFolder) {
-                                      handleFolderClick(file);
-                                    } else {
-                                      handleToggleFile(file);
-                                    }
-                                  }}
-                                  className={cn(
-                                    "border-b border-border/20 group hover:bg-secondary/15 transition-colors cursor-pointer",
-                                    isSelected && "bg-primary/5 hover:bg-primary/10"
-                                  )}
-                                >
-                                  <td className="py-3 pl-1" onClick={(e) => e.stopPropagation()}>
-                                    {!isFolder && file.canDownload ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleToggleFile(file)}
-                                        className={cn(
-                                          "flex h-5 w-5 items-center justify-center rounded-md border transition-colors cursor-pointer",
-                                          isSelected
-                                            ? "border-primary bg-primary text-primary-foreground"
-                                            : "border-border bg-secondary/35 hover:border-muted-foreground"
-                                        )}
-                                      >
-                                        {isSelected && <Check className="h-3 w-3 stroke-[3.5]" />}
-                                      </button>
-                                    ) : (
-                                      <div className="h-5 w-5" />
-                                    )}
-                                  </td>
-                                  <td className="py-3">
-                                    <div className="flex items-center gap-2.5 text-foreground truncate pr-2 group-hover:text-primary transition-colors">
-                                      <IconComponent className={cn("h-4.5 w-4.5 shrink-0", iconColor)} />
-                                      <span className="truncate font-semibold">{file.name}</span>
-                                      {file.isGoogleDoc && (
-                                        <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-blue-500/10 text-blue-450 font-semibold uppercase tracking-wider scale-90 shrink-0">
-                                          Google Doc
-                                        </span>
-                                      )}
-                                    </div>
-                                  </td>
-                                  <td className="py-3 text-muted-foreground font-sans">
-                                    {dateString}
-                                  </td>
-                                  <td className="py-3 text-muted-foreground text-right pr-2 font-sans">
-                                    {isFolder
-                                      ? "Folder"
-                                      : file.size
-                                      ? formatSize(file.size)
-                                      : file.isGoogleDoc
-                                      ? "Google Doc"
-                                      : "—"}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-
-                    {/* Load More Button */}
-                    {nextPageToken && (
-                      <div className="flex justify-center mt-6">
-                        <button
-                          type="button"
-                          disabled={loadMoreLoading}
-                          onClick={() => fetchFiles(currentFolderId, nextPageToken, true, searchQuery)}
-                          className="inline-flex items-center gap-2 rounded-xl border border-border bg-secondary/30 hover:bg-secondary/50 px-6 py-2.5 text-xs font-semibold text-foreground transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
-                        >
-                          {loadMoreLoading ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Download className="h-3.5 w-3.5" />
-                          )}
-                          {loadMoreLoading ? "Loading..." : "Load More Files"}
-                        </button>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-
-              {/* Action Bar / Selection summary at the bottom */}
-              <div className="px-6 py-4 bg-secondary/10 border-t border-border flex flex-col md:flex-row md:items-center justify-between gap-4 backdrop-blur-md relative z-10">
-                {/* Size stats */}
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center gap-2.5 text-xs">
-                    <span className="font-semibold text-foreground">
-                      Selected: {selectedCount} {selectedCount === 1 ? "file" : "files"}
-                    </span>
-                    <span className="text-muted-foreground/60 font-sans">•</span>
-                    <span className="font-semibold text-primary">
-                      Total Size: {formatSize(selectedTotalSize)}
-                    </span>
-                  </div>
-                  {userProfile && (
-                    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground font-sans">
-                      <HardDrive className="h-3.5 w-3.5 shrink-0" />
-                      <span className={cn(isOverQuota ? "text-destructive font-bold animate-pulse" : "text-muted-foreground")}>
-                        Available Drivya Storage: {formatSize(Math.max(0, userProfile.storageLimit - userProfile.storageUsed))}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Directory Selector and Import Submission Button */}
-                <div className="flex flex-wrap items-center gap-3">
-                  {/* Drivya Folder Selector */}
-                  <div ref={pickerRef} className="flex items-center gap-2 text-xs relative select-none">
-                    <span className="text-muted-foreground font-semibold font-sans">Import into:</span>
-                    <button
-                      type="button"
-                      onClick={() => setIsPickerOpen(!isPickerOpen)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-secondary/20 hover:bg-secondary/40 border border-border rounded-xl text-foreground cursor-pointer transition-all font-semibold max-w-[200px] truncate"
-                      title={selectedTargetDirPath}
-                    >
-                      <Folder className="h-3.5 w-3.5 text-amber-500 fill-amber-500/10 shrink-0" />
-                      <span className="truncate">{selectedTargetDirName}</span>
-                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/60 transition-transform duration-200 shrink-0" style={{ transform: isPickerOpen ? "rotate(180deg)" : "rotate(0deg)" }} />
-                    </button>
-
-                    <AnimatePresence>
-                      {isPickerOpen && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                          animate={{ opacity: 1, y: 0, scale: 1 }}
-                          exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                          transition={{ duration: 0.15 }}
-                          className="absolute bottom-full mb-2 right-0 w-72 bg-card/95 border border-border rounded-2xl shadow-elegant backdrop-blur-md z-50 flex flex-col overflow-hidden text-left"
-                        >
-                          {/* Header */}
-                          <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-border/80 bg-secondary/15">
-                            <div className="flex items-center gap-1.5 overflow-hidden">
-                              {pickerFolderStack.length > 1 && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setPickerFolderStack(prev => prev.slice(0, -1));
-                                  }}
-                                  className="p-1 rounded-lg hover:bg-secondary/60 text-muted-foreground hover:text-foreground transition-all cursor-pointer"
-                                >
-                                  <ArrowLeft className="h-3.5 w-3.5" />
-                                </button>
-                              )}
-                              <span className="font-semibold text-foreground truncate max-w-[150px]">
-                                {pickerFolderStack[pickerFolderStack.length - 1].name}
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setTargetDir(pickerFolderStack[pickerFolderStack.length - 1].id);
-                                setIsPickerOpen(false);
-                              }}
-                              className="px-2.5 py-1 text-[10.5px] font-bold rounded-lg bg-primary hover:opacity-90 text-primary-foreground transition-all cursor-pointer shadow-glow shrink-0"
-                            >
-                              Select
-                            </button>
-                          </div>
-
-                          {/* Folders List */}
-                          <div className="flex-1 overflow-y-auto max-h-[180px] p-1.5 space-y-0.5 font-sans">
-                            {getPickerChildren(pickerFolderStack[pickerFolderStack.length - 1].id).length === 0 ? (
-                              <div className="px-3.5 py-6 text-center text-muted-foreground/60 text-[11px] font-sans">
-                                No subfolders inside this folder.
-                              </div>
-                            ) : (
-                              getPickerChildren(pickerFolderStack[pickerFolderStack.length - 1].id).map((dir) => (
-                                <div
-                                  key={dir._id}
-                                  onClick={() => {
-                                    setPickerFolderStack(prev => [...prev, { id: dir._id.toString(), name: dir.name }]);
-                                  }}
-                                  className="flex items-center justify-between px-2.5 py-1.5 rounded-xl hover:bg-secondary/40 text-foreground cursor-pointer transition-colors group/item"
-                                >
-                                  <div className="flex items-center gap-2 overflow-hidden">
-                                    <Folder className="h-4 w-4 text-amber-500 fill-amber-500/10 shrink-0" />
-                                    <span className="truncate text-xs font-semibold">{dir.name}</span>
-                                  </div>
-                                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 group-hover/item:text-foreground transition-colors shrink-0" />
-                                </div>
-                              ))
-                            )}
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleImport}
-                    disabled={selectedCount === 0 || isOverQuota}
-                    className={cn(
-                      "inline-flex items-center gap-2 rounded-xl bg-gradient-primary px-5 h-10 text-xs font-semibold text-primary-foreground shadow-glow hover:opacity-90 active:translate-y-px transition-all cursor-pointer",
-                      (selectedCount === 0 || isOverQuota) && "opacity-40 cursor-not-allowed active:translate-y-0 shadow-none hover:opacity-100"
-                    )}
-                  >
-                    Import Selected Files
-                  </button>
-                </div>
+              {/* RIGHT: Import queue */}
+              <div className={cn("w-[280px] shrink-0 overflow-hidden flex-col", "hidden md:flex", mobileTab === "queue" && "flex! md:flex! w-full!")}>
+                {QueuePanel}
               </div>
             </div>
           )}
         </div>
 
-        {/* Closing actions bottom bar when done/completed */}
+        {/* ── Footer (after import done) ── */}
         {importSummary && (
-          <div className="px-6 py-4 bg-secondary/10 border-t border-border flex items-center justify-end gap-3 backdrop-blur-md relative z-20">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-secondary/30 hover:bg-secondary/50 px-6 h-10 text-xs font-semibold text-foreground transition-colors cursor-pointer"
-            >
+          <div className="px-5 py-3.5 bg-secondary/10 border-t border-border/60 flex items-center justify-end gap-3 backdrop-blur-md relative z-20 shrink-0">
+            <button type="button" onClick={handleClose}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-secondary/30 hover:bg-secondary/50 px-6 h-9 text-xs font-semibold text-foreground transition-colors cursor-pointer">
               Done
             </button>
           </div>
