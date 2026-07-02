@@ -15,6 +15,7 @@ import {
   chip,
   Kbd,
 } from "@/components/dashboard/dashboard-tokens";
+import { GoogleDriveModal } from "@/components/dashboard/GoogleDriveModal";
 
 /* ───────────────────────── Hero ───────────────────────── */
 
@@ -39,7 +40,7 @@ function formatBytes(bytes) {
   return (bytes / (1024 * 1024 * 1024)).toFixed(1) + " GB";
 }
 
-function HeroSection({ userProfile }) {
+function HeroSection({ userProfile, onImportGoogle }) {
   const [stats, setStats] = useState(null);
 
   useEffect(() => {
@@ -99,7 +100,10 @@ function HeroSection({ userProfile }) {
             )}
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
-            <button className="group relative inline-flex h-11 items-center gap-3 overflow-hidden rounded-xl border border-primary/20 bg-primary/5 px-4 text-sm font-semibold text-foreground shadow-sm backdrop-blur-md transition-all duration-300 hover:scale-104 cursor-pointer active:scale-[0.98]">
+            <button
+              onClick={onImportGoogle}
+              className="group relative inline-flex h-11 items-center gap-3 overflow-hidden rounded-xl border border-primary/20 bg-primary/5 px-4 text-sm font-semibold text-foreground shadow-sm backdrop-blur-md transition-all duration-300 hover:scale-104 cursor-pointer active:scale-[0.98]"
+            >
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/20 to-transparent -translate-x-full" />
               <div className="flex h-6 w-6 items-center justify-center rounded-[7px] bg-background shadow-sm ring-1 ring-border/50 transition-all duration-300 group-hover:ring-primary/40 group-hover:shadow-[0_0_12px_-3px_var(--color-primary)]">
                 <svg className="h-3.5 w-3.5 text-primary" viewBox="0 0 24 24" fill="currentColor">
@@ -517,14 +521,33 @@ function AnalyticsCard() {
 
 export default function Home() {
   const { userProfile } = useOutletContext?.() || {};
+  const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false);
+
+  // Check URL params for ?google=connected
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("google") === "connected") {
+      setIsGoogleModalOpen(true);
+      // Clean up parameters
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+
   return (
     <>
-      <HeroSection userProfile={userProfile} />
+      <HeroSection userProfile={userProfile} onImportGoogle={() => setIsGoogleModalOpen(true)} />
 
       <div className="lg:col-span-2 space-y-6">
         <AnalyticsCard />
         <RecentFilesView fetchFn={listActivities} titleId="recent-files-heading" limit={10} />
       </div>
+
+      <GoogleDriveModal
+        isOpen={isGoogleModalOpen}
+        onClose={() => setIsGoogleModalOpen(false)}
+        currentDirId={null}
+        userProfile={userProfile}
+      />
 
       <div className="flex items-center justify-between text-xs text-muted-foreground/80 pt-2">
         <div className="flex items-center gap-2">

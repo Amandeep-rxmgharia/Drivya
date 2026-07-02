@@ -151,6 +151,29 @@ const userSchema = new Schema(
         usedAt: { type: Date, default: null },
       },
     ],
+
+    // ─── Google Drive Integration ─────────────────────────────
+    googleDriveConnected: {
+      type: Boolean,
+      default: false,
+    },
+    googleDriveEmail: {
+      type: String,
+      default: "",
+    },
+    // Encrypted Google OAuth tokens at rest (AES-256-GCM)
+    googleTokensEnc: {
+      type: String,
+      default: "",
+    },
+    googleTokensIv: {
+      type: String,
+      default: "",
+    },
+    googleTokensAuthTag: {
+      type: String,
+      default: "",
+    },
   },
   {
     strict: "throw",
