@@ -480,7 +480,7 @@ export default function AdminPanel() {
   const tabs = [
     { id: "users", label: "Users", icon: UsersIcon, count: stats?.totalUsers },
     ...(isAdminUser
-      ? [{ id: "logs", label: "Audit Trail", icon: History, count: logsTotal }]
+      ? [{ id: "logs", label: <span>Audit&nbsp;Trail</span>, icon: History, count: logsTotal }]
       : []),
   ];
 

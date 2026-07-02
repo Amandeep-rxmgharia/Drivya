@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
+import GDriveLogo from '../../../assets/images/Google_Drive_Logo.svg'
 import {
   X,
   Search,
@@ -1030,15 +1031,13 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
         <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-accent/6 rounded-full blur-[80px] pointer-events-none" />
 
         {/* ── Header ── */}
-        <div className="relative flex items-center justify-between px-5 py-4 border-b border-border/70 bg-secondary/10 z-10 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 border border-primary/20 shadow-sm">
-              <svg className="h-5 w-5 text-primary" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M7.71 3.5L1.15 15l3.43 6 6.55-11.5M9.73 3.5h13.12l-3.43 6H6.28M15.66 15H2.55l3.43 6h13.11" />
-              </svg>
+        <div className="relative flex items-end lg:items-center justify-between px-5 py-4 border-b border-border/70 bg-secondary/10 z-10 shrink-0">
+          <div className="flex-col md:flex-row flex md:items-center gap-3">
+            <div className="flex h-7 w-7 items-center justify-center">
+              <img src={GDriveLogo} alt="" />
             </div>
             <div>
-              <h2 className="text-sm font-bold tracking-tight text-foreground font-display">Import from Google Drive</h2>
+              <h2 className="hidden lg:block text-sm font-bold tracking-tight text-foreground font-display">Import from Google Drive</h2>
               {isConnected && googleEmail && (
                 <p className="text-[11px] text-muted-foreground mt-0.5">
                   Connected as <span className="text-foreground font-semibold">{googleEmail}</span>
