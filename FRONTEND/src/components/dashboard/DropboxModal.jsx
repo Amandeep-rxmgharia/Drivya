@@ -41,6 +41,7 @@ import {
   cancelDropboxImport,
 } from "../../../api/dropbox";
 import { listAllDirectories } from "../../../api/drive";
+import api from "../../../api/auth";
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
 
@@ -74,6 +75,59 @@ function getFileVisuals(file) {
     return { Icon: FileCode, color: "text-cyan-400", bg: "from-cyan-500/20 to-blue-600/10", badge: "text-cyan-400 bg-cyan-400/10", label: "Code" };
   }
   return { Icon: File, color: "text-slate-400", bg: "from-slate-700/20 to-slate-900/10", badge: "text-slate-400 bg-slate-400/10", label: "File" };
+}
+
+// ─── Thumbnail Component ──────────────────────────────────────────────────────
+
+function DropboxThumbnail({ filePath, alt, fallbackIcon: FallbackIcon, className, iconClass, labelColor, labelText, isFolder }) {
+  const [src, setSrc] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    let objectUrl = null;
+    const loadThumbnail = async () => {
+      try {
+        setLoading(true);
+        setError(false);
+        const encodedPath = encodeURIComponent(filePath);
+        const response = await api.get(`/api/dropbox/thumbnail/${encodedPath}`, { responseType: "blob" });
+        if (active) {
+          objectUrl = URL.createObjectURL(response.data);
+          setSrc(objectUrl);
+        }
+      } catch {
+        if (active) setError(true);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    loadThumbnail();
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [filePath]);
+
+  if (loading) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-slate-800/10">
+        <Loader2 className="h-4 w-4 text-[#0061FF] animate-spin" />
+      </div>
+    );
+  }
+
+  if (error || !src) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-1.5 w-full h-full">
+        <FallbackIcon className={cn("h-8 w-8 transition-transform duration-300 group-hover:scale-110", isFolder ? "text-[#0061FF]" : iconClass)} />
+        <span className={cn("text-[9px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider", labelColor)}>{labelText}</span>
+      </div>
+    );
+  }
+
+  return <img src={src} alt={alt} className={className} />;
 }
 
 // ─── Main Modal ───────────────────────────────────────────────────────────────
@@ -529,10 +583,23 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
         )}
       >
         <div className={cn("relative w-full h-[95px] flex items-center justify-center bg-gradient-to-br overflow-hidden rounded-t-xl", bg)}>
-          <div className="flex flex-col items-center justify-center gap-1.5 w-full h-full">
-            <Icon className={cn("h-7 w-7 transition-transform duration-300 group-hover:scale-110", isFolder ? "text-[#0061FF]" : color)} />
-            <span className={cn("text-[9px] px-1.5 py-0.5 rounded-full font-semibold uppercase tracking-wider", badge)}>{label}</span>
-          </div>
+          {file.hasThumbnail ? (
+            <DropboxThumbnail
+              filePath={file.pathLower}
+              alt={file.name}
+              fallbackIcon={Icon}
+              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+              iconClass={color}
+              labelColor={badge}
+              labelText={label}
+              isFolder={isFolder}
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center gap-1.5 w-full h-full">
+              <Icon className={cn("h-7 w-7 transition-transform duration-300 group-hover:scale-110", isFolder ? "text-[#0061FF]" : color)} />
+              <span className={cn("text-[9px] px-1.5 py-0.5 rounded-full font-semibold uppercase tracking-wider", badge)}>{label}</span>
+            </div>
+          )}
           {!isFolder && file.canDownload && (
             <div
               onClick={(e) => { e.stopPropagation(); handleToggleFile(file); }}

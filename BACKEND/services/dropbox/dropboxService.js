@@ -2,6 +2,18 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
+
+// Extensions for which Dropbox can generate thumbnails
+const THUMBNAIL_EXTENSIONS = new Set([
+  ".jpg", ".jpeg", ".png", ".gif", ".webp", ".tiff", ".tif",
+  ".bmp", ".ppm", ".pdf",
+]);
+
+function canHaveThumbnail(fileName, tag) {
+  if (tag === "folder") return false;
+  const ext = path.extname(fileName || "").toLowerCase();
+  return THUMBNAIL_EXTENSIONS.has(ext);
+}
 import { refreshAccessToken } from "../../config/dropboxOAuthConfig.js";
 
 /**
@@ -121,6 +133,7 @@ export async function listFiles(
     modifiedTime: entry.server_modified || entry.client_modified || null,
     mimeType: guessDropboxMimeType(entry.name, entry[".tag"]),
     canDownload: entry[".tag"] === "file",
+    hasThumbnail: canHaveThumbnail(entry.name, entry[".tag"]),
   }));
 
   return {
@@ -166,6 +179,7 @@ export async function searchFiles(tokens, query, userId = null) {
         modifiedTime: entry.server_modified || entry.client_modified || null,
         mimeType: guessDropboxMimeType(entry.name, entry[".tag"]),
         canDownload: entry[".tag"] === "file",
+        hasThumbnail: canHaveThumbnail(entry.name, entry[".tag"]),
       };
     });
 

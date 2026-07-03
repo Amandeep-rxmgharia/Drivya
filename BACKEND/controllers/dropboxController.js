@@ -10,6 +10,7 @@ import {
   getTokensFromCode,
   getAccountInfo,
   revokeToken,
+  refreshAccessToken,
 } from "../config/dropboxOAuthConfig.js";
 import {
   encryptTokens,
@@ -599,5 +600,88 @@ export const importDropboxFiles = async (req, res, next) => {
     }
   } finally {
     activeImports.delete(userId);
+  }
+};
+
+// ─── Get Dropbox File Thumbnail Proxy ──────────────────────────
+export const getDropboxThumbnail = async (req, res, next) => {
+  try {
+    const tokens = await getUserTokens(req.user.id);
+    if (!tokens) {
+      return res.status(400).json({ message: "Dropbox not connected." });
+    }
+
+    const { filePath } = req.params;
+    if (!filePath) {
+      return res.status(400).json({ message: "File path is required." });
+    }
+
+    // Decode the path (it's URL-encoded in the route param)
+    const decodedPath = decodeURIComponent(filePath);
+
+    const apiArg = JSON.stringify({
+      resource: { ".tag": "path", path: decodedPath },
+      format: { ".tag": "jpeg" },
+      size: { ".tag": "w480h320" },
+      mode: { ".tag": "bestfit" },
+    });
+
+    // Fetch thumbnail from Dropbox content-download endpoint
+    let response = await fetch(
+      "https://content.dropboxapi.com/2/files/get_thumbnail_v2",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${tokens.access_token}`,
+          "Dropbox-API-Arg": apiArg,
+        },
+      },
+    );
+
+    // If 401, refresh token and retry once
+    if (response.status === 401 && tokens.refresh_token) {
+      const refreshed = await refreshAccessToken(tokens.refresh_token);
+      tokens.access_token = refreshed.access_token;
+
+      // Persist refreshed token
+      try {
+        const encrypted = encryptTokens(tokens);
+        await User.updateOne(
+          { _id: req.user.id },
+          {
+            dropboxTokensEnc: encrypted.enc,
+            dropboxTokensIv: encrypted.iv,
+            dropboxTokensAuthTag: encrypted.authTag,
+          },
+        );
+      } catch (saveErr) {
+        console.error("Failed to save refreshed Dropbox tokens:", saveErr.message);
+      }
+
+      response = await fetch(
+        "https://content.dropboxapi.com/2/files/get_thumbnail_v2",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${tokens.access_token}`,
+            "Dropbox-API-Arg": apiArg,
+          },
+        },
+      );
+    }
+
+    if (!response.ok) {
+      return res.status(404).json({ message: "Thumbnail not available for this file." });
+    }
+
+    const contentType = response.headers.get("content-type") || "image/jpeg";
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Cache-Control", "public, max-age=86400");
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    return res.send(buffer);
+  } catch (err) {
+    next(err);
   }
 };

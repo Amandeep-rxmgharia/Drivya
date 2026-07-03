@@ -8,6 +8,7 @@ import {
   listDropboxFiles,
   importDropboxFiles,
   cancelDropboxImport,
+  getDropboxThumbnail,
 } from "../controllers/dropboxController.js";
 
 const router = Router();
@@ -19,6 +20,7 @@ router.post("/disconnect", authenticate, disconnectDropbox);
 router.get("/files", authenticate, listDropboxFiles);
 router.post("/import", authenticate, importDropboxFiles);
 router.post("/import/cancel", authenticate, cancelDropboxImport);
+router.get("/thumbnail/:filePath(*)", authenticate, getDropboxThumbnail);
 
 export default router;
 
