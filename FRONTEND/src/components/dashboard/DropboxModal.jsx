@@ -91,8 +91,7 @@ function DropboxThumbnail({ filePath, alt, fallbackIcon: FallbackIcon, className
       try {
         setLoading(true);
         setError(false);
-        const encodedPath = encodeURIComponent(filePath);
-        const response = await api.get(`/api/dropbox/thumbnail/${encodedPath}`, { responseType: "blob" });
+        const response = await api.get(`/api/dropbox/thumbnail`, { params: { path: filePath }, responseType: "blob" });
         if (active) {
           objectUrl = URL.createObjectURL(response.data);
           setSrc(objectUrl);

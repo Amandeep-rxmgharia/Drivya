@@ -20,7 +20,7 @@ router.post("/disconnect", authenticate, disconnectDropbox);
 router.get("/files", authenticate, listDropboxFiles);
 router.post("/import", authenticate, importDropboxFiles);
 router.post("/import/cancel", authenticate, cancelDropboxImport);
-router.get("/thumbnail/:filePath(*)", authenticate, getDropboxThumbnail);
+router.get("/thumbnail", authenticate, getDropboxThumbnail);
 
 export default router;
 

@@ -611,19 +611,16 @@ export const getDropboxThumbnail = async (req, res, next) => {
       return res.status(400).json({ message: "Dropbox not connected." });
     }
 
-    const { filePath } = req.params;
+    const filePath = req.query.path;
     if (!filePath) {
       return res.status(400).json({ message: "File path is required." });
     }
 
-    // Decode the path (it's URL-encoded in the route param)
-    const decodedPath = decodeURIComponent(filePath);
-
     const apiArg = JSON.stringify({
-      resource: { ".tag": "path", path: decodedPath },
-      format: { ".tag": "jpeg" },
-      size: { ".tag": "w480h320" },
-      mode: { ".tag": "bestfit" },
+      resource: { ".tag": "path", path: filePath },
+      format: "jpeg",
+      size: "w480h320",
+      mode: "bestfit",
     });
 
     // Fetch thumbnail from Dropbox content-download endpoint
@@ -671,6 +668,8 @@ export const getDropboxThumbnail = async (req, res, next) => {
     }
 
     if (!response.ok) {
+      const errText = await response.text().catch(() => "");
+      console.error(`[Dropbox Thumbnail] API error ${response.status} for path "${filePath}":`, errText);
       return res.status(404).json({ message: "Thumbnail not available for this file." });
     }
 

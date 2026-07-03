@@ -105,7 +105,7 @@ function HeroSection({ userProfile, onImportGoogle, onImportDropbox }) {
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <button
               onClick={onImportGoogle}
-              className="group relative inline-flex h-11 items-center gap-3 overflow-hidden rounded-xl border border-primary/20 bg-primary/5 px-4 text-sm font-semibold text-foreground shadow-sm backdrop-blur-md transition-all duration-300 hover:scale-104 cursor-pointer active:scale-[0.98]"
+              className="group relative inline-flex h-11 items-center gap-3 overflow-hidden rounded-xl border border-border/60 bg-secondary/30 px-4 text-sm font-semibold text-foreground shadow-sm backdrop-blur-md transition-all duration-300 hover:scale-104 cursor-pointer active:scale-[0.98]"
             >
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/20 to-transparent -translate-x-full" />
               <div className="flex h-5 w-5 items-center justify-center">
@@ -118,12 +118,12 @@ function HeroSection({ userProfile, onImportGoogle, onImportDropbox }) {
 
             <button
               onClick={onImportDropbox}
-              className="group relative inline-flex h-11 items-center gap-3 overflow-hidden rounded-xl border border-border/60 bg-secondary/30 px-4 text-sm font-medium text-foreground/90 shadow-sm backdrop-blur-md transition-all duration-300 hover:scale-104 cursor-pointer active:scale-[0.98]"
+              className="group   relative inline-flex h-11 items-center gap-3 overflow-hidden rounded-xl border border-border/60 bg-secondary/30 px-4 text-sm font-medium text-foreground/90 shadow-sm backdrop-blur-md transition-all duration-300 hover:scale-104 cursor-pointer active:scale-[0.98]"
             >
               <div className="flex h-7 w-7 items-center justify-center rounded-[7px] bg-background shadow-sm ring-1 ring-border/50 transition-all duration-300 group-hover:ring-[#0061FF]/40 group-hover:shadow-[0_0_12px_-3px_#0061FF]">
               <img src={dropboxLogo} alt="" />
               </div>
-              <span className="relative z-10">Connect Dropbox</span>
+              <span className="relative z-10">Import from Dropbox</span>
             </button>
           </div>
         </div>
