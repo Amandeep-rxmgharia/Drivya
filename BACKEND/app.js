@@ -15,6 +15,7 @@ import starRoutes from "./routes/starRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
 import accountRoutes from "./routes/accountRoutes.js";
 import googleDriveRoutes, { googleCallbackHandler } from "./routes/googleDriveRoutes.js";
+import dropboxRoutes, { dropboxCallbackHandler } from "./routes/dropboxRoutes.js";
 import { connectDb } from "./config/db.js";
 import { ensureStorageRoot } from "./services/storageService.js";
 
@@ -91,7 +92,9 @@ app.use("/api/starred", starRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/account", accountRoutes);
 app.use("/api/google", googleDriveRoutes);
+app.use("/api/dropbox", dropboxRoutes);
 app.get("/auth/google/callback", googleCallbackHandler);
+app.get("/auth/dropbox/callback", dropboxCallbackHandler);
 
 // ─── Global Error Handler ────────────────────────────────────
 app.use((err, req, res, next) => {

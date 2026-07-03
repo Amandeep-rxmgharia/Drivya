@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
-import GDriveLogo from '../../../assets/images/Google_Drive_Logo.svg'
+import dropboxLogo from '../../../assets/images/Dropbox-Icon.svg';
 import {
   X,
   Search,
@@ -27,24 +27,20 @@ import {
   FileCode,
   Download,
   ChevronRight,
-  ChevronDown,
-  Trash2,
   Import,
   FolderTree,
   Inbox,
-  Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  getGoogleStatus,
-  disconnectGoogle,
-  listGoogleFiles,
-  importGoogleFiles,
-  getGoogleAuthUrl,
-  cancelGoogleImport,
-} from "../../../api/googleDrive";
+  getDropboxStatus,
+  disconnectDropbox,
+  listDropboxFiles,
+  importDropboxFiles,
+  getDropboxAuthUrl,
+  cancelDropboxImport,
+} from "../../../api/dropbox";
 import { listAllDirectories } from "../../../api/drive";
-import api from "../../../api/auth";
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
 
@@ -57,98 +53,44 @@ function formatSize(bytes) {
 }
 
 function getFileVisuals(file) {
-  const mime = file?.mimeType || "";
   const nameLower = (file?.name || "").toLowerCase();
   const isFolder = file?.isFolder;
 
   if (isFolder) {
-    return { Icon: Folder, color: "text-amber-500", bg: "from-amber-500/15 to-amber-600/5", badge: "text-amber-500 bg-amber-500/10", label: "Folder" };
-  } else if (mime.startsWith("image/") || /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(nameLower)) {
+    return { Icon: Folder, color: "text-[#0061FF]", bg: "from-[#0061FF]/15 to-[#0061FF]/5", badge: "text-[#0061FF] bg-[#0061FF]/10", label: "Folder" };
+  } else if (/\.(jpg|jpeg|png|gif|webp|svg)$/i.test(nameLower)) {
     return { Icon: Image, color: "text-pink-400", bg: "from-pink-500/20 to-purple-600/10", badge: "text-pink-400 bg-pink-400/10", label: "Image" };
-  } else if (mime.startsWith("video/") || /\.(mp4|mkv|mov|avi|wmv|flv)$/i.test(nameLower)) {
+  } else if (/\.(mp4|mkv|mov|avi|wmv|flv)$/i.test(nameLower)) {
     return { Icon: Video, color: "text-purple-400", bg: "from-purple-500/20 to-indigo-600/10", badge: "text-purple-400 bg-purple-400/10", label: "Video" };
-  } else if (mime.startsWith("audio/") || /\.(mp3|wav|ogg|flac|m4a|aac)$/i.test(nameLower)) {
+  } else if (/\.(mp3|wav|ogg|flac|m4a|aac)$/i.test(nameLower)) {
     return { Icon: Music, color: "text-emerald-400", bg: "from-emerald-500/20 to-teal-600/10", badge: "text-emerald-400 bg-emerald-400/10", label: "Audio" };
-  } else if (mime === "application/pdf" || nameLower.endsWith(".pdf")) {
+  } else if (nameLower.endsWith(".pdf")) {
     return { Icon: FileText, color: "text-rose-400", bg: "from-red-500/20 to-rose-600/10", badge: "text-rose-400 bg-rose-400/10", label: "PDF" };
-  } else if (mime.includes("spreadsheet") || mime.includes("excel") || /\.(xls|xlsx|csv)$/i.test(nameLower)) {
+  } else if (/\.(xls|xlsx|csv)$/i.test(nameLower)) {
     return { Icon: FileSpreadsheet, color: "text-green-400", bg: "from-green-500/20 to-emerald-600/10", badge: "text-green-400 bg-green-400/10", label: "Sheet" };
-  } else if (mime.includes("presentation") || mime.includes("powerpoint") || /\.(ppt|pptx)$/i.test(nameLower)) {
+  } else if (/\.(ppt|pptx)$/i.test(nameLower)) {
     return { Icon: Presentation, color: "text-orange-400", bg: "from-orange-500/20 to-amber-600/10", badge: "text-orange-400 bg-orange-400/10", label: "Slide" };
-  } else if (mime.includes("json") || mime.includes("javascript") || mime.includes("html") || /\.(js|jsx|ts|tsx|json|html|css|py|go|cpp|c|java|sh)$/i.test(nameLower)) {
+  } else if (/\.(js|jsx|ts|tsx|json|html|css|py|go|cpp|c|java|sh)$/i.test(nameLower)) {
     return { Icon: FileCode, color: "text-cyan-400", bg: "from-cyan-500/20 to-blue-600/10", badge: "text-cyan-400 bg-cyan-400/10", label: "Code" };
-  } else if (file?.isGoogleDoc) {
-    return { Icon: FileText, color: "text-blue-400", bg: "from-blue-500/20 to-indigo-600/10", badge: "text-blue-400 bg-blue-400/10", label: "Doc" };
   }
   return { Icon: File, color: "text-slate-400", bg: "from-slate-700/20 to-slate-900/10", badge: "text-slate-400 bg-slate-400/10", label: "File" };
 }
 
-// ─── Thumbnail Component ──────────────────────────────────────────────────────
-
-function GoogleDriveThumbnail({ fileId, alt, fallbackIcon: FallbackIcon, className, iconClass, labelColor, labelText, isFolder }) {
-  const [src, setSrc] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    let objectUrl = null;
-    const loadThumbnail = async () => {
-      try {
-        setLoading(true);
-        setError(false);
-        const response = await api.get(`/api/google/thumbnail/${fileId}`, { responseType: "blob" });
-        if (active) {
-          objectUrl = URL.createObjectURL(response.data);
-          setSrc(objectUrl);
-        }
-      } catch {
-        if (active) setError(true);
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
-    loadThumbnail();
-    return () => {
-      active = false;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [fileId]);
-
-  if (loading) {
-    return (
-      <div className="w-full h-full flex items-center justify-center bg-slate-800/10">
-        <Loader2 className="h-4 w-4 text-primary animate-spin" />
-      </div>
-    );
-  }
-
-  if (error || !src) {
-    return (
-      <div className="flex flex-col items-center justify-center gap-1.5 w-full h-full">
-        <FallbackIcon className={cn("h-8 w-8 transition-transform duration-300 group-hover:scale-110", isFolder ? "text-amber-500 fill-amber-500/20" : iconClass)} />
-        <span className={cn("text-[9px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider", labelColor)}>{labelText}</span>
-      </div>
-    );
-  }
-
-  return <img src={src} alt={alt} className={className} />;
-}
-
 // ─── Main Modal ───────────────────────────────────────────────────────────────
 
-export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, onRefresh }) {
+export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRefresh }) {
   // ── Auth state ───────────────────────────────────────────────
   const [isConnected, setIsConnected] = useState(false);
-  const [googleEmail, setGoogleEmail] = useState("");
+  const [dropboxEmail, setDropboxEmail] = useState("");
   const [authLoading, setAuthLoading] = useState(true);
 
-  // ── Drive browser state ──────────────────────────────────────
+  // ── Dropbox browser state ────────────────────────────────────
   const [files, setFiles] = useState([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
-  const [folderStack, setFolderStack] = useState([{ id: "root", name: "Google Drive" }]);
+  const [folderStack, setFolderStack] = useState([{ id: "", name: "Dropbox" }]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [nextPageToken, setNextPageToken] = useState(null);
+  const [cursor, setCursor] = useState(null);
+  const [hasMore, setHasMore] = useState(false);
   const [loadMoreLoading, setLoadMoreLoading] = useState(false);
   const [viewMode, setViewMode] = useState("grid");
 
@@ -157,9 +99,9 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
 
   // ── Drivya destination folder state ─────────────────────────
   const [rawDrivyaDirs, setRawDrivyaDirs] = useState([]);
-  const [drivyaFolderStack, setDrivyaFolderStack] = useState([{ id: "root", name: "My Drive" }]);
+  const [drivyaFolderStack, setDrivyaFolderStack] = useState([{ id: "root", name: "My Vault" }]);
   const [targetDirId, setTargetDirId] = useState(currentDirId || "root");
-  const [targetDirName, setTargetDirName] = useState("My Drive (Root)");
+  const [targetDirName, setTargetDirName] = useState("My Vault (Root)");
 
   // ── Mobile tab state ─────────────────────────────────────────
   const [mobileTab, setMobileTab] = useState("browse"); // 'browse' | 'queue'
@@ -169,6 +111,7 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
   const [importSummary, setImportSummary] = useState(null);
   const [fileProgress, setFileProgress] = useState({});
   const [error, setError] = useState(null);
+
   const abortControllerRef = useRef(null);
 
   const currentFolderId = folderStack[folderStack.length - 1].id;
@@ -210,9 +153,9 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
     if (!isOpen || rawDrivyaDirs.length === 0) return;
 
     if (!currentDirId || currentDirId === "root") {
-      setDrivyaFolderStack([{ id: "root", name: "My Drive" }]);
+      setDrivyaFolderStack([{ id: "root", name: "My Vault" }]);
       setTargetDirId("root");
-      setTargetDirName("My Drive (Root)");
+      setTargetDirName("My Vault (Root)");
       return;
     }
 
@@ -224,7 +167,7 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
       dirMap[d._id.toString()] = d;
     });
 
-    const stack = [{ id: "root", name: "My Drive" }];
+    const stack = [{ id: "root", name: "My Vault" }];
     
     currentFolder.path.forEach(parentId => {
       const parentDir = dirMap[parentId.toString()];
@@ -245,11 +188,11 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
     setAuthLoading(true);
     setError(null);
     try {
-      const status = await getGoogleStatus();
+      const status = await getDropboxStatus();
       setIsConnected(status.connected);
-      setGoogleEmail(status.email);
+      setDropboxEmail(status.email);
       if (status.connected) {
-        fetchFiles("root");
+        fetchFiles("");
         fetchDrivyaDirectories();
       }
     } catch {
@@ -269,25 +212,29 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
     }
   };
 
-  // ── Google Drive file listing ─────────────────────────────────
-  const fetchFiles = async (folderId, pageToken = null, append = false, query = "") => {
+  // ── Dropbox file listing ─────────────────────────────────────
+  const fetchFiles = async (folderPath, paginationCursor = null, append = false, query = "") => {
     if (append) setLoadMoreLoading(true);
     else { setLoadingFiles(true); setError(null); }
     try {
-      const data = await listGoogleFiles({
-        folderId: query ? null : (folderId === "root" ? "root" : folderId),
-        pageToken,
+      const data = await listDropboxFiles({
+        path: query ? null : folderPath,
+        cursor: paginationCursor,
         query: query || null,
       });
-      if (append) setFiles((prev) => [...prev, ...data.files]);
-      else setFiles(data.files || []);
-      setNextPageToken(data.nextPageToken || null);
-    } catch (err) {
-      if (err.response?.status === 401 || err.code === "GOOGLE_TOKEN_EXPIRED") {
-        setIsConnected(false);
-        setGoogleEmail("");
+      if (append) {
+        setFiles((prev) => [...prev, ...data.files]);
       } else {
-        setError("Failed to load files from Google Drive.");
+        setFiles(data.files || []);
+      }
+      setCursor(data.cursor || null);
+      setHasMore(data.hasMore || false);
+    } catch (err) {
+      if (err.response?.status === 401 || err.code === "DROPBOX_TOKEN_EXPIRED") {
+        setIsConnected(false);
+        setDropboxEmail("");
+      } else {
+        setError("Failed to load files from Dropbox.");
       }
     } finally {
       setLoadingFiles(false);
@@ -309,32 +256,32 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
   const handleConnect = async () => {
     try {
       setAuthLoading(true);
-      const { url } = await getGoogleAuthUrl();
+      const { url } = await getDropboxAuthUrl();
       window.location.href = url;
     } catch {
-      setError("Could not launch Google authentication.");
+      setError("Could not launch Dropbox authentication.");
       setAuthLoading(false);
     }
   };
 
   const handleDisconnect = async () => {
-    if (!confirm("Are you sure you want to disconnect your Google Drive?")) return;
+    if (!confirm("Are you sure you want to disconnect Dropbox?")) return;
     try {
-      await disconnectGoogle();
+      await disconnectDropbox();
       setIsConnected(false);
-      setGoogleEmail("");
+      setDropboxEmail("");
       setFiles([]);
       setSelectedFiles({});
     } catch {
-      setError("Failed to revoke Google access.");
+      setError("Failed to disconnect Dropbox.");
     }
   };
 
   // ── Navigation ────────────────────────────────────────────────
   const handleFolderClick = (folder) => {
     if (searchQuery) setSearchQuery("");
-    setFolderStack((prev) => [...prev, { id: folder.id, name: folder.name }]);
-    fetchFiles(folder.id);
+    setFolderStack((prev) => [...prev, { id: folder.pathLower, name: folder.name }]);
+    fetchFiles(folder.pathLower);
   };
 
   const handleBreadcrumbNav = (index) => {
@@ -378,13 +325,13 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
     });
   };
 
-  // ── Import ─────────────────────────────────────────────────────
+  // ── Import / Cancel ────────────────────────────────────────────
   const handleCancel = async () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
     try {
-      await cancelGoogleImport();
+      await cancelDropboxImport();
     } catch (err) {
       console.warn("Failed to request explicit cancel on backend:", err);
     }
@@ -393,7 +340,8 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
   const handleImport = async () => {
     if (selectedCount === 0) return;
     if (isOverQuota) { alert("Selected files exceed your available storage quota."); return; }
-    const fileIds = Object.keys(selectedFiles);
+    
+    const filePaths = Object.values(selectedFiles).map((f) => f.pathLower);
     setIsImporting(true);
     setImportSummary(null);
     setFileProgress({});
@@ -403,12 +351,18 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
     abortControllerRef.current = controller;
 
     const initialProgress = {};
-    fileIds.forEach((id) => { initialProgress[id] = { percent: 0, status: "waiting", name: selectedFiles[id].name }; });
+    Object.values(selectedFiles).forEach((f) => {
+      initialProgress[f.pathLower] = { percent: 0, status: "waiting", name: f.name };
+    });
     setFileProgress(initialProgress);
+
     try {
-      await importGoogleFiles(fileIds, targetDirId === "root" ? null : targetDirId, {
+      await importDropboxFiles(filePaths, targetDirId === "root" ? null : targetDirId, {
         onProgress: (data) => {
-          setFileProgress((prev) => ({ ...prev, [data.fileId]: { percent: data.percent, status: data.status, name: data.fileName, error: data.error || null } }));
+          setFileProgress((prev) => ({
+            ...prev,
+            [data.fileId]: { percent: data.percent, status: data.status, name: data.fileName, error: data.error || null }
+          }));
         },
         onDone: (data) => {
           setImportSummary(data);
@@ -452,31 +406,61 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
       retryFileIds.forEach((id) => { next[id] = { ...next[id], percent: 0, status: "waiting", error: null }; });
       return next;
     });
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
-      await importGoogleFiles(retryFileIds, targetDirId === "root" ? null : targetDirId, {
+      await importDropboxFiles(retryFileIds, targetDirId === "root" ? null : targetDirId, {
         onProgress: (data) => {
-          setFileProgress((prev) => ({ ...prev, [data.fileId]: { percent: data.percent, status: data.status, name: data.fileName, error: data.error || null } }));
+          setFileProgress((prev) => ({
+            ...prev,
+            [data.fileId]: { percent: data.percent, status: data.status, name: data.fileName, error: data.error || null }
+          }));
         },
         onDone: () => {
           setFileProgress((currentProgress) => {
             const entries = Object.entries(currentProgress);
             const importedCount = entries.filter(([, p]) => p.status === "complete").length;
             const failedCount = entries.filter(([, p]) => p.status === "failed").length;
-            const totalSize = Object.values(selectedFiles).reduce((s, f) => currentProgress[f.id]?.status === "complete" ? s + (f.size || 1024 * 1024) : s, 0);
+            const totalSize = Object.values(selectedFiles).reduce((s, f) => currentProgress[f.pathLower]?.status === "complete" ? s + (f.size || 1024 * 1024) : s, 0);
+            
             setImportSummary({
-              imported: importedCount, failed: failedCount, totalSize,
+              imported: importedCount,
+              failed: failedCount,
+              totalSize,
               files: entries.filter(([, p]) => p.status === "complete").map(([id, p]) => ({ fileId: id, fileName: p.name })),
               errors: entries.filter(([, p]) => p.status === "failed").map(([id, p]) => ({ fileId: id, fileName: p.name, error: p.error })),
             });
             return currentProgress;
           });
+          abortControllerRef.current = null;
           window.dispatchEvent(new CustomEvent("refresh-drive"));
           if (onRefresh) onRefresh();
         },
-        onError: (data) => setError(data.error || "An error occurred during retry."),
-      });
+        onCancelled: (data) => {
+          setImportSummary({
+            imported: data.imported || 0,
+            failed: data.failed || 0,
+            totalSize: data.totalSize || 0,
+            files: data.files || [],
+            errors: data.errors || [],
+            cancelled: true,
+          });
+          abortControllerRef.current = null;
+          window.dispatchEvent(new CustomEvent("refresh-drive"));
+          if (onRefresh) onRefresh();
+        },
+        onError: (data) => {
+          setError(data.error || "An error occurred during retry.");
+          abortControllerRef.current = null;
+        },
+      }, controller.signal);
     } catch (err) {
-      setError(err.message || "Failed to retry import.");
+      if (err.name !== "AbortError") {
+        setError(err.message || "Failed to retry import.");
+      }
+      abortControllerRef.current = null;
     }
   };
 
@@ -486,7 +470,7 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
       if (!confirm("An import is in progress. Closing will run it in the background. Proceed?")) return;
     }
     setSelectedFiles({});
-    setFolderStack([{ id: "root", name: "Google Drive" }]);
+    setFolderStack([{ id: "", name: "Dropbox" }]);
     setSearchQuery("");
     setIsImporting(false);
     setImportSummary(null);
@@ -524,7 +508,7 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
     </div>
   );
 
-  // ─── Grid card ─────────────────────────────────────────────────
+  // ─── Grid item ─────────────────────────────────────────────────
   const renderGridItem = (file) => {
     const { Icon, color, bg, badge, label } = getFileVisuals(file);
     const isFolder = file.isFolder;
@@ -540,37 +524,22 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
         transition={{ duration: 0.15 }}
         onClick={() => isFolder ? handleFolderClick(file) : handleToggleFile(file)}
         className={cn(
-          "group relative flex flex-col h-[160px] bg-secondary/20 border border-border/70 rounded-xl overflow-hidden transition-all duration-200 select-none cursor-pointer hover:border-primary/40 hover:-translate-y-0.5 hover:shadow-glow",
-          isSelected && "border-primary bg-primary/5 ring-1 ring-primary/20 shadow-glow"
+          "group relative flex flex-col h-[160px] bg-secondary/20 border border-border/70 rounded-xl overflow-hidden transition-all duration-200 select-none cursor-pointer hover:border-[#0061FF]/40 hover:-translate-y-0.5 hover:shadow-[0_0_12px_rgba(0,97,255,0.15)]",
+          isSelected && "border-[#0061FF] bg-[#0061FF]/5 ring-1 ring-[#0061FF]/20 shadow-[0_0_12px_rgba(0,97,255,0.15)]"
         )}
       >
-        {/* Thumbnail area */}
         <div className={cn("relative w-full h-[95px] flex items-center justify-center bg-gradient-to-br overflow-hidden rounded-t-xl", bg)}>
-          {file.thumbnailLink ? (
-            <GoogleDriveThumbnail
-              fileId={file.id}
-              alt={file.name}
-              fallbackIcon={Icon}
-              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-              iconClass={color}
-              labelColor={badge}
-              labelText={label}
-              isFolder={isFolder}
-            />
-          ) : (
-            <div className="flex flex-col items-center justify-center gap-1.5 w-full h-full">
-              <Icon className={cn("h-7 w-7 transition-transform duration-300 group-hover:scale-110", isFolder ? "text-amber-500 fill-amber-500/20" : color)} />
-              <span className={cn("text-[9px] px-1.5 py-0.5 rounded-full font-semibold uppercase tracking-wider", badge)}>{label}</span>
-            </div>
-          )}
-          {/* Checkbox */}
+          <div className="flex flex-col items-center justify-center gap-1.5 w-full h-full">
+            <Icon className={cn("h-7 w-7 transition-transform duration-300 group-hover:scale-110", isFolder ? "text-[#0061FF]" : color)} />
+            <span className={cn("text-[9px] px-1.5 py-0.5 rounded-full font-semibold uppercase tracking-wider", badge)}>{label}</span>
+          </div>
           {!isFolder && file.canDownload && (
             <div
               onClick={(e) => { e.stopPropagation(); handleToggleFile(file); }}
               className={cn(
                 "absolute top-2 right-2 h-5 w-5 flex items-center justify-center rounded-md border backdrop-blur-sm transition-all duration-200 cursor-pointer shadow-sm z-10",
                 isSelected
-                  ? "border-primary bg-primary text-primary-foreground"
+                  ? "border-[#0061FF] bg-[#0061FF] text-white"
                   : "border-white/30 bg-black/20 text-transparent hover:border-white/60 hover:bg-black/40"
               )}
             >
@@ -578,12 +547,11 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
             </div>
           )}
         </div>
-        {/* Footer */}
         <div className="flex-1 px-2.5 py-2 flex flex-col justify-between bg-secondary/5">
-          <p className="text-[11px] font-semibold text-foreground line-clamp-1 group-hover:text-primary transition-colors" title={file.name}>{file.name}</p>
+          <p className="text-[11px] font-semibold text-foreground line-clamp-1 group-hover:text-[#0061FF] transition-colors" title={file.name}>{file.name}</p>
           <div className="flex items-center justify-between text-[10px] text-muted-foreground">
             <span>{dateStr}</span>
-            <span>{isFolder ? "Folder" : file.size ? formatSize(file.size) : file.isGoogleDoc ? "Doc" : "—"}</span>
+            <span>{isFolder ? "Folder" : file.size ? formatSize(file.size) : "—"}</span>
           </div>
         </div>
       </motion.div>
@@ -592,8 +560,7 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
 
   // ─── List row ──────────────────────────────────────────────────
   const renderListRow = (file) => {
-    const { Icon, color, badge, label } = getFileVisuals(file);
-    const isFolder = file.isFolder;
+    const { Icon, color, isFolder } = getFileVisuals(file);
     const isSelected = !!selectedFiles[file.id];
     const dateStr = file.modifiedTime ? new Date(file.modifiedTime).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—";
 
@@ -603,7 +570,7 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
         onClick={() => isFolder ? handleFolderClick(file) : handleToggleFile(file)}
         className={cn(
           "border-b border-border/20 group hover:bg-secondary/15 transition-colors cursor-pointer",
-          isSelected && "bg-primary/5 hover:bg-primary/10"
+          isSelected && "bg-[#0061FF]/5 hover:bg-[#0061FF]/10"
         )}
       >
         <td className="py-2.5 pl-2 pr-1 w-8" onClick={(e) => e.stopPropagation()}>
@@ -613,7 +580,7 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
               onClick={() => handleToggleFile(file)}
               className={cn(
                 "flex h-4.5 w-4.5 items-center justify-center rounded border transition-colors cursor-pointer",
-                isSelected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-secondary/35 hover:border-primary/60"
+                isSelected ? "border-[#0061FF] bg-[#0061FF] text-white" : "border-border bg-secondary/35 hover:border-[#0061FF]/60"
               )}
             >
               {isSelected && <Check className="h-2.5 w-2.5 stroke-[3.5]" />}
@@ -621,24 +588,22 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
           ) : <div className="h-4.5 w-4.5" />}
         </td>
         <td className="py-2.5 pr-2">
-          <div className="flex items-center gap-2 text-foreground group-hover:text-primary transition-colors">
-            <Icon className={cn("h-4 w-4 shrink-0", isFolder ? "text-amber-500 fill-amber-500/20" : color)} />
+          <div className="flex items-center gap-2 text-foreground group-hover:text-[#0061FF] transition-colors">
+            <Icon className={cn("h-4 w-4 shrink-0", isFolder ? "text-[#0061FF]" : color)} />
             <span className="text-xs font-semibold truncate max-w-[180px]">{file.name}</span>
-            {file.isGoogleDoc && <span className={cn("text-[9px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider shrink-0", badge)}>Doc</span>}
           </div>
         </td>
         <td className="py-2.5 text-[11px] text-muted-foreground w-24">{dateStr}</td>
         <td className="py-2.5 text-[11px] text-muted-foreground text-right pr-2 w-20">
-          {isFolder ? "Folder" : file.size ? formatSize(file.size) : file.isGoogleDoc ? "Doc" : "—"}
+          {isFolder ? "Folder" : file.size ? formatSize(file.size) : "—"}
         </td>
       </tr>
     );
   };
 
-  // ─── LEFT PANEL: Drive Browser ──────────────────────────────────
+  // ─── LEFT PANEL: Dropbox Browser ──────────────────────────────────
   const DrivePanel = (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Breadcrumbs + controls */}
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border/60 bg-secondary/10 shrink-0 flex-wrap gap-y-2">
         <div className="flex items-center gap-1 text-xs overflow-x-auto flex-1 min-w-0">
           {folderStack.length > 1 && (
@@ -660,7 +625,7 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
                   onClick={() => handleBreadcrumbNav(idx)}
                   className={cn(
                     "font-semibold transition-colors cursor-pointer",
-                    isLast ? "text-primary cursor-default" : "text-muted-foreground hover:text-foreground"
+                    isLast ? "text-[#0061FF] cursor-default" : "text-muted-foreground hover:text-foreground"
                   )}
                   disabled={isLast}
                 >
@@ -672,30 +637,27 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          {/* View toggle */}
           <div className="flex items-center bg-secondary/30 border border-border rounded-lg p-0.5">
-            <button type="button" onClick={() => setViewMode("grid")} className={cn("p-1.5 rounded-md transition-all cursor-pointer", viewMode === "grid" ? "bg-secondary/80 text-primary shadow-sm" : "text-muted-foreground hover:text-foreground")}>
+            <button type="button" onClick={() => setViewMode("grid")} className={cn("p-1.5 rounded-md transition-all cursor-pointer", viewMode === "grid" ? "bg-secondary/80 text-[#0061FF] shadow-sm" : "text-muted-foreground hover:text-foreground")}>
               <LayoutGrid className="h-3.5 w-3.5" />
             </button>
-            <button type="button" onClick={() => setViewMode("list")} className={cn("p-1.5 rounded-md transition-all cursor-pointer", viewMode === "list" ? "bg-secondary/80 text-primary shadow-sm" : "text-muted-foreground hover:text-foreground")}>
+            <button type="button" onClick={() => setViewMode("list")} className={cn("p-1.5 rounded-md transition-all cursor-pointer", viewMode === "list" ? "bg-secondary/80 text-[#0061FF] shadow-sm" : "text-muted-foreground hover:text-foreground")}>
               <List className="h-3.5 w-3.5" />
             </button>
           </div>
-          {/* Search */}
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/60" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search files..."
-              className="pl-8 pr-3 py-1.5 text-xs bg-secondary/15 border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary transition-all w-44 text-foreground placeholder:text-muted-foreground/50"
+              placeholder="Search Dropbox..."
+              className="pl-8 pr-3 py-1.5 text-xs bg-secondary/15 border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0061FF]/40 focus:border-[#0061FF] transition-all w-44 text-foreground placeholder:text-muted-foreground/50"
             />
           </div>
         </div>
       </div>
 
-      {/* Select All bar */}
       {!loadingFiles && importableFiles.length > 0 && (
         <div className="flex items-center gap-2 px-4 py-2 border-b border-border/30 bg-secondary/5 shrink-0">
           <button
@@ -703,7 +665,7 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
             onClick={handleSelectAllToggle}
             className={cn(
               "flex h-4.5 w-4.5 items-center justify-center rounded border transition-colors cursor-pointer shrink-0",
-              isAllSelected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-secondary/35 hover:border-primary/60"
+              isAllSelected ? "border-[#0061FF] bg-[#0061FF] text-white" : "border-border bg-secondary/35 hover:border-[#0061FF]/60"
             )}
           >
             {isAllSelected && <Check className="h-2.5 w-2.5 stroke-[3.5]" />}
@@ -714,7 +676,6 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
         </div>
       )}
 
-      {/* File grid / list */}
       <div className="flex-1 overflow-y-auto p-4 min-h-0">
         {error && (
           <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/20 text-destructive text-xs rounded-xl mb-3">
@@ -726,7 +687,7 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
           <div className="h-full flex flex-col items-center justify-center p-8 text-center text-muted-foreground min-h-[200px]">
             <Folder className="h-10 w-10 text-muted-foreground/40 mb-3" />
             <p className="text-sm font-semibold">No files found</p>
-            <p className="text-xs text-muted-foreground/50 mt-1">This folder is empty or no search matches.</p>
+            <p className="text-xs text-muted-foreground/50 mt-1">Folder is empty or search returned no results.</p>
           </div>
         ) : (
           <>
@@ -740,7 +701,7 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
                   <thead>
                     <tr className="border-b border-border/40 text-muted-foreground">
                       <th className="w-8 py-2 pl-2">
-                        <button type="button" onClick={handleSelectAllToggle} className={cn("flex h-4.5 w-4.5 items-center justify-center rounded border transition-colors cursor-pointer", isAllSelected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-secondary/35 hover:border-primary/60")}>
+                        <button type="button" onClick={handleSelectAllToggle} className={cn("flex h-4.5 w-4.5 items-center justify-center rounded border transition-colors cursor-pointer", isAllSelected ? "border-[#0061FF] bg-[#0061FF] text-white" : "border-border bg-secondary/35 hover:border-[#0061FF]/60")}>
                           {isAllSelected && <Check className="h-2.5 w-2.5 stroke-[3.5]" />}
                         </button>
                       </th>
@@ -753,12 +714,12 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
                 </table>
               </div>
             )}
-            {nextPageToken && (
+            {hasMore && cursor && (
               <div className="flex justify-center mt-4">
                 <button
                   type="button"
                   disabled={loadMoreLoading}
-                  onClick={() => fetchFiles(currentFolderId, nextPageToken, true, searchQuery)}
+                  onClick={() => fetchFiles(currentFolderId, cursor, true, searchQuery)}
                   className="inline-flex items-center gap-2 rounded-xl border border-border bg-secondary/30 hover:bg-secondary/50 px-5 py-2 text-xs font-semibold text-foreground transition-all cursor-pointer disabled:opacity-40 shadow-sm"
                 >
                   {loadMoreLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
@@ -775,14 +736,12 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
   // ─── RIGHT PANEL: Queue + Folder Tree ──────────────────────────────
   const QueuePanel = (
     <div className="flex flex-col h-full overflow-hidden bg-secondary/5 border-l border-border/60">
-
-      {/* Storage bar */}
       {userProfile && (
         <div className="px-4 pt-3.5 pb-2 border-b border-border/40 shrink-0">
           <div className="flex items-center justify-between text-[11px] mb-1.5">
             <span className="flex items-center gap-1.5 text-muted-foreground font-medium">
               <HardDrive className="h-3 w-3" />
-              Drivya Storage
+              Vault Storage
             </span>
             <span className={cn("font-bold", isOverQuota ? "text-destructive animate-pulse" : "text-foreground")}>
               {formatSize(Math.max(0, storageRemaining))} free
@@ -790,17 +749,16 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
           </div>
           <div className="h-1 bg-secondary/50 rounded-full overflow-hidden">
             <div
-              className={cn("h-full rounded-full transition-all duration-500", isOverQuota ? "bg-destructive" : "bg-primary")}
+              className={cn("h-full rounded-full transition-all duration-500", isOverQuota ? "bg-destructive" : "bg-[#0061FF]")}
               style={{ width: `${Math.min(100, (userProfile.storageUsed / userProfile.storageLimit) * 100)}%` }}
             />
           </div>
         </div>
       )}
 
-      {/* Selected count pill */}
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-border/40 shrink-0">
         <div className="flex items-center gap-2">
-          <div className={cn("h-5 w-5 rounded-md flex items-center justify-center text-[10px] font-bold shrink-0", selectedCount > 0 ? "bg-primary text-primary-foreground" : "bg-secondary/50 text-muted-foreground")}>
+          <div className={cn("h-5 w-5 rounded-md flex items-center justify-center text-[10px] font-bold shrink-0", selectedCount > 0 ? "bg-[#0061FF] text-white" : "bg-secondary/50 text-muted-foreground")}>
             {selectedCount}
           </div>
           <span className="text-xs font-semibold text-foreground">
@@ -808,19 +766,18 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
           </span>
         </div>
         {selectedCount > 0 && (
-          <span className={cn("text-[11px] font-semibold", isOverQuota ? "text-destructive" : "text-primary")}>
+          <span className={cn("text-[11px] font-semibold", isOverQuota ? "text-destructive" : "text-[#0061FF]")}>
             {formatSize(selectedTotalSize)}
           </span>
         )}
       </div>
 
-      {/* Queue list */}
       <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
         {selectedList.length === 0 ? (
           <div className="flex flex-col items-center justify-center flex-1 p-6 text-center text-muted-foreground">
             <Inbox className="h-9 w-9 text-muted-foreground/30 mb-2.5" />
             <p className="text-xs font-semibold">Import queue is empty</p>
-            <p className="text-[11px] text-muted-foreground/50 mt-1">Click files on the left to queue them</p>
+            <p className="text-[11px] text-muted-foreground/50 mt-1">Select files to import</p>
           </div>
         ) : (
           <div className="px-3 py-2 space-y-1">
@@ -845,7 +802,7 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
                       type="button"
                       onClick={() => handleRemoveFromQueue(file.id)}
                       className="h-5 w-5 rounded flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all cursor-pointer opacity-0 group-hover/queue:opacity-100 shrink-0"
-                      title="Remove from queue"
+                      title="Remove"
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -857,11 +814,10 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
         )}
       </div>
 
-      {/* Destination folder section */}
       <div className="border-t border-border/60 shrink-0 flex flex-col min-h-[180px]">
         <div className="px-4 py-2 flex items-center justify-between bg-secondary/10 shrink-0">
           <div className="flex items-center gap-2">
-            <FolderTree className="h-3.5 w-3.5 text-primary shrink-0" />
+            <FolderTree className="h-3.5 w-3.5 text-[#0061FF] shrink-0" />
             <span className="text-xs font-semibold text-foreground">Import Destination</span>
           </div>
           {drivyaFolderStack.length > 1 && (
@@ -872,16 +828,15 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
                 setDrivyaFolderStack(nextStack);
                 const parent = nextStack[nextStack.length - 1];
                 setTargetDirId(parent.id);
-                setTargetDirName(parent.name === "My Drive" ? "My Drive (Root)" : parent.name);
+                setTargetDirName(parent.name === "My Vault" ? "My Vault (Root)" : parent.name);
               }}
-              className="text-[10px] font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+              className="text-[10px] font-bold text-[#0061FF] hover:underline flex items-center gap-1 cursor-pointer"
             >
               <ArrowLeft className="h-2.5 w-2.5" /> Back
             </button>
           )}
         </div>
 
-        {/* Dynamic breadcrumb path display */}
         <div className="px-4 py-1.5 border-b border-border/20 bg-secondary/5 flex items-center gap-1 overflow-x-auto scrollbar-hide shrink-0 text-[10.5px]">
           {drivyaFolderStack.map((f, idx) => {
             const isLast = idx === drivyaFolderStack.length - 1;
@@ -895,10 +850,10 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
                     const nextStack = drivyaFolderStack.slice(0, idx + 1);
                     setDrivyaFolderStack(nextStack);
                     setTargetDirId(f.id);
-                    setTargetDirName(f.name === "My Drive" ? "My Drive (Root)" : f.name);
+                    setTargetDirName(f.name === "My Vault" ? "My Vault (Root)" : f.name);
                   }}
                   className={cn(
-                    "font-medium transition-colors hover:text-primary cursor-pointer max-w-[80px] truncate",
+                    "font-medium transition-colors hover:text-[#0061FF] cursor-pointer max-w-[80px] truncate",
                     isLast ? "text-foreground font-semibold pointer-events-none" : "text-muted-foreground"
                   )}
                 >
@@ -909,7 +864,6 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
           })}
         </div>
 
-        {/* Scrollable list of child subfolders */}
         <div className="flex-1 overflow-y-auto max-h-[140px] min-h-[90px] px-2 py-1 space-y-0.5 bg-secondary/5">
           {getDrivyaChildren(drivyaFolderStack[drivyaFolderStack.length - 1].id).length === 0 ? (
             <div className="flex flex-col items-center justify-center py-6 text-center text-muted-foreground/45">
@@ -939,7 +893,6 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
           )}
         </div>
 
-        {/* Destination indicator + Import button */}
         <div className="px-4 pt-2 pb-4 border-t border-border/40 bg-secondary/10 space-y-2.5">
           <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
             <Folder className="h-3 w-3 text-amber-500 shrink-0" />
@@ -957,9 +910,9 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
             type="button"
             onClick={handleImport}
             disabled={selectedCount === 0 || isOverQuota}
-            id="gdrive-import-btn"
+            id="dropbox-import-btn"
             className={cn(
-              "w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-primary h-10 text-sm font-semibold text-primary-foreground shadow-glow hover:opacity-90 active:translate-y-px transition-all cursor-pointer",
+              "w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#0061FF] to-[#004CD6] h-10 text-sm font-semibold text-white shadow-glow hover:opacity-90 active:translate-y-px transition-all cursor-pointer",
               (selectedCount === 0 || isOverQuota) && "opacity-40 cursor-not-allowed active:translate-y-0 shadow-none hover:opacity-40"
             )}
           >
@@ -977,10 +930,10 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
       {!importSummary ? (
         <div className="flex items-center justify-between pb-4 border-b border-border/40">
           <div className="flex items-center gap-3">
-            <Loader2 className="h-5 w-5 text-primary animate-spin" />
+            <Loader2 className="h-5 w-5 text-[#0061FF] animate-spin" />
             <div>
               <h4 className="text-sm font-semibold text-foreground">Streaming files to Drivya...</h4>
-              <p className="text-xs text-muted-foreground mt-0.5">Transferring directly from Google servers.</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Transferring directly from Dropbox servers.</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -991,7 +944,7 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
             >
               Cancel Import
             </button>
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-secondary/35 border border-border/60 text-primary animate-pulse">Keep tab open</span>
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-secondary/35 border border-border/60 text-[#0061FF] animate-pulse">Keep tab open</span>
           </div>
         </div>
       ) : (
@@ -1039,7 +992,7 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
           </p>
           {failedFileIds.length > 0 && !importSummary.cancelled && (
             <button type="button" onClick={() => handleRetry(failedFileIds)}
-              className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary/10 hover:bg-primary/20 border border-primary/30 px-4 h-9 text-xs font-semibold text-primary transition-all cursor-pointer">
+              className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#0061FF]/10 hover:bg-[#0061FF]/20 border border-[#0061FF]/30 px-4 h-9 text-xs font-semibold text-[#0061FF] transition-all cursor-pointer">
               <RefreshCw className="h-3.5 w-3.5" /> Retry {failedFileIds.length} Failed
             </button>
           )}
@@ -1064,9 +1017,9 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
               <div className="flex items-center justify-between text-xs">
                 <span className="font-semibold text-foreground truncate max-w-[65%]">{item.name}</span>
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className={cn("font-bold uppercase tracking-wider text-[9px] px-2 py-0.5 rounded-full", isDone && "bg-emerald-500/10 text-emerald-400", isFailed && "bg-destructive/10 text-destructive", isDownloading && "bg-primary/10 text-primary animate-pulse", item.status === "waiting" && "bg-muted text-muted-foreground")}>{item.status}</span>
+                  <span className={cn("font-bold uppercase tracking-wider text-[9px] px-2 py-0.5 rounded-full", isDone && "bg-emerald-500/10 text-emerald-400", isFailed && "bg-destructive/10 text-destructive", isDownloading && "bg-[#0061FF]/10 text-[#0061FF] animate-pulse", item.status === "waiting" && "bg-muted text-muted-foreground")}>{item.status}</span>
                   {isFailed && (
-                    <button type="button" onClick={() => handleRetry([id])} className="inline-flex h-6 w-6 items-center justify-center rounded-lg bg-secondary/80 hover:bg-secondary border border-border text-primary transition-all cursor-pointer" title="Retry">
+                    <button type="button" onClick={() => handleRetry([id])} className="inline-flex h-6 w-6 items-center justify-center rounded-lg bg-secondary/80 hover:bg-secondary border border-border text-[#0061FF] transition-all cursor-pointer" title="Retry">
                       <RefreshCw className="h-3 w-3" />
                     </button>
                   )}
@@ -1074,10 +1027,10 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
               </div>
               <div className="w-full h-1.5 bg-secondary/30 rounded-full overflow-hidden">
                 <motion.div initial={{ width: 0 }} animate={{ width: `${item.percent}%` }} transition={{ duration: 0.3 }}
-                  className={cn("h-full rounded-full", isFailed ? "bg-destructive" : isDone ? "bg-emerald-500" : "bg-primary")} />
+                  className={cn("h-full rounded-full", isFailed ? "bg-destructive" : isDone ? "bg-emerald-500" : "bg-[#0061FF]")} />
               </div>
               {isFailed && item.error && <p className="text-[10px] text-destructive italic">Error: {item.error}</p>}
-              {isDownloading && <p className="text-[10px] text-primary text-right tabular-nums">{item.percent}%</p>}
+              {isDownloading && <p className="text-[10px] text-[#0061FF] text-right tabular-nums">{item.percent}%</p>}
             </div>
           );
         })}
@@ -1085,15 +1038,12 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
     </div>
   );
 
-  // ─── RENDER ──────────────────────────────────────────────────────
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5">
-      {/* Backdrop */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         onClick={handleClose}
         className="absolute inset-0 bg-background/60 dark:bg-black/65 backdrop-blur-md" />
 
-      {/* Modal */}
       <motion.div
         initial={{ opacity: 0, scale: 0.96, y: 16 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -1101,37 +1051,34 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
         transition={{ type: "spring", stiffness: 360, damping: 28 }}
         className="relative flex flex-col w-full max-w-5xl h-[90vh] bg-background/97 dark:bg-card/95 text-foreground border border-border/80 rounded-2xl shadow-elegant backdrop-blur-lg noise overflow-hidden z-10"
       >
-        {/* Decorative glows */}
-        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-primary/8 rounded-full blur-[80px] pointer-events-none" />
+        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-[#0061FF]/8 rounded-full blur-[80px] pointer-events-none" />
         <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-accent/6 rounded-full blur-[80px] pointer-events-none" />
 
-        {/* ── Header ── */}
         <div className="relative flex items-end lg:items-center justify-between px-5 py-4 border-b border-border/70 bg-secondary/10 z-10 shrink-0">
           <div className="flex-col md:flex-row flex md:items-center gap-3">
             <div className="flex h-7 w-7 items-center justify-center">
-              <img src={GDriveLogo} alt="" />
+              <img src={dropboxLogo} alt="" className="h-6 w-6" />
             </div>
             <div>
-              <h2 className="hidden lg:block text-sm font-bold tracking-tight text-foreground font-display">Import from Google Drive</h2>
-              {isConnected && googleEmail && (
+              <h2 className="hidden lg:block text-sm font-bold tracking-tight text-foreground font-display">Import from Dropbox</h2>
+              {isConnected && dropboxEmail && (
                 <p className="text-[11px] text-muted-foreground mt-0.5">
-                  Connected as <span className="text-foreground font-semibold">{googleEmail}</span>
+                  Connected as <span className="text-foreground font-semibold">{dropboxEmail}</span>
                 </p>
               )}
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Mobile tab switcher */}
             {isConnected && !isImporting && (
               <div className="flex md:hidden items-center bg-secondary/30 border border-border rounded-lg p-0.5">
-                <button type="button" onClick={() => setMobileTab("browse")} className={cn("px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer", mobileTab === "browse" ? "bg-secondary/80 text-primary shadow-sm" : "text-muted-foreground")}>
+                <button type="button" onClick={() => setMobileTab("browse")} className={cn("px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer", mobileTab === "browse" ? "bg-secondary/80 text-[#0061FF] shadow-sm" : "text-muted-foreground")}>
                   Browse
                 </button>
-                <button type="button" onClick={() => setMobileTab("queue")} className={cn("px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer relative", mobileTab === "queue" ? "bg-secondary/80 text-primary shadow-sm" : "text-muted-foreground")}>
+                <button type="button" onClick={() => setMobileTab("queue")} className={cn("px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer relative", mobileTab === "queue" ? "bg-secondary/80 text-[#0061FF] shadow-sm" : "text-muted-foreground")}>
                   Queue
                   {selectedCount > 0 && (
-                    <span className="absolute -top-1 -right-1 h-4 w-4 bg-primary text-primary-foreground rounded-full text-[9px] flex items-center justify-center font-bold">{selectedCount}</span>
+                    <span className="absolute -top-1 -right-1 h-4 w-4 bg-[#0061FF] text-white rounded-full text-[9px] flex items-center justify-center font-bold">{selectedCount}</span>
                   )}
                 </button>
               </div>
@@ -1140,7 +1087,7 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
             {isConnected && !isImporting && (
               <button type="button" onClick={handleDisconnect}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-destructive hover:bg-destructive/10 transition-colors cursor-pointer border border-transparent hover:border-destructive/20"
-                title="Disconnect Google account">
+                title="Disconnect Dropbox">
                 <LogOut className="h-4 w-4" />
               </button>
             )}
@@ -1151,27 +1098,23 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
           </div>
         </div>
 
-        {/* ── Body ── */}
         <div className="flex-1 overflow-hidden flex flex-col relative z-10">
           {authLoading ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-3">
-              <Loader2 className="h-8 w-8 text-primary animate-spin" />
-              <p className="text-xs text-muted-foreground">Checking Google connection...</p>
+              <Loader2 className="h-8 w-8 text-[#0061FF] animate-spin" />
+              <p className="text-xs text-muted-foreground">Checking Dropbox status...</p>
             </div>
           ) : !isConnected ? (
-            /* Connect Screen */
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center max-w-sm mx-auto">
               <div className="relative mb-6">
-                <div className="absolute -inset-2 rounded-full bg-gradient-primary opacity-25 blur-xl animate-pulse" />
+                <div className="absolute -inset-2 rounded-full bg-[#0061FF]/20 opacity-25 blur-xl animate-pulse" />
                 <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl bg-secondary/30 border border-border shadow-xl">
-                  <svg className="h-10 w-10 text-primary" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M7.71 3.5L1.15 15l3.43 6 6.55-11.5M9.73 3.5h13.12l-3.43 6H6.28M15.66 15H2.55l3.43 6h13.11" />
-                  </svg>
+                  <img src={dropboxLogo} alt="" className="h-10 w-10" />
                 </div>
               </div>
-              <h3 className="text-lg font-bold font-display text-foreground mb-2">Connect Google Drive</h3>
+              <h3 className="text-lg font-bold font-display text-foreground mb-2">Connect Dropbox</h3>
               <p className="text-sm text-muted-foreground leading-relaxed mb-6">
-                Drivya only requests read access to list and download the files you select.
+                Connect your Dropbox account to browse and import your files directly into Drivya.
               </p>
               {error && (
                 <div className="w-full flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/20 text-destructive text-xs rounded-xl mb-4 text-left">
@@ -1179,22 +1122,18 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
                   <span>{error}</span>
                 </div>
               )}
-              <button type="button" onClick={handleConnect} id="gdrive-connect-btn"
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-primary px-5 h-11 text-sm font-semibold text-primary-foreground shadow-glow hover:opacity-90 active:translate-y-px transition-all cursor-pointer">
-                Connect Google Account
+              <button type="button" onClick={handleConnect} id="dropbox-connect-btn"
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#0061FF] to-[#004CD6] px-5 h-11 text-sm font-semibold text-white shadow-glow hover:opacity-90 active:translate-y-px transition-all cursor-pointer">
+                Connect Dropbox Account
               </button>
             </div>
           ) : isImporting ? (
-            /* Import progress */
             ProgressView
           ) : (
-            /* Split-panel explorer */
             <div className="flex-1 overflow-hidden flex">
-              {/* LEFT: Drive browser */}
               <div className={cn("flex-[3] min-w-0 overflow-hidden flex flex-col", "hidden md:flex", mobileTab === "browse" && "flex! md:flex!")}>
                 {DrivePanel}
               </div>
-              {/* RIGHT: Import queue */}
               <div className={cn("w-[280px] shrink-0 overflow-hidden flex-col", "hidden md:flex", mobileTab === "queue" && "flex! md:flex! w-full!")}>
                 {QueuePanel}
               </div>
@@ -1202,7 +1141,6 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
           )}
         </div>
 
-        {/* ── Footer (after import done) ── */}
         {importSummary && (
           <div className="px-5 py-3.5 bg-secondary/10 border-t border-border/60 flex items-center justify-end gap-3 backdrop-blur-md relative z-20 shrink-0">
             <button type="button" onClick={handleClose}

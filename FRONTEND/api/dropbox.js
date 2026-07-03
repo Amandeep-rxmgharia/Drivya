@@ -3,73 +3,73 @@ import api from "./auth.js";
 const API_BASE = "http://localhost:3000";
 
 /**
- * Get the Google OAuth consent URL.
+ * Get the Dropbox OAuth consent URL.
  * @returns {Promise<{ url: string }>}
  */
-export const getGoogleAuthUrl = async () => {
-  const response = await api.get("/api/google/auth-url");
+export const getDropboxAuthUrl = async () => {
+  const response = await api.get("/api/dropbox/auth-url");
   return response.data;
 };
 
 /**
- * Check if the user has connected Google Drive.
+ * Check if the user has connected Dropbox.
  * @returns {Promise<{ connected: boolean, email: string }>}
  */
-export const getGoogleStatus = async () => {
-  const response = await api.get("/api/google/status");
+export const getDropboxStatus = async () => {
+  const response = await api.get("/api/dropbox/status");
   return response.data;
 };
 
 /**
- * Disconnect Google Drive.
+ * Disconnect Dropbox.
  * @returns {Promise<{ message: string }>}
  */
-export const disconnectGoogle = async () => {
-  const response = await api.post("/api/google/disconnect");
+export const disconnectDropbox = async () => {
+  const response = await api.post("/api/dropbox/disconnect");
   return response.data;
 };
 
 /**
- * List files in the user's Google Drive.
- * @param {{ pageToken?: string, query?: string, folderId?: string }} params
- * @returns {Promise<{ files: object[], nextPageToken?: string }>}
+ * List files in the user's Dropbox.
+ * @param {{ path?: string, cursor?: string, query?: string }} params
+ * @returns {Promise<{ files: object[], cursor?: string, hasMore: boolean }>}
  */
-export const listGoogleFiles = async ({ pageToken, query, folderId } = {}) => {
+export const listDropboxFiles = async ({ path: folderPath, cursor, query } = {}) => {
   const params = {};
-  if (pageToken) params.pageToken = pageToken;
+  if (folderPath) params.path = folderPath;
+  if (cursor) params.cursor = cursor;
   if (query) params.query = query;
-  if (folderId) params.folderId = folderId;
 
-  const response = await api.get("/api/google/files", { params });
+  const response = await api.get("/api/dropbox/files", { params });
   return response.data;
 };
 
 /**
- * Explicitly cancel active Google Drive import.
+ * Explicitly cancel active Dropbox import.
  * @returns {Promise<{ message: string }>}
  */
-export const cancelGoogleImport = async () => {
-  const response = await api.post("/api/google/import/cancel");
+export const cancelDropboxImport = async () => {
+  const response = await api.post("/api/dropbox/import/cancel");
   return response.data;
 };
 
 /**
- * Import files from Google Drive with real-time SSE progress.
+ * Import files from Dropbox with real-time SSE progress.
+ * Supports cancellation via signal.
  *
- * @param {string[]} fileIds - Google Drive file IDs to import
+ * @param {string[]} filePaths - Dropbox file paths to import
  * @param {string} directoryId - Target Drivya directory
  * @param {{ onStart?: Function, onProgress?: Function, onDone?: Function, onCancelled?: Function, onError?: Function }} callbacks
  * @param {AbortSignal} [signal] - AbortSignal to cancel the SSE request
  * @returns {Promise<void>}
  */
-export const importGoogleFiles = (fileIds, directoryId, callbacks = {}, signal = null) => {
+export const importDropboxFiles = (filePaths, directoryId, callbacks = {}, signal = null) => {
   return new Promise((resolve, reject) => {
-    // Use fetch for SSE since we need POST with a body
-    fetch(`${API_BASE}/api/google/import`, {
+    fetch(`${API_BASE}/api/dropbox/import`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ fileIds, directoryId }),
+      body: JSON.stringify({ filePaths, directoryId }),
       signal: signal || undefined,
     })
       .then(async (response) => {
@@ -88,7 +88,6 @@ export const importGoogleFiles = (fileIds, directoryId, callbacks = {}, signal =
 
           buffer += decoder.decode(value, { stream: true });
 
-          // Parse SSE events from buffer
           const lines = buffer.split("\n");
           buffer = lines.pop() || ""; // Keep incomplete line in buffer
 
@@ -132,6 +131,7 @@ export const importGoogleFiles = (fileIds, directoryId, callbacks = {}, signal =
       })
       .catch((err) => {
         if (err.name === "AbortError") {
+          // Handled via onCancelled callback or general UI state reset
           callbacks.onCancelled?.({ message: "Import cancelled by user" });
           resolve();
         } else {

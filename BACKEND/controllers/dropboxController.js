@@ -2,25 +2,25 @@ import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import fsp from "node:fs/promises";
-import mongoose from "mongoose";
 import User from "../models/userModel.js";
 import File from "../models/fileModel.js";
 import Directory from "../models/directoryModel.js";
 import {
-  getAuthUrl,
+  getDropboxAuthUrl as buildDropboxAuthUrl,
   getTokensFromCode,
-  createDriveClient,
+  getAccountInfo,
   revokeToken,
-} from "../config/googleOAuthConfig.js";
+} from "../config/dropboxOAuthConfig.js";
 import {
   encryptTokens,
   decryptTokens,
 } from "../services/google/googleTokenCrypto.js";
 import {
   listFiles,
+  searchFiles,
   getFileMetadata,
   streamImportFile,
-} from "../services/google/googleDriveService.js";
+} from "../services/dropbox/dropboxService.js";
 import { generateStorageName } from "../middlewares/uploadMiddleware.js";
 import { recordActivity } from "../services/activityService.js";
 import { ACTIVITY_ACTIONS } from "../constants/activityConstants.js";
@@ -37,10 +37,9 @@ const STATE_TTL = 10 * 60 * 1000; // 10 minutes
 // ─── Track active imports to prevent double-imports ───
 const activeImports = new Map(); // userId → AbortController
 
-// ─── Get Google OAuth URL ────────────────────────────────────
-export const getGoogleAuthUrl = async (req, res, next) => {
+// ─── Get Dropbox OAuth URL ─────────────────────────────────
+export const getDropboxAuthUrl = async (req, res, next) => {
   try {
-    // Generate CSRF state token bound to this user
     const state = randomBytes(32).toString("hex");
     pendingStates.set(state, {
       userId: req.user.id,
@@ -54,27 +53,27 @@ export const getGoogleAuthUrl = async (req, res, next) => {
       }
     }
 
-    const url = getAuthUrl(state);
+    const url = buildDropboxAuthUrl(state);
     return res.json({ url });
   } catch (err) {
     next(err);
   }
 };
 
-// ─── Google OAuth Callback ───────────────────────────────────
-export const googleCallback = async (req, res, next) => {
+// ─── Dropbox OAuth Callback ─────────────────────────────────
+export const dropboxCallback = async (req, res, next) => {
   try {
     const { code, state, error: oauthError } = req.query;
 
     if (oauthError) {
       return res.redirect(
-        `${process.env.CORS_ORIGIN}/dashboard/home?google=error&reason=${oauthError}`,
+        `${process.env.CORS_ORIGIN}/dashboard/home?dropbox=error&reason=${oauthError}`,
       );
     }
 
     if (!code || !state) {
       return res.redirect(
-        `${process.env.CORS_ORIGIN}/dashboard/home?google=error&reason=missing_params`,
+        `${process.env.CORS_ORIGIN}/dashboard/home?dropbox=error&reason=missing_params`,
       );
     }
 
@@ -82,57 +81,56 @@ export const googleCallback = async (req, res, next) => {
     const stateData = pendingStates.get(state);
     if (!stateData) {
       return res.redirect(
-        `${process.env.CORS_ORIGIN}/dashboard/home?google=error&reason=invalid_state`,
+        `${process.env.CORS_ORIGIN}/dashboard/home?dropbox=error&reason=invalid_state`,
       );
     }
     pendingStates.delete(state);
 
     if (Date.now() - stateData.createdAt > STATE_TTL) {
       return res.redirect(
-        `${process.env.CORS_ORIGIN}/dashboard/home?google=error&reason=expired_state`,
+        `${process.env.CORS_ORIGIN}/dashboard/home?dropbox=error&reason=expired_state`,
       );
     }
 
     // Exchange code for tokens
     const tokens = await getTokensFromCode(code);
 
-    // Get the user's Google email
-    const { oauth2Client } = createDriveClient(tokens);
-    const { google } = await import("googleapis");
-    const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client });
-    const userInfo = await oauth2.userinfo.get();
-    const googleEmail = userInfo.data.email || "";
+    // Get user info (email)
+    const accountInfo = await getAccountInfo(tokens.access_token);
 
     // Encrypt and store tokens
-    const encrypted = encryptTokens(tokens);
+    const encrypted = encryptTokens({
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+    });
 
     await User.updateOne(
       { _id: stateData.userId },
       {
-        googleDriveConnected: true,
-        googleDriveEmail: googleEmail,
-        googleTokensEnc: encrypted.enc,
-        googleTokensIv: encrypted.iv,
-        googleTokensAuthTag: encrypted.authTag,
+        dropboxConnected: true,
+        dropboxEmail: accountInfo.email,
+        dropboxTokensEnc: encrypted.enc,
+        dropboxTokensIv: encrypted.iv,
+        dropboxTokensAuthTag: encrypted.authTag,
       },
     );
 
     return res.redirect(
-      `${process.env.CORS_ORIGIN}/dashboard/home?google=connected`,
+      `${process.env.CORS_ORIGIN}/dashboard/home?dropbox=connected`,
     );
   } catch (err) {
-    console.error("[Google OAuth Callback] Error:", err.message);
+    console.error("[Dropbox OAuth Callback] Error:", err.message);
     return res.redirect(
-      `${process.env.CORS_ORIGIN}/dashboard/home?google=error&reason=token_exchange_failed`,
+      `${process.env.CORS_ORIGIN}/dashboard/home?dropbox=error&reason=token_exchange_failed`,
     );
   }
 };
 
-// ─── Get Google Connection Status ────────────────────────────
-export const getGoogleStatus = async (req, res, next) => {
+// ─── Get Dropbox Connection Status ──────────────────────────
+export const getDropboxStatus = async (req, res, next) => {
   try {
     const user = await User.findById(req.user.id)
-      .select("googleDriveConnected googleDriveEmail")
+      .select("dropboxConnected dropboxEmail")
       .lean();
 
     if (!user) {
@@ -140,117 +138,127 @@ export const getGoogleStatus = async (req, res, next) => {
     }
 
     return res.json({
-      connected: user.googleDriveConnected || false,
-      email: user.googleDriveEmail || "",
+      connected: user.dropboxConnected || false,
+      email: user.dropboxEmail || "",
     });
   } catch (err) {
     next(err);
   }
 };
 
-// ─── Disconnect Google Drive ─────────────────────────────────
-export const disconnectGoogle = async (req, res, next) => {
+// ─── Disconnect Dropbox ─────────────────────────────────────
+export const disconnectDropbox = async (req, res, next) => {
   try {
     const user = await User.findById(req.user.id)
       .select(
-        "googleDriveConnected googleTokensEnc googleTokensIv googleTokensAuthTag",
+        "dropboxConnected dropboxTokensEnc dropboxTokensIv dropboxTokensAuthTag",
       )
       .lean();
 
-    if (!user || !user.googleDriveConnected) {
-      return res.status(400).json({ message: "Google Drive not connected." });
+    if (!user || !user.dropboxConnected) {
+      return res.status(400).json({ message: "Dropbox not connected." });
     }
 
     // Try to revoke the token (best-effort)
     try {
       const tokens = decryptTokens({
-        enc: user.googleTokensEnc,
-        iv: user.googleTokensIv,
-        authTag: user.googleTokensAuthTag,
+        enc: user.dropboxTokensEnc,
+        iv: user.dropboxTokensIv,
+        authTag: user.dropboxTokensAuthTag,
       });
       if (tokens.access_token) {
         await revokeToken(tokens.access_token);
       }
     } catch (revokeErr) {
-      console.warn("[Google Disconnect] Token revoke failed:", revokeErr.message);
+      console.warn(
+        "[Dropbox Disconnect] Token revoke failed:",
+        revokeErr.message,
+      );
     }
 
     // Clear stored tokens
     await User.updateOne(
       { _id: req.user.id },
       {
-        googleDriveConnected: false,
-        googleDriveEmail: "",
-        googleTokensEnc: "",
-        googleTokensIv: "",
-        googleTokensAuthTag: "",
+        dropboxConnected: false,
+        dropboxEmail: "",
+        dropboxTokensEnc: "",
+        dropboxTokensIv: "",
+        dropboxTokensAuthTag: "",
       },
     );
 
-    return res.json({ message: "Google Drive disconnected." });
+    return res.json({ message: "Dropbox disconnected." });
   } catch (err) {
     next(err);
   }
 };
 
-// ─── Helper: Get decrypted tokens for current user ───────────
+// ─── Helper: Get decrypted tokens for current user ──────────
 async function getUserTokens(userId) {
   const user = await User.findById(userId)
     .select(
-      "googleDriveConnected googleTokensEnc googleTokensIv googleTokensAuthTag",
+      "dropboxConnected dropboxTokensEnc dropboxTokensIv dropboxTokensAuthTag",
     )
     .lean();
 
-  if (!user || !user.googleDriveConnected) {
+  if (!user || !user.dropboxConnected) {
     return null;
   }
 
   return decryptTokens({
-    enc: user.googleTokensEnc,
-    iv: user.googleTokensIv,
-    authTag: user.googleTokensAuthTag,
+    enc: user.dropboxTokensEnc,
+    iv: user.dropboxTokensIv,
+    authTag: user.dropboxTokensAuthTag,
   });
 }
 
-// ─── List Google Drive Files ─────────────────────────────────
-export const listGoogleFiles = async (req, res, next) => {
+// ─── List Dropbox Files ─────────────────────────────────────
+export const listDropboxFiles = async (req, res, next) => {
   try {
     const tokens = await getUserTokens(req.user.id);
     if (!tokens) {
-      return res
-        .status(400)
-        .json({ message: "Google Drive not connected." });
+      return res.status(400).json({ message: "Dropbox not connected." });
     }
 
-    const { pageToken, query, folderId } = req.query;
-    const result = await listFiles(tokens, { pageToken, query, folderId }, req.user.id);
+    const { path: folderPath, cursor, query } = req.query;
+
+    // If searching, use search endpoint
+    if (query && query.trim()) {
+      const result = await searchFiles(tokens, query.trim(), req.user.id);
+      return res.json(result);
+    }
+
+    const result = await listFiles(
+      tokens,
+      { path: folderPath || "", cursor },
+      req.user.id,
+    );
 
     return res.json(result);
   } catch (err) {
-    // Handle token expiry / revocation
-    if (err.code === 401 || err.response?.status === 401) {
-      // Token expired/revoked — mark as disconnected
+    if (err.status === 401) {
       await User.updateOne(
         { _id: req.user.id },
         {
-          googleDriveConnected: false,
-          googleDriveEmail: "",
-          googleTokensEnc: "",
-          googleTokensIv: "",
-          googleTokensAuthTag: "",
+          dropboxConnected: false,
+          dropboxEmail: "",
+          dropboxTokensEnc: "",
+          dropboxTokensIv: "",
+          dropboxTokensAuthTag: "",
         },
       );
       return res.status(401).json({
-        message: "Google authorization expired. Please reconnect.",
-        code: "GOOGLE_TOKEN_EXPIRED",
+        message: "Dropbox authorization expired. Please reconnect.",
+        code: "DROPBOX_TOKEN_EXPIRED",
       });
     }
     next(err);
   }
 };
 
-// ─── Cancel active Google import ─────────────────────────────
-export const cancelGoogleImport = async (req, res, next) => {
+// ─── Cancel active Dropbox import ───────────────────────────
+export const cancelDropboxImport = async (req, res, next) => {
   try {
     const userId = req.user.id;
     const controller = activeImports.get(userId);
@@ -264,8 +272,8 @@ export const cancelGoogleImport = async (req, res, next) => {
   }
 };
 
-// ─── Import Files from Google Drive (SSE streaming) ──────────
-export const importGoogleFiles = async (req, res, next) => {
+// ─── Import Files from Dropbox (SSE streaming) ──────────────
+export const importDropboxFiles = async (req, res, next) => {
   const userId = req.user.id;
 
   // Prevent concurrent imports for same user
@@ -289,19 +297,17 @@ export const importGoogleFiles = async (req, res, next) => {
     const tokens = await getUserTokens(userId);
     if (!tokens) {
       activeImports.delete(userId);
-      return res
-        .status(400)
-        .json({ message: "Google Drive not connected." });
+      return res.status(400).json({ message: "Dropbox not connected." });
     }
 
-    const { fileIds, directoryId } = req.body;
+    const { filePaths, directoryId } = req.body;
 
-    if (!fileIds || !Array.isArray(fileIds) || fileIds.length === 0) {
+    if (!filePaths || !Array.isArray(filePaths) || filePaths.length === 0) {
       activeImports.delete(userId);
       return res.status(400).json({ message: "No files selected." });
     }
 
-    if (fileIds.length > 20) {
+    if (filePaths.length > 20) {
       activeImports.delete(userId);
       return res
         .status(400)
@@ -332,15 +338,17 @@ export const importGoogleFiles = async (req, res, next) => {
     const metadataList = [];
     let totalSize = 0;
 
-    for (const fileId of fileIds) {
+    for (const filePath of filePaths) {
       try {
-        const meta = await getFileMetadata(tokens, fileId, userId);
+        const meta = await getFileMetadata(tokens, filePath, userId);
         if (meta.isFolder || !meta.canDownload) continue;
         metadataList.push(meta);
-        // Google Docs have no size, estimate 1MB
         totalSize += meta.size || 1 * 1024 * 1024;
       } catch (metaErr) {
-        console.warn(`[Import] Failed to get metadata for ${fileId}:`, metaErr.message);
+        console.warn(
+          `[Dropbox Import] Failed to get metadata for ${filePath}:`,
+          metaErr.message,
+        );
       }
     }
 
@@ -393,6 +401,7 @@ export const importGoogleFiles = async (req, res, next) => {
 
     // ─── Sequential import (1 file at a time) ───────────────
     for (let i = 0; i < metadataList.length; i++) {
+      // Check if cancelled
       if (abortController.signal.aborted) {
         cancelled = true;
         break;
@@ -404,7 +413,7 @@ export const importGoogleFiles = async (req, res, next) => {
 
       sendSSE("progress", {
         index: i,
-        fileId: meta.id,
+        fileId: meta.pathLower,
         fileName: meta.name,
         status: "downloading",
         percent: 0,
@@ -415,15 +424,18 @@ export const importGoogleFiles = async (req, res, next) => {
 
         const result = await streamImportFile(
           tokens,
-          meta.id,
+          meta.pathLower,
           destPath,
           (bytesWritten) => {
             const percent = estimatedSize
-              ? Math.min(99, Math.round((bytesWritten / estimatedSize) * 100))
+              ? Math.min(
+                  99,
+                  Math.round((bytesWritten / estimatedSize) * 100),
+                )
               : 50;
             sendSSE("progress", {
               index: i,
-              fileId: meta.id,
+              fileId: meta.pathLower,
               fileName: meta.name,
               status: "downloading",
               percent,
@@ -487,44 +499,46 @@ export const importGoogleFiles = async (req, res, next) => {
             size: fileDoc.size,
           },
           parentDirId: targetDirId,
-          metadata: { source: "google-drive" },
+          metadata: { source: "dropbox" },
         }).catch((err) =>
-          console.error("Activity[google-import]:", err.message),
+          console.error("Activity[dropbox-import]:", err.message),
         );
 
         imported.push({
-          fileId: meta.id,
+          fileId: meta.pathLower,
           fileName: fileDoc.originalName,
           size: result.bytesWritten,
         });
 
         sendSSE("progress", {
           index: i,
-          fileId: meta.id,
+          fileId: meta.pathLower,
           fileName: fileDoc.originalName,
           status: "complete",
           percent: 100,
         });
       } catch (importErr) {
+        // If cancelled, the error is expected
         if (abortController.signal.aborted) {
           cancelled = true;
+          // Clean up partial file
           await fsp.unlink(destPath).catch(() => {});
           break;
         }
 
         console.error(
-          `[Import] Failed to import ${meta.name}:`,
+          `[Dropbox Import] Failed to import ${meta.name}:`,
           importErr.message,
         );
         failed.push({
-          fileId: meta.id,
+          fileId: meta.pathLower,
           fileName: meta.name,
           error: importErr.message,
         });
 
         sendSSE("progress", {
           index: i,
-          fileId: meta.id,
+          fileId: meta.pathLower,
           fileName: meta.name,
           status: "failed",
           percent: 0,
@@ -555,8 +569,8 @@ export const importGoogleFiles = async (req, res, next) => {
       if (imported.length > 0) {
         const title =
           imported.length === 1
-            ? `Imported "${imported[0].fileName}" from Google Drive`
-            : `${imported.length} files imported from Google Drive`;
+            ? `Imported "${imported[0].fileName}" from Dropbox`
+            : `${imported.length} files imported from Dropbox`;
 
         createNotification(userId, {
           type: "upload",
@@ -564,7 +578,7 @@ export const importGoogleFiles = async (req, res, next) => {
           description: `Successfully imported to "${dir.name}".`,
           actionPath: "/dashboard/drive",
         }).catch((err) =>
-          console.error("Notification[google-import]:", err),
+          console.error("Notification[dropbox-import]:", err),
         );
       }
     }
@@ -585,59 +599,5 @@ export const importGoogleFiles = async (req, res, next) => {
     }
   } finally {
     activeImports.delete(userId);
-  }
-};
-
-// ─── Get Google Drive File Thumbnail Proxy ─────────────────────
-export const getGoogleThumbnail = async (req, res, next) => {
-  try {
-    const tokens = await getUserTokens(req.user.id);
-    if (!tokens) {
-      return res.status(400).json({ message: "Google Drive not connected." });
-    }
-
-    const { fileId } = req.params;
-    if (!fileId) {
-      return res.status(400).json({ message: "File ID is required." });
-    }
-
-    const { drive, oauth2Client } = createDriveClient(tokens, req.user.id);
-    const metaRes = await drive.files.get({
-      fileId,
-      fields: "thumbnailLink",
-      supportsAllDrives: true,
-    });
-
-    const thumbnailLink = metaRes.data.thumbnailLink;
-    if (!thumbnailLink) {
-      return res.status(404).json({ message: "Thumbnail not available for this file." });
-    }
-
-    // Google Drive thumbnails default to 220px; replace with 400px for crisp display
-    const highResThumbnail = thumbnailLink.replace(/=s\d+$/, "=s400");
-
-    // Fetch the fresh access token (auto-refreshes if expired)
-    const { token: freshAccessToken } = await oauth2Client.getAccessToken();
-
-    // Fetch the thumbnail using global fetch with Bearer token authentication
-    const response = await fetch(highResThumbnail, {
-      headers: {
-        Authorization: `Bearer ${freshAccessToken || tokens.access_token}`,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch thumbnail: ${response.statusText}`);
-    }
-
-    const contentType = response.headers.get("content-type") || "image/jpeg";
-    res.setHeader("Content-Type", contentType);
-    res.setHeader("Cache-Control", "public, max-age=86400");
-
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    return res.send(buffer);
-  } catch (err) {
-    next(err);
   }
 };

@@ -8,6 +8,7 @@ import {
   listGoogleFiles,
   importGoogleFiles,
   getGoogleThumbnail,
+  cancelGoogleImport,
 } from "../controllers/googleDriveController.js";
 
 const router = Router();
@@ -18,6 +19,7 @@ router.get("/status", authenticate, getGoogleStatus);
 router.post("/disconnect", authenticate, disconnectGoogle);
 router.get("/files", authenticate, listGoogleFiles);
 router.post("/import", authenticate, importGoogleFiles);
+router.post("/import/cancel", authenticate, cancelGoogleImport);
 router.get("/thumbnail/:fileId", authenticate, getGoogleThumbnail);
 
 export default router;

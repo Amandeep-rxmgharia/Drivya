@@ -138,6 +138,7 @@ export async function streamImportFile(
   destPath,
   onProgress,
   userId = null,
+  abortSignal = null,
 ) {
   const { drive } = createDriveClient(tokens, userId);
 
@@ -163,7 +164,7 @@ export async function streamImportFile(
     // Google Docs/Sheets/Slides — must use export
     const exportRes = await drive.files.export(
       { fileId: googleFileId, mimeType: exportInfo.exportMime },
-      { responseType: "stream" },
+      { responseType: "stream", signal: abortSignal || undefined },
     );
     stream = exportRes.data;
     finalMimeType = exportInfo.exportMime;
@@ -175,7 +176,7 @@ export async function streamImportFile(
     // Regular binary file — direct download
     const downloadRes = await drive.files.get(
       { fileId: googleFileId, alt: "media" },
-      { responseType: "stream" },
+      { responseType: "stream", signal: abortSignal || undefined },
     );
     stream = downloadRes.data;
   }
@@ -187,6 +188,18 @@ export async function streamImportFile(
   return new Promise((resolve, reject) => {
     const writer = fs.createWriteStream(destPath);
     let bytesWritten = 0;
+
+    if (abortSignal) {
+      const onAbort = () => {
+        stream.destroy(new Error("Import cancelled"));
+        writer.destroy();
+      };
+      if (abortSignal.aborted) {
+        onAbort();
+        return;
+      }
+      abortSignal.addEventListener("abort", onAbort, { once: true });
+    }
 
     stream.on("data", (chunk) => {
       bytesWritten += chunk.length;

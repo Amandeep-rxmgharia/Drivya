@@ -174,6 +174,29 @@ const userSchema = new Schema(
       type: String,
       default: "",
     },
+
+    // ─── Dropbox Integration ──────────────────────────────────
+    dropboxConnected: {
+      type: Boolean,
+      default: false,
+    },
+    dropboxEmail: {
+      type: String,
+      default: "",
+    },
+    // Encrypted Dropbox OAuth tokens at rest (AES-256-GCM)
+    dropboxTokensEnc: {
+      type: String,
+      default: "",
+    },
+    dropboxTokensIv: {
+      type: String,
+      default: "",
+    },
+    dropboxTokensAuthTag: {
+      type: String,
+      default: "",
+    },
   },
   {
     strict: "throw",

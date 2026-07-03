@@ -18,6 +18,7 @@ import {
   Kbd,
 } from "@/components/dashboard/dashboard-tokens";
 import { GoogleDriveModal } from "@/components/dashboard/GoogleDriveModal";
+import { DropboxModal } from "@/components/dashboard/DropboxModal";
 
 /* ───────────────────────── Hero ───────────────────────── */
 
@@ -42,7 +43,7 @@ function formatBytes(bytes) {
   return (bytes / (1024 * 1024 * 1024)).toFixed(1) + " GB";
 }
 
-function HeroSection({ userProfile, onImportGoogle }) {
+function HeroSection({ userProfile, onImportGoogle, onImportDropbox }) {
   const [stats, setStats] = useState(null);
 
   useEffect(() => {
@@ -115,7 +116,10 @@ function HeroSection({ userProfile, onImportGoogle }) {
               </span>
             </button>
 
-            <button className="group relative inline-flex h-11 items-center gap-3 overflow-hidden rounded-xl border border-border/60 bg-secondary/30 px-4 text-sm font-medium text-foreground/90 shadow-sm backdrop-blur-md transition-all duration-300 hover:scale-104 cursor-pointer active:scale-[0.98]">
+            <button
+              onClick={onImportDropbox}
+              className="group relative inline-flex h-11 items-center gap-3 overflow-hidden rounded-xl border border-border/60 bg-secondary/30 px-4 text-sm font-medium text-foreground/90 shadow-sm backdrop-blur-md transition-all duration-300 hover:scale-104 cursor-pointer active:scale-[0.98]"
+            >
               <div className="flex h-7 w-7 items-center justify-center rounded-[7px] bg-background shadow-sm ring-1 ring-border/50 transition-all duration-300 group-hover:ring-[#0061FF]/40 group-hover:shadow-[0_0_12px_-3px_#0061FF]">
               <img src={dropboxLogo} alt="" />
               </div>
@@ -515,20 +519,27 @@ function AnalyticsCard() {
 export default function Home() {
   const { userProfile } = useOutletContext?.() || {};
   const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false);
+  const [isDropboxModalOpen, setIsDropboxModalOpen] = useState(false);
 
-  // Check URL params for ?google=connected
+  // Check URL params for ?google=connected or ?dropbox=connected
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("google") === "connected") {
       setIsGoogleModalOpen(true);
-      // Clean up parameters
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (params.get("dropbox") === "connected") {
+      setIsDropboxModalOpen(true);
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
 
   return (
     <>
-      <HeroSection userProfile={userProfile} onImportGoogle={() => setIsGoogleModalOpen(true)} />
+      <HeroSection
+        userProfile={userProfile}
+        onImportGoogle={() => setIsGoogleModalOpen(true)}
+        onImportDropbox={() => setIsDropboxModalOpen(true)}
+      />
 
       <div className="lg:col-span-2 space-y-6">
         <AnalyticsCard />
@@ -538,6 +549,13 @@ export default function Home() {
       <GoogleDriveModal
         isOpen={isGoogleModalOpen}
         onClose={() => setIsGoogleModalOpen(false)}
+        currentDirId={null}
+        userProfile={userProfile}
+      />
+
+      <DropboxModal
+        isOpen={isDropboxModalOpen}
+        onClose={() => setIsDropboxModalOpen(false)}
         currentDirId={null}
         userProfile={userProfile}
       />
