@@ -32,17 +32,55 @@ export function deriveKind(name, mimeType) {
   // By extension
   const extMap = {
     pdf: "pdf",
-    doc: "document", docx: "document", odt: "document", rtf: "document",
-    xls: "document", xlsx: "document", csv: "document", ods: "document",
-    ppt: "document", pptx: "document", key: "document", odp: "document",
-    txt: "document", md: "document",
-    zip: "archive", rar: "archive", "7z": "archive", tar: "archive", gz: "archive",
-    js: "code", ts: "code", jsx: "code", tsx: "code", py: "code",
-    java: "code", c: "code", cpp: "code", go: "code", rs: "code",
-    html: "code", css: "code", json: "code", xml: "code", yaml: "code", yml: "code",
-    fig: "image", sketch: "image", psd: "image", ai: "image",
-    mp3: "audio", wav: "audio", ogg: "audio", flac: "audio", aac: "audio",
-    mp4: "video", mov: "video", avi: "video", mkv: "video", webm: "video",
+    doc: "document",
+    docx: "document",
+    odt: "document",
+    rtf: "document",
+    xls: "document",
+    xlsx: "document",
+    csv: "document",
+    ods: "document",
+    ppt: "document",
+    pptx: "document",
+    key: "document",
+    odp: "document",
+    txt: "document",
+    md: "document",
+    zip: "archive",
+    rar: "archive",
+    "7z": "archive",
+    tar: "archive",
+    gz: "archive",
+    js: "code",
+    ts: "code",
+    jsx: "code",
+    tsx: "code",
+    py: "code",
+    java: "code",
+    c: "code",
+    cpp: "code",
+    go: "code",
+    rs: "code",
+    html: "code",
+    css: "code",
+    json: "code",
+    xml: "code",
+    yaml: "code",
+    yml: "code",
+    fig: "image",
+    sketch: "image",
+    psd: "image",
+    ai: "image",
+    mp3: "audio",
+    wav: "audio",
+    ogg: "audio",
+    flac: "audio",
+    aac: "audio",
+    mp4: "video",
+    mov: "video",
+    avi: "video",
+    mkv: "video",
+    webm: "video",
   };
 
   return extMap[ext] || "document";
@@ -87,7 +125,9 @@ export async function recordActivity({
 
   // Compute today's date at midnight UTC for per-day deduplication
   const now = new Date();
-  const activityDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  const activityDate = new Date(
+    Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()),
+  );
 
   // Upsert: one document per (userId, resourceType, resourceId, action, activityDate).
   // Same file opened/downloaded on the same day → updates existing doc.
@@ -143,7 +183,7 @@ export async function listActivities({
   // ── Build aggregation pipeline ──
   const matchStage = {
     userId: userOid,
-    resourceType: "file"
+    resourceType: "file",
   };
   if (action) {
     matchStage.action = action;
@@ -165,8 +205,8 @@ export async function listActivities({
         _id: { resourceType: "$resourceType", resourceId: "$resourceId" },
         latestUpdatedAt: { $first: "$updatedAt" },
         latestActivityId: { $first: "$_id" },
-        action: { $first: "$action" },           // most recent action
-        actions: { $addToSet: "$action" },         // ALL unique actions
+        action: { $first: "$action" }, // most recent action
+        actions: { $addToSet: "$action" }, // ALL unique actions
         resourceType: { $first: "$resourceType" },
         resourceId: { $first: "$resourceId" },
         resourceSnapshot: { $first: "$resourceSnapshot" },
@@ -206,7 +246,10 @@ export async function listActivities({
     if (item.history) {
       for (const h of item.history) {
         const type = mapActionToType(h.action);
-        if (!actionMap[type] || new Date(h.updatedAt) > new Date(actionMap[type])) {
+        if (
+          !actionMap[type] ||
+          new Date(h.updatedAt) > new Date(actionMap[type])
+        ) {
           actionMap[type] = h.updatedAt;
         }
       }
@@ -219,7 +262,9 @@ export async function listActivities({
       }))
       .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
-    const actionsMapped = Array.from(new Set(item.actions.map(mapActionToType)));
+    const actionsMapped = Array.from(
+      new Set(item.actions.map(mapActionToType)),
+    );
 
     return {
       id: item.latestActivityId.toString(),
@@ -315,13 +360,21 @@ export async function getActivityStats(userId) {
     const userOid = new mongoose.Types.ObjectId(userId);
 
     const [stats] = await Activity.aggregate([
-      { $match: { userId: userOid, resourceType: "file", activityDate: { $gte: fortnightStart } } },
+      {
+        $match: {
+          userId: userOid,
+          resourceType: "file",
+          activityDate: { $gte: fortnightStart },
+        },
+      },
       {
         $facet: {
           openedToday: [
             {
               $match: {
-                action: { $in: [ACTIVITY_ACTIONS.OPENED, ACTIVITY_ACTIONS.EDITED] },
+                action: {
+                  $in: [ACTIVITY_ACTIONS.OPENED, ACTIVITY_ACTIONS.EDITED],
+                },
                 activityDate: { $gte: todayStart },
               },
             },
@@ -348,17 +401,35 @@ export async function getActivityStats(userId) {
           thisWeek: [
             {
               $match: {
-                activityDate: { $gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) }
-              }
+                activityDate: {
+                  $gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
+                },
+              },
             },
-            { $count: "count" }
+            { $count: "count" },
+          ],
+          uploadedThisWeek: [
+            {
+              $match: {
+                activityDate: {
+                  $gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
+                },
+                action: ACTIVITY_ACTIONS.UPLOADED,
+              },
+            },
+            { $count: "count" },
           ],
           dailyBreakdown: [
             {
               $group: {
                 _id: {
-                  date: { $dateToString: { format: "%Y-%m-%d", date: "$activityDate" } },
-                  action: "$action"
+                  date: {
+                    $dateToString: {
+                      format: "%Y-%m-%d",
+                      date: "$activityDate",
+                    },
+                  },
+                  action: "$action",
                 },
                 count: { $sum: 1 },
               },
@@ -372,6 +443,7 @@ export async function getActivityStats(userId) {
     const uploadedToday = stats?.uploadedToday[0]?.count || 0;
     const downloadedToday = stats?.downloadedToday[0]?.count || 0;
     const thisWeek = stats?.thisWeek[0]?.count || 0;
+    const uploadedThisWeek = stats?.uploadedThisWeek[0]?.count || 0;
 
     // Generate date strings for last 7 days and prev 7 days in YYYY-MM-DD
     const last7Days = [];
@@ -400,15 +472,17 @@ export async function getActivityStats(userId) {
       if (action === ACTIVITY_ACTIONS.OPENED) {
         // sum both opened and edited
         const openedMatch = dailyBreakdown.find(
-          (b) => b._id.date === dateStr && b._id.action === ACTIVITY_ACTIONS.OPENED
+          (b) =>
+            b._id.date === dateStr && b._id.action === ACTIVITY_ACTIONS.OPENED,
         );
         const editedMatch = dailyBreakdown.find(
-          (b) => b._id.date === dateStr && b._id.action === ACTIVITY_ACTIONS.EDITED
+          (b) =>
+            b._id.date === dateStr && b._id.action === ACTIVITY_ACTIONS.EDITED,
         );
         return (openedMatch?.count || 0) + (editedMatch?.count || 0);
       }
       const match = dailyBreakdown.find(
-        (b) => b._id.date === dateStr && b._id.action === action
+        (b) => b._id.date === dateStr && b._id.action === action,
       );
       return match?.count || 0;
     };
@@ -417,18 +491,33 @@ export async function getActivityStats(userId) {
       return range.map((dateStr) => getCountForDateAndAction(dateStr, action));
     };
 
-    const uploadsValues = getValuesForRange(last7Days, ACTIVITY_ACTIONS.UPLOADED);
+    const uploadsValues = getValuesForRange(
+      last7Days,
+      ACTIVITY_ACTIONS.UPLOADED,
+    );
     const openedValues = getValuesForRange(last7Days, ACTIVITY_ACTIONS.OPENED);
-    const downloadsValues = getValuesForRange(last7Days, ACTIVITY_ACTIONS.DOWNLOADED);
+    const downloadsValues = getValuesForRange(
+      last7Days,
+      ACTIVITY_ACTIONS.DOWNLOADED,
+    );
 
     const sum = (arr) => arr.reduce((a, b) => a + b, 0);
     const currentUploads = sum(uploadsValues);
     const currentOpened = sum(openedValues);
     const currentDownloads = sum(downloadsValues);
 
-    const prevUploadsValues = getValuesForRange(prev7Days, ACTIVITY_ACTIONS.UPLOADED);
-    const prevOpenedValues = getValuesForRange(prev7Days, ACTIVITY_ACTIONS.OPENED);
-    const prevDownloadsValues = getValuesForRange(prev7Days, ACTIVITY_ACTIONS.DOWNLOADED);
+    const prevUploadsValues = getValuesForRange(
+      prev7Days,
+      ACTIVITY_ACTIONS.UPLOADED,
+    );
+    const prevOpenedValues = getValuesForRange(
+      prev7Days,
+      ACTIVITY_ACTIONS.OPENED,
+    );
+    const prevDownloadsValues = getValuesForRange(
+      prev7Days,
+      ACTIVITY_ACTIONS.DOWNLOADED,
+    );
 
     const prevUploads = sum(prevUploadsValues);
     const prevOpened = sum(prevOpenedValues);
@@ -458,6 +547,7 @@ export async function getActivityStats(userId) {
       uploadedToday,
       downloadedToday,
       thisWeek,
+      uploadedThisWeek,
       avgPerDay,
       weeklyData: {
         uploads: {

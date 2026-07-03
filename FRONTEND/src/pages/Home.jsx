@@ -55,7 +55,8 @@ function HeroSection({ userProfile, onImportGoogle, onImportDropbox }) {
   }, []);
 
   const displayName = userProfile?.displayName || userProfile?.name || "there";
-  const uploadCount = stats?.thisWeek ?? 0;
+  const uploadCount = stats?.uploadedThisWeek ?? 0;
+  console.log(stats);
   const changeText = stats?.weeklyData?.uploads?.change || "0%";
   const storageUsed = userProfile?.storageUsed || 0;
   const storageLimit = userProfile?.storageLimit || 1073741824;
