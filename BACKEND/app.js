@@ -18,6 +18,7 @@ import googleDriveRoutes, { googleCallbackHandler } from "./routes/googleDriveRo
 import dropboxRoutes, { dropboxCallbackHandler } from "./routes/dropboxRoutes.js";
 import { connectDb } from "./config/db.js";
 import { ensureStorageRoot } from "./services/storageService.js";
+import { migrateActivityDate } from "./scripts/migrateActivityDate.js";
 
 const { PORT = 3000, CORS_ORIGIN = "http://localhost:5173", NODE_ENV } = process.env;
 
@@ -26,6 +27,9 @@ await connectDb();
 
 // ─── Ensure Storage Directory Exists ─────────────────────────
 await ensureStorageRoot();
+
+// ─── Run Migrations ──────────────────────────────────────────
+await migrateActivityDate();
 
 const app = express();
 

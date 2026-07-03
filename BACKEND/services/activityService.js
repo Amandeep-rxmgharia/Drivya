@@ -85,19 +85,22 @@ export async function recordActivity({
     );
   }
 
-  // Upsert: one document per (userId, resourceType, resourceId, action).
-  // If a document already exists for this combo, Mongoose's `timestamps`
-  // option auto-bumps `updatedAt`. The listing pipeline sorts by
-  // `updatedAt` so the item floats to the top of the activity list.
+  // Compute today's date at midnight UTC for per-day deduplication
+  const now = new Date();
+  const activityDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+
+  // Upsert: one document per (userId, resourceType, resourceId, action, activityDate).
+  // Same file opened/downloaded on the same day → updates existing doc.
+  // Same file opened/downloaded on a different day → creates a new doc.
   const doc = await Activity.findOneAndUpdate(
-    { userId, action, resourceType, resourceId },
+    { userId, action, resourceType, resourceId, activityDate },
     {
       $set: {
         resourceSnapshot,
         parentDirId,
         metadata,
       },
-      $setOnInsert: { userId, action, resourceType, resourceId },
+      $setOnInsert: { userId, action, resourceType, resourceId, activityDate },
     },
     { upsert: true, new: true },
   );
@@ -312,14 +315,14 @@ export async function getActivityStats(userId) {
     const userOid = new mongoose.Types.ObjectId(userId);
 
     const [stats] = await Activity.aggregate([
-      { $match: { userId: userOid, resourceType: "file", createdAt: { $gte: fortnightStart } } },
+      { $match: { userId: userOid, resourceType: "file", activityDate: { $gte: fortnightStart } } },
       {
         $facet: {
           openedToday: [
             {
               $match: {
                 action: { $in: [ACTIVITY_ACTIONS.OPENED, ACTIVITY_ACTIONS.EDITED] },
-                createdAt: { $gte: todayStart },
+                activityDate: { $gte: todayStart },
               },
             },
             { $count: "count" },
@@ -328,7 +331,7 @@ export async function getActivityStats(userId) {
             {
               $match: {
                 action: ACTIVITY_ACTIONS.UPLOADED,
-                createdAt: { $gte: todayStart },
+                activityDate: { $gte: todayStart },
               },
             },
             { $count: "count" },
@@ -337,7 +340,7 @@ export async function getActivityStats(userId) {
             {
               $match: {
                 action: ACTIVITY_ACTIONS.DOWNLOADED,
-                createdAt: { $gte: todayStart },
+                activityDate: { $gte: todayStart },
               },
             },
             { $count: "count" },
@@ -345,7 +348,7 @@ export async function getActivityStats(userId) {
           thisWeek: [
             {
               $match: {
-                createdAt: { $gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) }
+                activityDate: { $gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) }
               }
             },
             { $count: "count" }
@@ -354,7 +357,7 @@ export async function getActivityStats(userId) {
             {
               $group: {
                 _id: {
-                  date: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+                  date: { $dateToString: { format: "%Y-%m-%d", date: "$activityDate" } },
                   action: "$action"
                 },
                 count: { $sum: 1 },

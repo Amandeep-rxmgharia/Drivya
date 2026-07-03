@@ -49,6 +49,11 @@ const activitySchema = new Schema(
       type: Schema.Types.Mixed,
       default: null,
     },
+    /** Date (midnight UTC) the activity occurred — enables per-day deduplication. */
+    activityDate: {
+      type: Date,
+      required: true,
+    },
   },
   {
     strict: "throw",
@@ -64,10 +69,11 @@ activitySchema.index({ userId: 1, createdAt: -1 });
 // Filtered listing by action type (covers ?action=opened / ?action=uploaded)
 activitySchema.index({ userId: 1, action: 1, createdAt: -1 });
 
-// Unique constraint: one activity document per (user, resource, action).
-// This powers the upsert in recordActivity and prevents duplicate documents.
+// Unique constraint: one activity document per (user, resource, action, day).
+// This powers the upsert in recordActivity — same file on different days
+// creates separate documents, but multiple actions on the same day are deduped.
 activitySchema.index(
-  { userId: 1, resourceType: 1, resourceId: 1, action: 1 },
+  { userId: 1, resourceType: 1, resourceId: 1, action: 1, activityDate: 1 },
   { unique: true },
 );
 

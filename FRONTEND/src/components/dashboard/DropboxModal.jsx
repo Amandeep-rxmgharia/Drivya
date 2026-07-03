@@ -112,7 +112,7 @@ function DropboxThumbnail({ filePath, alt, fallbackIcon: FallbackIcon, className
   if (loading) {
     return (
       <div className="w-full h-full flex items-center justify-center bg-slate-800/10">
-        <Loader2 className="h-4 w-4 text-[#0061FF] animate-spin" />
+        <Loader2 className="h-4 w-4 text-primary animate-spin" />
       </div>
     );
   }
@@ -152,9 +152,9 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
 
   // ── Drivya destination folder state ─────────────────────────
   const [rawDrivyaDirs, setRawDrivyaDirs] = useState([]);
-  const [drivyaFolderStack, setDrivyaFolderStack] = useState([{ id: "root", name: "My Vault" }]);
+  const [drivyaFolderStack, setDrivyaFolderStack] = useState([{ id: "root", name: "My Drive" }]);
   const [targetDirId, setTargetDirId] = useState(currentDirId || "root");
-  const [targetDirName, setTargetDirName] = useState("My Vault (Root)");
+  const [targetDirName, setTargetDirName] = useState("My Drive (Root)");
 
   // ── Mobile tab state ─────────────────────────────────────────
   const [mobileTab, setMobileTab] = useState("browse"); // 'browse' | 'queue'
@@ -206,9 +206,9 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
     if (!isOpen || rawDrivyaDirs.length === 0) return;
 
     if (!currentDirId || currentDirId === "root") {
-      setDrivyaFolderStack([{ id: "root", name: "My Vault" }]);
+      setDrivyaFolderStack([{ id: "root", name: "My Drive" }]);
       setTargetDirId("root");
-      setTargetDirName("My Vault (Root)");
+      setTargetDirName("My Drive (Root)");
       return;
     }
 
@@ -220,7 +220,7 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
       dirMap[d._id.toString()] = d;
     });
 
-    const stack = [{ id: "root", name: "My Vault" }];
+    const stack = [{ id: "root", name: "My Drive" }];
     
     currentFolder.path.forEach(parentId => {
       const parentDir = dirMap[parentId.toString()];
@@ -577,8 +577,8 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
         transition={{ duration: 0.15 }}
         onClick={() => isFolder ? handleFolderClick(file) : handleToggleFile(file)}
         className={cn(
-          "group relative flex flex-col h-[160px] bg-secondary/20 border border-border/70 rounded-xl overflow-hidden transition-all duration-200 select-none cursor-pointer hover:border-[#0061FF]/40 hover:-translate-y-0.5 hover:shadow-[0_0_12px_rgba(0,97,255,0.15)]",
-          isSelected && "border-[#0061FF] bg-[#0061FF]/5 ring-1 ring-[#0061FF]/20 shadow-[0_0_12px_rgba(0,97,255,0.15)]"
+          "group relative flex flex-col h-[160px] bg-secondary/20 border border-border/70 rounded-xl overflow-hidden transition-all duration-200 select-none cursor-pointer hover:border-primary/40 hover:-translate-y-0.5 hover:shadow-glow",
+          isSelected && "border-primary bg-primary/5 ring-1 ring-primary/20 shadow-glow"
         )}
       >
         <div className={cn("relative w-full h-[95px] flex items-center justify-center bg-gradient-to-br overflow-hidden rounded-t-xl", bg)}>
@@ -605,7 +605,7 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
               className={cn(
                 "absolute top-2 right-2 h-5 w-5 flex items-center justify-center rounded-md border backdrop-blur-sm transition-all duration-200 cursor-pointer shadow-sm z-10",
                 isSelected
-                  ? "border-[#0061FF] bg-[#0061FF] text-white"
+                  ? "border-primary bg-primary text-primary-foreground"
                   : "border-white/30 bg-black/20 text-transparent hover:border-white/60 hover:bg-black/40"
               )}
             >
@@ -614,7 +614,7 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
           )}
         </div>
         <div className="flex-1 px-2.5 py-2 flex flex-col justify-between bg-secondary/5">
-          <p className="text-[11px] font-semibold text-foreground line-clamp-1 group-hover:text-[#0061FF] transition-colors" title={file.name}>{file.name}</p>
+          <p className="text-[11px] font-semibold text-foreground line-clamp-1 group-hover:text-primary transition-colors" title={file.name}>{file.name}</p>
           <div className="flex items-center justify-between text-[10px] text-muted-foreground">
             <span>{dateStr}</span>
             <span>{isFolder ? "Folder" : file.size ? formatSize(file.size) : "—"}</span>
@@ -636,7 +636,7 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
         onClick={() => isFolder ? handleFolderClick(file) : handleToggleFile(file)}
         className={cn(
           "border-b border-border/20 group hover:bg-secondary/15 transition-colors cursor-pointer",
-          isSelected && "bg-[#0061FF]/5 hover:bg-[#0061FF]/10"
+          isSelected && "bg-primary/5 hover:bg-primary/10"
         )}
       >
         <td className="py-2.5 pl-2 pr-1 w-8" onClick={(e) => e.stopPropagation()}>
@@ -646,7 +646,7 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
               onClick={() => handleToggleFile(file)}
               className={cn(
                 "flex h-4.5 w-4.5 items-center justify-center rounded border transition-colors cursor-pointer",
-                isSelected ? "border-[#0061FF] bg-[#0061FF] text-white" : "border-border bg-secondary/35 hover:border-[#0061FF]/60"
+                isSelected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-secondary/35 hover:border-primary/60"
               )}
             >
               {isSelected && <Check className="h-2.5 w-2.5 stroke-[3.5]" />}
@@ -654,7 +654,7 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
           ) : <div className="h-4.5 w-4.5" />}
         </td>
         <td className="py-2.5 pr-2">
-          <div className="flex items-center gap-2 text-foreground group-hover:text-[#0061FF] transition-colors">
+          <div className="flex items-center gap-2 text-foreground group-hover:text-primary transition-colors">
             <Icon className={cn("h-4 w-4 shrink-0", isFolder ? "text-[#0061FF]" : color)} />
             <span className="text-xs font-semibold truncate max-w-[180px]">{file.name}</span>
           </div>
@@ -691,7 +691,7 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
                   onClick={() => handleBreadcrumbNav(idx)}
                   className={cn(
                     "font-semibold transition-colors cursor-pointer",
-                    isLast ? "text-[#0061FF] cursor-default" : "text-muted-foreground hover:text-foreground"
+                    isLast ? "text-primary cursor-default" : "text-muted-foreground hover:text-foreground"
                   )}
                   disabled={isLast}
                 >
@@ -704,10 +704,10 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
 
         <div className="flex items-center gap-2 shrink-0">
           <div className="flex items-center bg-secondary/30 border border-border rounded-lg p-0.5">
-            <button type="button" onClick={() => setViewMode("grid")} className={cn("p-1.5 rounded-md transition-all cursor-pointer", viewMode === "grid" ? "bg-secondary/80 text-[#0061FF] shadow-sm" : "text-muted-foreground hover:text-foreground")}>
+            <button type="button" onClick={() => setViewMode("grid")} className={cn("p-1.5 rounded-md transition-all cursor-pointer", viewMode === "grid" ? "bg-secondary/80 text-primary shadow-sm" : "text-muted-foreground hover:text-foreground")}>
               <LayoutGrid className="h-3.5 w-3.5" />
             </button>
-            <button type="button" onClick={() => setViewMode("list")} className={cn("p-1.5 rounded-md transition-all cursor-pointer", viewMode === "list" ? "bg-secondary/80 text-[#0061FF] shadow-sm" : "text-muted-foreground hover:text-foreground")}>
+            <button type="button" onClick={() => setViewMode("list")} className={cn("p-1.5 rounded-md transition-all cursor-pointer", viewMode === "list" ? "bg-secondary/80 text-primary shadow-sm" : "text-muted-foreground hover:text-foreground")}>
               <List className="h-3.5 w-3.5" />
             </button>
           </div>
@@ -718,7 +718,7 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search Dropbox..."
-              className="pl-8 pr-3 py-1.5 text-xs bg-secondary/15 border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0061FF]/40 focus:border-[#0061FF] transition-all w-44 text-foreground placeholder:text-muted-foreground/50"
+              className="pl-8 pr-3 py-1.5 text-xs bg-secondary/15 border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary transition-all w-44 text-foreground placeholder:text-muted-foreground/50"
             />
           </div>
         </div>
@@ -731,7 +731,7 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
             onClick={handleSelectAllToggle}
             className={cn(
               "flex h-4.5 w-4.5 items-center justify-center rounded border transition-colors cursor-pointer shrink-0",
-              isAllSelected ? "border-[#0061FF] bg-[#0061FF] text-white" : "border-border bg-secondary/35 hover:border-[#0061FF]/60"
+              isAllSelected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-secondary/35 hover:border-primary/60"
             )}
           >
             {isAllSelected && <Check className="h-2.5 w-2.5 stroke-[3.5]" />}
@@ -767,7 +767,7 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
                   <thead>
                     <tr className="border-b border-border/40 text-muted-foreground">
                       <th className="w-8 py-2 pl-2">
-                        <button type="button" onClick={handleSelectAllToggle} className={cn("flex h-4.5 w-4.5 items-center justify-center rounded border transition-colors cursor-pointer", isAllSelected ? "border-[#0061FF] bg-[#0061FF] text-white" : "border-border bg-secondary/35 hover:border-[#0061FF]/60")}>
+                        <button type="button" onClick={handleSelectAllToggle} className={cn("flex h-4.5 w-4.5 items-center justify-center rounded border transition-colors cursor-pointer", isAllSelected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-secondary/35 hover:border-primary/60")}>
                           {isAllSelected && <Check className="h-2.5 w-2.5 stroke-[3.5]" />}
                         </button>
                       </th>
@@ -807,7 +807,7 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
           <div className="flex items-center justify-between text-[11px] mb-1.5">
             <span className="flex items-center gap-1.5 text-muted-foreground font-medium">
               <HardDrive className="h-3 w-3" />
-              Vault Storage
+              Drivya Storage
             </span>
             <span className={cn("font-bold", isOverQuota ? "text-destructive animate-pulse" : "text-foreground")}>
               {formatSize(Math.max(0, storageRemaining))} free
@@ -815,7 +815,7 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
           </div>
           <div className="h-1 bg-secondary/50 rounded-full overflow-hidden">
             <div
-              className={cn("h-full rounded-full transition-all duration-500", isOverQuota ? "bg-destructive" : "bg-[#0061FF]")}
+              className={cn("h-full rounded-full transition-all duration-500", isOverQuota ? "bg-destructive" : "bg-primary")}
               style={{ width: `${Math.min(100, (userProfile.storageUsed / userProfile.storageLimit) * 100)}%` }}
             />
           </div>
@@ -824,7 +824,7 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
 
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-border/40 shrink-0">
         <div className="flex items-center gap-2">
-          <div className={cn("h-5 w-5 rounded-md flex items-center justify-center text-[10px] font-bold shrink-0", selectedCount > 0 ? "bg-[#0061FF] text-white" : "bg-secondary/50 text-muted-foreground")}>
+          <div className={cn("h-5 w-5 rounded-md flex items-center justify-center text-[10px] font-bold shrink-0", selectedCount > 0 ? "bg-primary text-primary-foreground" : "bg-secondary/50 text-muted-foreground")}>
             {selectedCount}
           </div>
           <span className="text-xs font-semibold text-foreground">
@@ -832,7 +832,7 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
           </span>
         </div>
         {selectedCount > 0 && (
-          <span className={cn("text-[11px] font-semibold", isOverQuota ? "text-destructive" : "text-[#0061FF]")}>
+          <span className={cn("text-[11px] font-semibold", isOverQuota ? "text-destructive" : "text-primary")}>
             {formatSize(selectedTotalSize)}
           </span>
         )}
@@ -883,7 +883,7 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
       <div className="border-t border-border/60 shrink-0 flex flex-col min-h-[180px]">
         <div className="px-4 py-2 flex items-center justify-between bg-secondary/10 shrink-0">
           <div className="flex items-center gap-2">
-            <FolderTree className="h-3.5 w-3.5 text-[#0061FF] shrink-0" />
+            <FolderTree className="h-3.5 w-3.5 text-primary shrink-0" />
             <span className="text-xs font-semibold text-foreground">Import Destination</span>
           </div>
           {drivyaFolderStack.length > 1 && (
@@ -894,9 +894,9 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
                 setDrivyaFolderStack(nextStack);
                 const parent = nextStack[nextStack.length - 1];
                 setTargetDirId(parent.id);
-                setTargetDirName(parent.name === "My Vault" ? "My Vault (Root)" : parent.name);
+                setTargetDirName(parent.name === "My Drive" ? "My Drive (Root)" : parent.name);
               }}
-              className="text-[10px] font-bold text-[#0061FF] hover:underline flex items-center gap-1 cursor-pointer"
+              className="text-[10px] font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
             >
               <ArrowLeft className="h-2.5 w-2.5" /> Back
             </button>
@@ -916,10 +916,10 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
                     const nextStack = drivyaFolderStack.slice(0, idx + 1);
                     setDrivyaFolderStack(nextStack);
                     setTargetDirId(f.id);
-                    setTargetDirName(f.name === "My Vault" ? "My Vault (Root)" : f.name);
+                    setTargetDirName(f.name === "My Drive" ? "My Drive (Root)" : f.name);
                   }}
                   className={cn(
-                    "font-medium transition-colors hover:text-[#0061FF] cursor-pointer max-w-[80px] truncate",
+                    "font-medium transition-colors hover:text-primary cursor-pointer max-w-[80px] truncate",
                     isLast ? "text-foreground font-semibold pointer-events-none" : "text-muted-foreground"
                   )}
                 >
@@ -978,7 +978,7 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
             disabled={selectedCount === 0 || isOverQuota}
             id="dropbox-import-btn"
             className={cn(
-              "w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#0061FF] to-[#004CD6] h-10 text-sm font-semibold text-white shadow-glow hover:opacity-90 active:translate-y-px transition-all cursor-pointer",
+              "w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-primary h-10 text-sm font-semibold text-primary-foreground shadow-glow hover:opacity-90 active:translate-y-px transition-all cursor-pointer",
               (selectedCount === 0 || isOverQuota) && "opacity-40 cursor-not-allowed active:translate-y-0 shadow-none hover:opacity-40"
             )}
           >
@@ -996,7 +996,7 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
       {!importSummary ? (
         <div className="flex items-center justify-between pb-4 border-b border-border/40">
           <div className="flex items-center gap-3">
-            <Loader2 className="h-5 w-5 text-[#0061FF] animate-spin" />
+            <Loader2 className="h-5 w-5 text-primary animate-spin" />
             <div>
               <h4 className="text-sm font-semibold text-foreground">Streaming files to Drivya...</h4>
               <p className="text-xs text-muted-foreground mt-0.5">Transferring directly from Dropbox servers.</p>
@@ -1010,7 +1010,7 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
             >
               Cancel Import
             </button>
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-secondary/35 border border-border/60 text-[#0061FF] animate-pulse">Keep tab open</span>
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-secondary/35 border border-border/60 text-primary animate-pulse">Keep tab open</span>
           </div>
         </div>
       ) : (
@@ -1058,7 +1058,7 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
           </p>
           {failedFileIds.length > 0 && !importSummary.cancelled && (
             <button type="button" onClick={() => handleRetry(failedFileIds)}
-              className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#0061FF]/10 hover:bg-[#0061FF]/20 border border-[#0061FF]/30 px-4 h-9 text-xs font-semibold text-[#0061FF] transition-all cursor-pointer">
+              className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary/10 hover:bg-primary/20 border border-primary/30 px-4 h-9 text-xs font-semibold text-primary transition-all cursor-pointer">
               <RefreshCw className="h-3.5 w-3.5" /> Retry {failedFileIds.length} Failed
             </button>
           )}
@@ -1083,9 +1083,9 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
               <div className="flex items-center justify-between text-xs">
                 <span className="font-semibold text-foreground truncate max-w-[65%]">{item.name}</span>
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className={cn("font-bold uppercase tracking-wider text-[9px] px-2 py-0.5 rounded-full", isDone && "bg-emerald-500/10 text-emerald-400", isFailed && "bg-destructive/10 text-destructive", isDownloading && "bg-[#0061FF]/10 text-[#0061FF] animate-pulse", item.status === "waiting" && "bg-muted text-muted-foreground")}>{item.status}</span>
+                  <span className={cn("font-bold uppercase tracking-wider text-[9px] px-2 py-0.5 rounded-full", isDone && "bg-emerald-500/10 text-emerald-400", isFailed && "bg-destructive/10 text-destructive", isDownloading && "bg-primary/10 text-primary animate-pulse", item.status === "waiting" && "bg-muted text-muted-foreground")}>{item.status}</span>
                   {isFailed && (
-                    <button type="button" onClick={() => handleRetry([id])} className="inline-flex h-6 w-6 items-center justify-center rounded-lg bg-secondary/80 hover:bg-secondary border border-border text-[#0061FF] transition-all cursor-pointer" title="Retry">
+                    <button type="button" onClick={() => handleRetry([id])} className="inline-flex h-6 w-6 items-center justify-center rounded-lg bg-secondary/80 hover:bg-secondary border border-border text-primary transition-all cursor-pointer" title="Retry">
                       <RefreshCw className="h-3 w-3" />
                     </button>
                   )}
@@ -1093,10 +1093,10 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
               </div>
               <div className="w-full h-1.5 bg-secondary/30 rounded-full overflow-hidden">
                 <motion.div initial={{ width: 0 }} animate={{ width: `${item.percent}%` }} transition={{ duration: 0.3 }}
-                  className={cn("h-full rounded-full", isFailed ? "bg-destructive" : isDone ? "bg-emerald-500" : "bg-[#0061FF]")} />
+                  className={cn("h-full rounded-full", isFailed ? "bg-destructive" : isDone ? "bg-emerald-500" : "bg-primary")} />
               </div>
               {isFailed && item.error && <p className="text-[10px] text-destructive italic">Error: {item.error}</p>}
-              {isDownloading && <p className="text-[10px] text-[#0061FF] text-right tabular-nums">{item.percent}%</p>}
+              {isDownloading && <p className="text-[10px] text-primary text-right tabular-nums">{item.percent}%</p>}
             </div>
           );
         })}
@@ -1117,7 +1117,7 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
         transition={{ type: "spring", stiffness: 360, damping: 28 }}
         className="relative flex flex-col w-full max-w-5xl h-[90vh] bg-background/97 dark:bg-card/95 text-foreground border border-border/80 rounded-2xl shadow-elegant backdrop-blur-lg noise overflow-hidden z-10"
       >
-        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-[#0061FF]/8 rounded-full blur-[80px] pointer-events-none" />
+        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-primary/8 rounded-full blur-[80px] pointer-events-none" />
         <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-accent/6 rounded-full blur-[80px] pointer-events-none" />
 
         <div className="relative flex items-end lg:items-center justify-between px-5 py-4 border-b border-border/70 bg-secondary/10 z-10 shrink-0">
@@ -1138,13 +1138,13 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
           <div className="flex items-center gap-2">
             {isConnected && !isImporting && (
               <div className="flex md:hidden items-center bg-secondary/30 border border-border rounded-lg p-0.5">
-                <button type="button" onClick={() => setMobileTab("browse")} className={cn("px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer", mobileTab === "browse" ? "bg-secondary/80 text-[#0061FF] shadow-sm" : "text-muted-foreground")}>
+                <button type="button" onClick={() => setMobileTab("browse")} className={cn("px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer", mobileTab === "browse" ? "bg-secondary/80 text-primary shadow-sm" : "text-muted-foreground")}>
                   Browse
                 </button>
-                <button type="button" onClick={() => setMobileTab("queue")} className={cn("px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer relative", mobileTab === "queue" ? "bg-secondary/80 text-[#0061FF] shadow-sm" : "text-muted-foreground")}>
+                <button type="button" onClick={() => setMobileTab("queue")} className={cn("px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer relative", mobileTab === "queue" ? "bg-secondary/80 text-primary shadow-sm" : "text-muted-foreground")}>
                   Queue
                   {selectedCount > 0 && (
-                    <span className="absolute -top-1 -right-1 h-4 w-4 bg-[#0061FF] text-white rounded-full text-[9px] flex items-center justify-center font-bold">{selectedCount}</span>
+                    <span className="absolute -top-1 -right-1 h-4 w-4 bg-primary text-primary-foreground rounded-full text-[9px] flex items-center justify-center font-bold">{selectedCount}</span>
                   )}
                 </button>
               </div>
@@ -1167,13 +1167,13 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
         <div className="flex-1 overflow-hidden flex flex-col relative z-10">
           {authLoading ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-3">
-              <Loader2 className="h-8 w-8 text-[#0061FF] animate-spin" />
+              <Loader2 className="h-8 w-8 text-primary animate-spin" />
               <p className="text-xs text-muted-foreground">Checking Dropbox status...</p>
             </div>
           ) : !isConnected ? (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center max-w-sm mx-auto">
               <div className="relative mb-6">
-                <div className="absolute -inset-2 rounded-full bg-[#0061FF]/20 opacity-25 blur-xl animate-pulse" />
+                <div className="absolute -inset-2 rounded-full bg-gradient-primary opacity-25 blur-xl animate-pulse" />
                 <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl bg-secondary/30 border border-border shadow-xl">
                   <img src={dropboxLogo} alt="" className="h-10 w-10" />
                 </div>
@@ -1189,7 +1189,7 @@ export function DropboxModal({ isOpen, onClose, currentDirId, userProfile, onRef
                 </div>
               )}
               <button type="button" onClick={handleConnect} id="dropbox-connect-btn"
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#0061FF] to-[#004CD6] px-5 h-11 text-sm font-semibold text-white shadow-glow hover:opacity-90 active:translate-y-px transition-all cursor-pointer">
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-primary px-5 h-11 text-sm font-semibold text-primary-foreground shadow-glow hover:opacity-90 active:translate-y-px transition-all cursor-pointer">
                 Connect Dropbox Account
               </button>
             </div>
