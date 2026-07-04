@@ -253,7 +253,7 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
         fetchDrivyaDirectories();
       }
     } catch {
-      setError("Unable to connect to service. Please try again.");
+      setError("Unable to connect to service. Slow network issue!");
     } finally {
       setAuthLoading(false);
     }
@@ -1109,7 +1109,7 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
         <div className="relative flex items-end lg:items-center justify-between px-5 py-4 border-b border-border/70 bg-secondary/10 z-10 shrink-0">
           <div className="flex-col md:flex-row flex md:items-center gap-3">
             <div className="flex h-7 w-7 items-center justify-center">
-              <img src={GDriveLogo} alt="" />
+              {isConnected && <img src={GDriveLogo} alt="" />}
             </div>
             <div>
               <h2 className="hidden lg:block text-sm font-bold tracking-tight text-foreground font-display">Import from Google Drive</h2>
@@ -1162,11 +1162,9 @@ export function GoogleDriveModal({ isOpen, onClose, currentDirId, userProfile, o
             /* Connect Screen */
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center max-w-sm mx-auto">
               <div className="relative mb-6">
-                <div className="absolute -inset-2 rounded-full bg-gradient-primary opacity-25 blur-xl animate-pulse" />
-                <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl bg-secondary/30 border border-border shadow-xl">
-                  <svg className="h-10 w-10 text-primary" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M7.71 3.5L1.15 15l3.43 6 6.55-11.5M9.73 3.5h13.12l-3.43 6H6.28M15.66 15H2.55l3.43 6h13.11" />
-                  </svg>
+                <div className="absolute -inset-2 rounded-full  " />
+                <div className="relative flex h-18 w-18 items-center justify-center rounded-2xl bg-secondary/30 border border-border shadow-xl">
+                                <img className="w-10 h-10" src={GDriveLogo} alt="" />
                 </div>
               </div>
               <h3 className="text-lg font-bold font-display text-foreground mb-2">Connect Google Drive</h3>

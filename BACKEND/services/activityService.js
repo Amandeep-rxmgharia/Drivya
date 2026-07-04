@@ -340,7 +340,7 @@ export async function deleteActivitiesForResources(resourceIds, userId) {
  * Get activity statistics for a user. Cached for ACTIVITY_CACHE_TTL.STATS seconds.
  *
  * Returns:
- *   { openedToday, uploadedToday, thisWeek, avgPerDay }
+ *   { openedToday, uploadedToday, thisWeek, uploadedThisWeek, avgPerDay }
  */
 export async function getActivityStats(userId) {
   const cacheKey = `${ACTIVITY_CACHE_KEYS.STATS}${userId}`;

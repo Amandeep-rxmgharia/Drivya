@@ -147,14 +147,14 @@ const WEEKLY_DATA = {
   opened: {
     label: "Opened",
     title: "Weekly Opens",
-    change: "↑ 8%",
+    change: null,
     rawValues: [0, 0, 0, 0, 0, 0, 0],
     suffix: "files",
   },
   downloads: {
     label: "Downloads",
     title: "Weekly Downloads",
-    change: "↓ 4%",
+    change: null,
     rawValues: [0, 0, 0, 0, 0, 0, 0],
     suffix: "files",
   },

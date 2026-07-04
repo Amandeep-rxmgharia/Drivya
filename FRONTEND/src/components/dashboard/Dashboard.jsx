@@ -1152,16 +1152,16 @@ export function DashboardLayout() {
       }
     }
     return {
-      displayName: "Amelia Moreau",
-      email: "amelia@drivya.com",
-      username: "amelia-moreau",
-      phone: "+1 (555) 012-3456",
+      displayName: "",
+      email: "",
+      username: "",
+      phone: "",
       language: "en",
       timezone: "auto",
       status: "active",
-      tier: "Free",
+      tier: "",
       avatarUrl: "",
-      role: "user",
+      role: "",
       isActive: true,
     };
   });
