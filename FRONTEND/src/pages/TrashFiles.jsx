@@ -1058,7 +1058,7 @@ export default function TrashFiles() {
               </div>
 
               {/* Desktop view: Tabs */}
-              <div className="hidden lg:block -mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto scrollbar-hide w-full">
+              <div className="hidden lg:block -mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto scrollbar-hide w-fit">
                 <div
                   className="flex rounded-xl border border-border bg-secondary/40 p-0.5 w-max sm:w-auto"
                   role="tablist"

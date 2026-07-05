@@ -1,9 +1,10 @@
-import { memo, useRef, useEffect, Fragment } from "react";
+import { memo, useRef, useEffect, Fragment, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { motion } from "motion/react";
 import {
   Beaker,
   Bell,
+  ChevronDown,
   Code2,
   CreditCard,
   Eye,
@@ -153,116 +154,107 @@ const SettingsNav = memo(function SettingsNav({ className }) {
 export function SettingsMobilePicker() {
   const { section } = useParams();
   const active = section || "account";
-  const scrollRef = useRef(null);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
 
-  /* auto-scroll the active tab into view on mount / section change */
+  // Close dropdown on click outside
   useEffect(() => {
-    if (!scrollRef.current) return;
-    const activeEl = scrollRef.current.querySelector(
-      `[data-section="${active}"]`,
-    );
-    if (activeEl) {
-      activeEl.scrollIntoView({
-        behavior: "smooth",
-        inline: "center",
-        block: "nearest",
-      });
-    }
-  }, [active]);
+    if (!dropdownOpen) return;
+    const handleOutsideClick = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [dropdownOpen]);
+
+  const activeSection = SETTINGS_SECTIONS.find((s) => s.id === active) || SETTINGS_SECTIONS[0];
+  const ActiveIcon = activeSection.icon;
 
   return (
-    <div className="lg:hidden mb-6">
-      {/* Glass container with gradient fade edges */}
-      <div className="relative glass rounded-2xl p-1.5">
-        {/* Left fade */}
-        <div
-          className="pointer-events-none absolute left-1.5 top-1.5 bottom-1.5 w-8 z-10 rounded-l-xl"
-          style={{
-            background:
-              "linear-gradient(to right, var(--glass-bg), transparent)",
-          }}
-        />
-        {/* Right fade */}
-        <div
-          className="pointer-events-none absolute right-1.5 top-1.5 bottom-1.5 w-8 z-10 rounded-r-xl"
-          style={{
-            background:
-              "linear-gradient(to left, var(--glass-bg), transparent)",
-          }}
-        />
-
-        {/* Scrollable track */}
-        <div
-          ref={scrollRef}
-          className="flex items-center gap-1.5 overflow-x-auto px-1.5 py-0.5 scrollbar-hide"
-          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+    <div className="lg:hidden mb-6" ref={dropdownRef}>
+      <div className="relative inline-block">
+        <button
+          type="button"
+          onClick={() => setDropdownOpen(!dropdownOpen)}
+          className="inline-flex h-10 items-center gap-3 rounded-xl border border-border bg-secondary/40 px-4 text-xs font-semibold text-foreground hover:bg-secondary transition-colors cursor-pointer"
+          aria-expanded={dropdownOpen}
         >
-          {GROUPS.map((group, gi) => {
-            const items = SETTINGS_SECTIONS.filter((s) => s.group === group);
-            if (items.length === 0) return null;
-            return (
-              <Fragment key={group}>
-                {/* Group divider (skip first) */}
-                {gi > 0 && (
-                  <div className="flex items-center shrink-0 px-1">
-                    <div className="h-5 w-px bg-border/50 rounded-full" />
-                  </div>
-                )}
-
-                {items.map((item) => {
-                  const isActive = active === item.id;
-                  return (
-                    <Link
-                      key={item.id}
-                      to={`/dashboard/settings/${item.id}`}
-                      data-section={item.id}
+          <div className="flex items-center gap-2">
+            <ActiveIcon className="h-4 w-4 text-primary" />
+            <span>{activeSection.label}</span>
+            {activeSection.badge && (
+              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-primary">
+                {activeSection.badge}
+              </span>
+            )}
+            {activeSection.tier && (
+              <span className="rounded bg-accent/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-accent">
+                {activeSection.tier}
+              </span>
+            )}
+          </div>
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 transition-transform text-muted-foreground",
+              dropdownOpen && "rotate-180"
+            )}
+          />
+        </button>
+        {dropdownOpen && (
+          <div className="absolute left-0 z-30 mt-2 min-w-[200px] max-h-[300px] overflow-y-auto rounded-xl border border-border bg-popover p-1 shadow-elegant animate-fade-in">
+            {SETTINGS_SECTIONS.map((item) => {
+              const ItemIcon = item.icon;
+              const isActive = active === item.id;
+              return (
+                <Link
+                  key={item.id}
+                  to={`/dashboard/settings/${item.id}`}
+                  onClick={() => setDropdownOpen(false)}
+                  className={cn(
+                    "w-full rounded-lg px-3 py-2 text-left text-xs transition-colors flex items-center gap-2.5 cursor-pointer",
+                    isActive
+                      ? "bg-primary text-primary-foreground font-medium"
+                      : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                  )}
+                >
+                  <ItemIcon
+                    className={cn(
+                      "h-4 w-4 shrink-0 transition-colors",
+                      isActive ? "text-primary-foreground" : "text-muted-foreground",
+                    )}
+                  />
+                  <span className="flex-1 truncate">{item.label}</span>
+                  {item.badge && (
+                    <span
                       className={cn(
-                        "group relative flex items-center gap-1.5 shrink-0 rounded-xl px-3 py-2 text-xs font-medium whitespace-nowrap transition-all duration-200",
+                        "rounded px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider",
                         isActive
-                          ? "bg-primary text-primary-foreground shadow-glow"
-                          : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground active:scale-[0.97]",
+                          ? "bg-white/20 text-primary-foreground"
+                          : "bg-primary/10 text-primary",
                       )}
                     >
-                      <item.icon
-                        className={cn(
-                          "h-3.5 w-3.5 shrink-0 transition-colors",
-                          isActive
-                            ? "text-primary-foreground"
-                            : "text-muted-foreground group-hover:text-foreground",
-                        )}
-                      />
-                      <span>{item.label}</span>
-                      {item.badge && (
-                        <span
-                          className={cn(
-                            "rounded px-1 py-px text-[8px] font-bold uppercase tracking-wider",
-                            isActive
-                              ? "bg-white/20 text-primary-foreground"
-                              : "bg-primary/10 text-primary",
-                          )}
-                        >
-                          {item.badge}
-                        </span>
+                      {item.badge}
+                    </span>
+                  )}
+                  {item.tier && (
+                    <span
+                      className={cn(
+                        "rounded px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider",
+                        isActive
+                          ? "bg-white/20 text-primary-foreground"
+                          : "bg-accent/10 text-accent",
                       )}
-                      {item.tier && (
-                        <span
-                          className={cn(
-                            "rounded px-1 py-px text-[8px] font-bold uppercase tracking-wider",
-                            isActive
-                              ? "bg-white/20 text-primary-foreground"
-                              : "bg-accent/10 text-accent",
-                          )}
-                        >
-                          {item.tier}
-                        </span>
-                      )}
-                    </Link>
-                  );
-                })}
-              </Fragment>
-            );
-          })}
-        </div>
+                    >
+                      {item.tier}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
