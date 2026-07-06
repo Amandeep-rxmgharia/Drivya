@@ -71,10 +71,14 @@ export default function Auth() {
   });
 
   // Form states
-  const [loginEmail, setLoginEmail] = useState("");
+  const [loginEmail, setLoginEmail] = useState(() => {
+    return localStorage.getItem("rememberedEmail") || "";
+  });
   const [loginPassword, setLoginPassword] = useState("");
   const [showLoginPassword, setShowLoginPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
+  const [rememberMe, setRememberMe] = useState(() => {
+    return localStorage.getItem("rememberMe") === "true";
+  });
 
   const [registerName, setRegisterName] = useState("");
   const [registerEmail, setRegisterEmail] = useState("");
@@ -370,12 +374,19 @@ export default function Auth() {
     setLoadingStep("Verifying credentials...");
 
     try {
-      const data = await loginUser({ email: loginEmail, password: loginPassword });
+      const data = await loginUser({ email: loginEmail, password: loginPassword, rememberMe });
       if (data?.requiresTwoFA) {
         setIsLoading(false);
         setTwoFARequired(true);
         setErrorMsg("");
         return;
+      }
+      if (rememberMe) {
+        localStorage.setItem("rememberedEmail", loginEmail);
+        localStorage.setItem("rememberMe", "true");
+      } else {
+        localStorage.removeItem("rememberedEmail");
+        localStorage.removeItem("rememberMe");
       }
       setLoadingStep("Loading account data...");
       setIsSuccess(true);
@@ -418,6 +429,13 @@ export default function Auth() {
 
     try {
       await loginVerify2FA({ code: codeToVerify });
+      if (rememberMe) {
+        localStorage.setItem("rememberedEmail", loginEmail);
+        localStorage.setItem("rememberMe", "true");
+      } else {
+        localStorage.removeItem("rememberedEmail");
+        localStorage.removeItem("rememberMe");
+      }
       setLoadingStep("Access granted! Loading dashboard...");
       setIsSuccess(true);
       setIsLoading(false);

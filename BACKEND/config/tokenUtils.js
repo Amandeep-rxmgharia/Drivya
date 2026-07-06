@@ -27,10 +27,11 @@ export function generateAccessToken(userId, sessionId, role = "user") {
  * Generate a long-lived refresh token.
  * @param {string} userId
  * @param {string} sessionId
+ * @param {boolean} rememberMe
  * @returns {string}
  */
-export function generateRefreshToken(userId, sessionId) {
-  return jwt.sign({ id: userId, sid: sessionId }, JWT_REFRESH_SECRET, {
+export function generateRefreshToken(userId, sessionId, rememberMe = false) {
+  return jwt.sign({ id: userId, sid: sessionId, rememberMe }, JWT_REFRESH_SECRET, {
     expiresIn: REFRESH_TOKEN_EXPIRY,
   });
 }
@@ -56,7 +57,7 @@ export function verifyRefreshToken(token) {
 /**
  * Set access + refresh tokens as httpOnly cookies.
  */
-export function setTokenCookies(res, accessToken, refreshToken) {
+export function setTokenCookies(res, accessToken, refreshToken, rememberMe = false) {
   const isProduction = NODE_ENV === "production";
 
   res.cookie("accessToken", accessToken, {
@@ -64,20 +65,26 @@ export function setTokenCookies(res, accessToken, refreshToken) {
     secure: isProduction,
     sameSite: isProduction ? "strict" : "lax",
     maxAge: 15 * 60 * 1000, // 15 minutes
+    path: "/",
   });
 
-  res.cookie("refreshToken", refreshToken, {
+  const refreshCookieOptions = {
     httpOnly: true,
     secure: isProduction,
     sameSite: isProduction ? "strict" : "lax",
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    // path: "/auth/refresh", // only sent on refresh endpoint
-  });
+    path: "/",
+  };
+
+  if (rememberMe) {
+    refreshCookieOptions.maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days
+  }
+
+  res.cookie("refreshToken", refreshToken, refreshCookieOptions);
 }
 
 export function clearTokenCookies(res) {
-  res.clearCookie("accessToken");
-  res.clearCookie("refreshToken");
+  res.clearCookie("accessToken", { path: "/" });
+  res.clearCookie("refreshToken", { path: "/" });
 }
 
 /**

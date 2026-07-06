@@ -117,7 +117,7 @@ export const register = async (req, res, next) => {
 
 // ─── Login ───────────────────────────────────────────────────
 export const login = async (req, res, next) => {
-  const { email, password } = req.body;
+  const { email, password, rememberMe } = req.body;
 
   try {
     const user = await User.findOne({ email }).select("+password").lean(false);
@@ -146,8 +146,8 @@ console.log(user.twoFAEnabled);
     });
 
     const accessToken = generateAccessToken(user._id.toString(), sessionDoc._id.toString(), user.role);
-    const refreshToken = generateRefreshToken(user._id.toString(), sessionDoc._id.toString());
-    setTokenCookies(res, accessToken, refreshToken);
+    const refreshToken = generateRefreshToken(user._id.toString(), sessionDoc._id.toString(), !!rememberMe);
+    setTokenCookies(res, accessToken, refreshToken, !!rememberMe);
 
     if (user.loginAlerts !== false) {
       createNotification(user._id, {
@@ -205,8 +205,8 @@ export const refresh = async (req, res, next) => {
 
     // Issue new access token (token rotation)
     const newAccessToken = generateAccessToken(decoded.id, decoded.sid, user.role);
-    const newRefreshToken = generateRefreshToken(decoded.id, decoded.sid);
-    setTokenCookies(res, newAccessToken, newRefreshToken);
+    const newRefreshToken = generateRefreshToken(decoded.id, decoded.sid, !!decoded.rememberMe);
+    setTokenCookies(res, newAccessToken, newRefreshToken, !!decoded.rememberMe);
 
     return res.json({ message: "Token refreshed." });
   } catch (err) {
