@@ -17,9 +17,13 @@ const AVATAR_DIR = path.resolve(__dirname, "..", "storage", "avatars");
 // ─── Get Profile ─────────────────────────────────────────────
 export const getProfile = async (req, res, next) => {
   try {
-    const user = await User.findById(req.user.id)
-      .lean()
-      .select("-__v -password");
+    // Run both queries in parallel:
+    // 1. Main profile data (password excluded as usual)
+    // 2. Lightweight check for password existence (password has select:false in schema)
+    const [user, userPwCheck] = await Promise.all([
+      User.findById(req.user.id).lean().select("-__v -password"),
+      User.findById(req.user.id).lean().select("+password"),
+    ]);
 
     if (!user) {
       return res.status(404).json({ message: "User not found." });
@@ -38,6 +42,8 @@ export const getProfile = async (req, res, next) => {
         memberSince: user.createdAt,
         loginAlerts: user.loginAlerts !== false,
         twoFAEnabled: !!user.twoFAEnabled,
+        authProvider: user.authProvider || "local",
+        hasPassword: !!userPwCheck?.password,
       },
     });
   } catch (err) {
@@ -285,6 +291,47 @@ export const changePassword = async (req, res, next) => {
     });
 
     return res.json({ message: "Password changed successfully." });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── Set Password (for Google-only users) ────────────────────
+export const setPassword = async (req, res, next) => {
+  const { newPassword } = req.body;
+
+  if (!newPassword || newPassword.length < 8) {
+    return res.status(400).json({ message: "Password must be at least 8 characters." });
+  }
+
+  try {
+    const user = await User.findById(req.user.id).select("+password authProvider");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    // Only allow if user doesn't already have a password
+    if (user.password) {
+      return res.status(400).json({
+        message: "You already have a password. Use 'Change Password' instead.",
+      });
+    }
+
+    // Set the password (pre-save hook will hash it)
+    user.password = newPassword;
+    await user.save();
+
+    // Create security notification
+    await createNotification(user._id, {
+      type: "security",
+      title: "Password created",
+      description: "A password was set for your account. You can now sign in with either Google or email/password.",
+      actionLabel: "Security Settings",
+      actionPath: "/dashboard/settings/security",
+    });
+
+    return res.json({ message: "Password set successfully. You can now log in with email and password." });
   } catch (err) {
     next(err);
   }

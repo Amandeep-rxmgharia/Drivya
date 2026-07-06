@@ -16,6 +16,10 @@ import {
   verifyReset2FA,
   resetPassword,
 } from "../controllers/authController.js";
+import {
+  googleLogin,
+  googleLoginUrl,
+} from "../controllers/googleAuthController.js";
 import { authenticate } from "../middlewares/authMiddleware.js";
 import {
   validateRegister,
@@ -39,6 +43,8 @@ const loginLimiter = rateLimit({
 // ─── Public Routes ───────────────────────────────────────────
 router.post("/register", validateRegister, handleValidationErrors, register);
 router.post("/login", loginLimiter, validateLogin, handleValidationErrors, login);
+router.post("/google", googleLogin);
+router.get("/google/login-url", googleLoginUrl);
 router.post("/refresh", refresh);
 router.post("/logout", logout);
 router.post("/forgot-password", forgotPassword);

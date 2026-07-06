@@ -139,4 +139,16 @@ export const resetPassword = async ({ resetToken, newPassword }) => {
   return response.data;
 };
 
+// ─── Google OAuth API Functions ──────────────────────────────
+
+export const googleAuth = async ({ credential }) => {
+  const response = await api.post("/auth/google", { credential });
+  return response.data;
+};
+
+export const getGoogleLoginUrl = async () => {
+  const response = await api.get("/auth/google/login-url");
+  return response.data;
+};
+
 export default api;

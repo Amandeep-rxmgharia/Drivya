@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -29,6 +29,8 @@ import {
   verifyResetOtp,
   verifyReset2FA,
   resetPassword,
+  googleAuth,
+  getGoogleLoginUrl,
 } from "../../api/auth";
 
 // Google Logo SVG
@@ -109,6 +111,108 @@ export default function Auth() {
   const [reset2FADigits, setReset2FADigits] = useState(Array(6).fill(""));
   const [resetBackupCode, setResetBackupCode] = useState("");
   const [isResetBackupMode, setIsResetBackupMode] = useState(false);
+
+  const handleGoogleCredentialResponse = async (response) => {
+    const { credential } = response;
+    setIsLoading(true);
+    setLoadingStep("Signing in with Google...");
+    setErrorMsg("");
+
+    try {
+      const data = await googleAuth({ credential });
+      if (data?.requiresTwoFA) {
+        setIsLoading(false);
+        setTwoFARequired(true);
+        setErrorMsg("");
+        return;
+      }
+      setLoadingStep("Welcome back! Loading dashboard...");
+      setIsSuccess(true);
+      setIsLoading(false);
+      const redirectTo = searchParams.get("redirect") || "/dashboard";
+      setTimeout(() => navigate(redirectTo), 600);
+    } catch (error) {
+      const msg =
+        error.response?.data?.message ||
+        "Google authentication failed.";
+      setErrorMsg(msg);
+      setIsSuccess(false);
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleButtonClick = async () => {
+    setIsLoading(true);
+    setLoadingStep("Connecting to Google...");
+    setErrorMsg("");
+    try {
+      const data = await getGoogleLoginUrl();
+      if (data?.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error("No URL returned");
+      }
+    } catch (error) {
+      const msg = error.response?.data?.message || "Failed to initiate Google sign-in.";
+      setErrorMsg(msg);
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      console.warn("VITE_GOOGLE_CLIENT_ID is not configured.");
+      return;
+    }
+
+    const initGsi = () => {
+      if (typeof window.google === "undefined") return;
+
+      window.google.accounts.id.initialize({
+        client_id: clientId,
+        callback: handleGoogleCredentialResponse,
+        auto_select: false,
+      });
+
+      window.google.accounts.id.prompt((notification) => {
+        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+          console.log("One Tap was not displayed or skipped", notification.getNotDisplayedReason());
+        }
+      });
+    };
+
+    if (typeof window.google !== "undefined") {
+      initGsi();
+    } else {
+      const script = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
+      if (script) {
+        script.addEventListener("load", initGsi);
+      }
+    }
+
+    return () => {
+      if (typeof window.google !== "undefined") {
+        window.google.accounts.id.cancel();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const googleStatus = searchParams.get("google");
+    const message = searchParams.get("message");
+
+    if (googleStatus === "success") {
+      setLoadingStep("Access granted! Loading dashboard...");
+      setIsSuccess(true);
+      const redirectTo = searchParams.get("redirect") || "/dashboard";
+      setTimeout(() => navigate(redirectTo), 600);
+    } else if (googleStatus === "2fa") {
+      setTwoFARequired(true);
+    } else if (googleStatus === "error") {
+      setErrorMsg(message || "Google authentication failed.");
+    }
+  }, [searchParams, navigate]);
 
   const handleOtpChange = (index, value) => {
     if (!/^\d*$/.test(value)) return;
@@ -1655,6 +1759,7 @@ export default function Auth() {
                       whileHover={{ scale: 1.02, y: -1 }}
                       whileTap={{ scale: 0.98 }}
                       type="button"
+                      onClick={handleGoogleButtonClick}
                       className="flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl border border-border/30 bg-muted/10 hover:bg-muted/20 hover:border-border/60 text-sm font-semibold transition-all cursor-pointer"
                     >
                       <GoogleIcon />

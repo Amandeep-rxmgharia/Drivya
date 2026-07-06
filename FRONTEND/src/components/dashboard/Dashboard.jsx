@@ -1137,6 +1137,7 @@ export function DashboardLayout() {
       avatarUrl: "",
       role: "",
       isActive: true,
+      hasPassword: false,
     };
   });
 
@@ -1165,6 +1166,7 @@ export function DashboardLayout() {
             twoFAEnabled: data.user.twoFAEnabled,
             role: data.user.role || "user",
             isActive: data.user.isActive !== false,
+            hasPassword: !!data.user.hasPassword,
           }));
         }
       } catch (err) {

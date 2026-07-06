@@ -34,6 +34,13 @@ export const changePassword = async ({ currentPassword, newPassword }) => {
   return response.data;
 };
 
+export const setPassword = async ({ newPassword }) => {
+  const response = await api.post("/api/account/password/set", {
+    newPassword,
+  });
+  return response.data;
+};
+
 export const deleteAccount = async (password) => {
   const response = await api.delete("/api/account", {
     data: { password },

@@ -52,9 +52,25 @@ const userSchema = new Schema(
       trim: true,
       default: "",
     },
+
+    // ─── Google OAuth Login ─────────────────────────────────
+    googleId: {
+      type: String,
+      unique: true,
+      sparse: true, // allows null (non-Google users)
+      default: null,
+    },
+    authProvider: {
+      type: String,
+      enum: ["local", "google"],
+      default: "local",
+    },
+
     password: {
       type: String,
-      required: true,
+      required: function () {
+        return this.authProvider === "local";
+      },
       minLength: [8, "password must be at least 8 characters"],
       select: false, // never include password in queries by default
     },
@@ -200,7 +216,7 @@ const userSchema = new Schema(
 // ─── Pre-save hook: hash password before storing ─────────────
 userSchema.pre("save", async function (next) {
   // Only hash if the password field was modified (or is new)
-  if (!this.isModified("password")) return next();
+  if (!this.isModified("password") || !this.password) return next();
 
   try {
     this.password = await bcrypt.hash(this.password, SALT_ROUNDS);

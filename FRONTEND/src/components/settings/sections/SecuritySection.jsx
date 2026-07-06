@@ -37,6 +37,7 @@ import {
 } from "../setting-controls";
 import {
   changePassword,
+  setPassword,
   updateProfile,
   getActiveSessions,
   revokeSession,
@@ -382,6 +383,281 @@ function PasswordChangeForm({ onClose }) {
   );
 }
 
+/* ═══════════════════════ Password Set Form (for Google users) ═══════════════════════ */
+
+function PasswordSetForm({ onClose, setUserProfile }) {
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [success, setSuccess] = useState(false);
+  const successTimerRef = useRef(null);
+
+  // Clean up timer on unmount
+  useEffect(() => {
+    return () => {
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    };
+  }, []);
+
+  const strength = computeStrength(newPassword);
+  const rulesStatus = PASSWORD_RULES.map((rule) => ({
+    ...rule,
+    passed: rule.test(newPassword),
+  }));
+  const allRulesPassed = rulesStatus.every((r) => r.passed);
+
+  const validate = useCallback(() => {
+    const errors = {};
+    if (!newPassword) {
+      errors.newPassword = "Password is required.";
+    } else if (!allRulesPassed) {
+      errors.newPassword = "Password doesn't meet requirements.";
+    }
+    if (!confirmPassword) {
+      errors.confirmPassword = "Please confirm your password.";
+    } else if (confirmPassword !== newPassword) {
+      errors.confirmPassword = "Passwords do not match.";
+    }
+    return errors;
+  }, [newPassword, confirmPassword, allRulesPassed]);
+
+  const handleSubmit = async () => {
+    setError("");
+    setFieldErrors({});
+    const errors = validate();
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await setPassword({ newPassword });
+      setSuccess(true);
+      if (setUserProfile) {
+        setUserProfile((prev) => ({
+          ...prev,
+          hasPassword: true,
+        }));
+      }
+      // Auto-close after 2s
+      successTimerRef.current = setTimeout(() => {
+        onClose?.();
+      }, 2000);
+    } catch (err) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.errors?.[0]?.message ||
+        "Something went wrong. Please try again.";
+      setError(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (success) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: -4 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="px-6 py-4"
+      >
+        <div className="flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3">
+          <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+              Password set successfully
+            </p>
+            <p className="text-[11px] text-emerald-600/70 dark:text-emerald-400/70 mt-0.5">
+              You can now log in with either Google or email/password.
+            </p>
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.div
+      initial={{ height: 0, opacity: 0 }}
+      animate={{ height: "auto", opacity: 1 }}
+      exit={{ height: 0, opacity: 0 }}
+      transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+      className="overflow-hidden"
+    >
+      <div className="px-6 pb-5 pt-1 space-y-4">
+        {/* Global error */}
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <SettingBanner variant="destructive" icon={AlertTriangle}>
+              {error}
+            </SettingBanner>
+          </motion.div>
+        )}
+
+        {/* New Password */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground">
+            Password
+          </label>
+          <SettingInput
+            type="password"
+            value={newPassword}
+            onChange={(val) => {
+              setNewPassword(val);
+              if (fieldErrors.newPassword)
+                setFieldErrors((p) => ({ ...p, newPassword: "" }));
+            }}
+            placeholder="Create a strong password"
+            icon={Key}
+            className="max-w-sm"
+          />
+          {fieldErrors.newPassword && (
+            <motion.p
+              initial={{ opacity: 0, y: -2 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-[11px] font-medium text-destructive flex items-center gap-1"
+            >
+              <AlertTriangle className="h-3 w-3 shrink-0" />
+              {fieldErrors.newPassword}
+            </motion.p>
+          )}
+
+          {/* Strength Meter */}
+          {newPassword.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-2 pt-1"
+            >
+              <div className="flex items-center gap-2">
+                <div className="h-1.5 flex-1 max-w-sm rounded-full bg-secondary/60 overflow-hidden">
+                  <motion.div
+                    className={`h-full rounded-full ${strength.color}`}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${strength.score}%` }}
+                    transition={{
+                      duration: 0.5,
+                      ease: [0.22, 1, 0.36, 1],
+                    }}
+                  />
+                </div>
+                <span
+                  className={`text-[10px] font-bold uppercase tracking-wider ${strength.score <= 20
+                    ? "text-red-500"
+                    : strength.score <= 40
+                      ? "text-amber-500"
+                      : strength.score <= 65
+                        ? "text-yellow-500"
+                        : "text-emerald-500"
+                    }`}
+                >
+                  {strength.label}
+                </span>
+              </div>
+
+              {/* Requirements Checklist */}
+              <div className="flex flex-wrap gap-x-4 gap-y-1">
+                {rulesStatus.map((rule) => (
+                  <span
+                    key={rule.key}
+                    className={`inline-flex items-center gap-1 text-[11px] transition-colors duration-200 ${rule.passed
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-muted-foreground/60"
+                      }`}
+                  >
+                    {rule.passed ? (
+                      <Check className="h-3 w-3" />
+                    ) : (
+                      <X className="h-3 w-3" />
+                    )}
+                    {rule.label}
+                  </span>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </div>
+
+        {/* Confirm Password */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground">
+            Confirm Password
+          </label>
+          <SettingInput
+            type="password"
+            value={confirmPassword}
+            onChange={(val) => {
+              setConfirmPassword(val);
+              if (fieldErrors.confirmPassword)
+                setFieldErrors((p) => ({ ...p, confirmPassword: "" }));
+            }}
+            placeholder="Re-enter your password"
+            icon={ShieldCheck}
+            className="max-w-sm"
+          />
+          {fieldErrors.confirmPassword && (
+            <motion.p
+              initial={{ opacity: 0, y: -2 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-[11px] font-medium text-destructive flex items-center gap-1"
+            >
+              <AlertTriangle className="h-3 w-3 shrink-0" />
+              {fieldErrors.confirmPassword}
+            </motion.p>
+          )}
+          {/* Match indicator */}
+          {confirmPassword.length > 0 &&
+            !fieldErrors.confirmPassword &&
+            confirmPassword === newPassword && (
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1"
+              >
+                <Check className="h-3 w-3" />
+                Passwords match
+              </motion.p>
+            )}
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2 pt-1">
+          <button
+            onClick={handleSubmit}
+            disabled={isSubmitting}
+            className="inline-flex h-9 items-center gap-2 rounded-xl bg-primary px-5 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Creating…
+              </>
+            ) : (
+              <>
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Create Password
+              </>
+            )}
+          </button>
+          <button
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-secondary/40 px-4 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 /* ═══════════════════════ Security Section ═══════════════════════ */
 
 export default function SecuritySection({ userProfile, setUserProfile }) {
@@ -512,11 +788,11 @@ export default function SecuritySection({ userProfile, setUserProfile }) {
         id="password"
         icon={Key}
         title="Password"
-        description="Manage your account password."
+        description={userProfile?.hasPassword ? "Manage your account password." : "Set up a password for your account."}
       >
         <SettingRow
           label="Password"
-          description="Must be at least 8 characters with a letter and a number."
+          description={userProfile?.hasPassword ? "Must be at least 8 characters with a letter and a number." : "Create a password to enable email/password login alongside Google."}
         >
           <button
             onClick={() => setShowPasswordForm((s) => !s)}
@@ -526,16 +802,24 @@ export default function SecuritySection({ userProfile, setUserProfile }) {
               }`}
           >
             <Key className="h-3.5 w-3.5" />
-            {showPasswordForm ? "Hide Form" : "Change Password"}
+            {showPasswordForm ? "Hide Form" : userProfile?.hasPassword ? "Change Password" : "Create Password"}
           </button>
         </SettingRow>
 
         <AnimatePresence mode="wait">
           {showPasswordForm && (
-            <PasswordChangeForm
-              key="password-form"
-              onClose={() => setShowPasswordForm(false)}
-            />
+            userProfile?.hasPassword ? (
+              <PasswordChangeForm
+                key="password-change-form"
+                onClose={() => setShowPasswordForm(false)}
+              />
+            ) : (
+              <PasswordSetForm
+                key="password-set-form"
+                onClose={() => setShowPasswordForm(false)}
+                setUserProfile={setUserProfile}
+              />
+            )
           )}
         </AnimatePresence>
       </SettingSection>

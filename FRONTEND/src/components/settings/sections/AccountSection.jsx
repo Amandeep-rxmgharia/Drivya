@@ -707,6 +707,7 @@ export default function AccountSection({ userProfile, setUserProfile }) {
       avatarUrl: p.avatarUrl,
       storageUsed: p.storageUsed,
       storageLimit: p.storageLimit,
+      hasPassword: p.hasPassword,
     }));
   };
 

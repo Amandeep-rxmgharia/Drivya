@@ -118,6 +118,15 @@ export const login = async (req, res, next) => {
     if (!user) {
       return res.status(401).json({ message: "Invalid credentials." });
     }
+
+    // Block Google-only users from email/password login
+    if (user.authProvider === "google" && !user.password) {
+      return res.status(401).json({
+        message: "This account uses Google Sign-In. Please use 'Continue with Google' to log in.",
+        code: "GOOGLE_ACCOUNT",
+      });
+    }
+
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       return res.status(401).json({ message: "Invalid credentials." });
@@ -239,11 +248,16 @@ export const logout = async (req, res, next) => {
 // ─── Get Current User ────────────────────────────────────────
 export const getMe = async (req, res, next) => {
   try {
-    const user = await User.findById(req.user.id).lean().select("-__v");
+    const [user, userPwCheck] = await Promise.all([
+      User.findById(req.user.id).lean().select("-__v -password"),
+      User.findById(req.user.id).lean().select("+password"),
+    ]);
 
     if (!user) {
       return res.status(404).json({ message: "User not found." });
     }
+
+    user.hasPassword = !!userPwCheck?.password;
 
     return res.json({ user });
   } catch (err) {

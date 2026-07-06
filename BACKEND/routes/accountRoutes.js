@@ -7,6 +7,7 @@ import {
   getAvatar,
   deleteAvatar,
   changePassword,
+  setPassword,
   deleteAccount,
   getSharingDefaults,
   updateSharingDefaults,
@@ -71,6 +72,11 @@ router.put(
   validateChangePassword,
   handleValidationErrors,
   changePassword,
+);
+router.post(
+  "/password/set",
+  requireTwoFA,
+  setPassword,
 );
 
 // ─── Sessions ────────────────────────────────────────────────
