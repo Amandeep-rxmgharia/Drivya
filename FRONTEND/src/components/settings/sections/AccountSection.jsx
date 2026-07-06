@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import {
   User,
   Mail,
-  Phone,
   Camera,
   Languages,
   Check,
@@ -169,12 +168,6 @@ function ProfileHeroCard({ profile, onEditClick, onAvatarChange }) {
                 Verified
               </span>
             </span>
-            {profile.contact && (
-              <span className="inline-flex items-center gap-1.5">
-                <Phone className="h-3.5 w-3.5" />
-                {profile.contact}
-              </span>
-            )}
           </div>
         </div>
 
@@ -212,7 +205,6 @@ function EditProfileModal({
 }) {
   const [form, setForm] = useState({
     name: "",
-    contact: "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -224,7 +216,6 @@ function EditProfileModal({
     if (open) {
       setForm({
         name: profile.name || "",
-        contact: profile.contact || "",
       });
       setError("");
       setSuccess(false);
@@ -235,8 +226,7 @@ function EditProfileModal({
   if (!open) return null;
 
   const hasChanges =
-    form.name !== (profile.name || "") ||
-    form.contact !== (profile.contact || "");
+    form.name !== (profile.name || "");
 
   const handleAvatarSelect = (e) => {
     const file = e.target.files?.[0];
@@ -274,8 +264,6 @@ function EditProfileModal({
     try {
       const updates = {};
       if (form.name !== profile.name) updates.name = form.name.trim();
-      if (form.contact !== (profile.contact || ""))
-        updates.contact = form.contact.trim();
 
       if (Object.keys(updates).length > 0) {
         await onSave(updates);
@@ -442,27 +430,6 @@ function EditProfileModal({
             />
             <p className="text-[10px] text-muted-foreground">
               Email cannot be changed. Contact support for help.
-            </p>
-          </div>
-
-          {/* Phone field */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-foreground/80 flex items-center gap-1.5">
-              <Phone className="h-3 w-3 text-muted-foreground" />
-              Phone Number
-            </label>
-            <input
-              type="tel"
-              value={form.contact}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, contact: e.target.value }))
-              }
-              placeholder="+1 (555) 000-0000"
-              maxLength={20}
-              className="h-10 w-full rounded-xl border border-border bg-secondary/30 px-3.5 text-sm text-foreground placeholder:text-muted-foreground/50 transition-all focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
-            />
-            <p className="text-[10px] text-muted-foreground">
-              Used for SMS two-factor authentication and account recovery.
             </p>
           </div>
 
@@ -715,7 +682,6 @@ export default function AccountSection({ userProfile, setUserProfile }) {
   const [profile, setProfile] = useState({
     name: "",
     email: "",
-    contact: "",
     language: "en",
     timezone: "auto",
     avatarUrl: "",
@@ -736,7 +702,6 @@ export default function AccountSection({ userProfile, setUserProfile }) {
       displayName: p.name,
       name: p.name,
       email: p.email,
-      phone: p.contact,
       language: p.language,
       timezone: p.timezone,
       avatarUrl: p.avatarUrl,
@@ -884,23 +849,6 @@ export default function AccountSection({ userProfile, setUserProfile }) {
           <span className="text-sm text-foreground/80 font-medium">
             {profile.email}
           </span>
-        </SettingRow>
-
-        <SettingRow
-          label="Phone Number"
-          description="Used for SMS 2FA and account recovery."
-        >
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-foreground/80 font-medium">
-              {profile.contact || "Not set"}
-            </span>
-            <button
-              onClick={() => setEditOpen(true)}
-              className="text-xs font-medium text-primary hover:text-primary/80 transition-colors"
-            >
-              {profile.contact ? "Edit" : "Add"}
-            </button>
-          </div>
         </SettingRow>
       </SettingSection>
 

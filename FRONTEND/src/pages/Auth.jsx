@@ -8,7 +8,6 @@ import {
   User,
   Mail,
   Lock,
-  Phone,
   Car,
   Building,
   Check,
@@ -82,7 +81,6 @@ export default function Auth() {
 
   const [registerName, setRegisterName] = useState("");
   const [registerEmail, setRegisterEmail] = useState("");
-  const [registerPhone, setRegisterPhone] = useState("");
   const [registerPassword, setRegisterPassword] = useState("");
   const [registerConfirmPassword, setRegisterConfirmPassword] = useState("");
   const [acceptTerms, setAcceptTerms] = useState(false);
@@ -459,7 +457,6 @@ export default function Auth() {
     if (
       !registerName ||
       !registerEmail ||
-      !registerPhone ||
       !registerPassword ||
       !registerConfirmPassword
     ) {
@@ -482,7 +479,6 @@ export default function Auth() {
       await registerUser({
         name: registerName,
         email: registerEmail,
-        contact: registerPhone,
         password: registerPassword,
       });
       setLoadingStep("Initializing dashboard...");
@@ -1538,23 +1534,6 @@ export default function Auth() {
                                 placeholder="name@example.com"
                                 value={registerEmail}
                                 onChange={(e) => setRegisterEmail(e.target.value)}
-                                className="w-full bg-muted/15 border border-border/30 rounded-xl py-3 pl-10 pr-4 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/45 focus:bg-muted/10 transition-all font-medium text-foreground placeholder:text-muted-foreground/60"
-                              />
-                            </div>
-                          </div>
-
-                          {/* Phone Number Field */}
-                          <div className="space-y-1.5 relative">
-                            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">
-                              Phone Number
-                            </label>
-                            <div className="relative group">
-                              <Phone className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
-                              <input
-                                type="tel"
-                                placeholder="+1 (555) 000-0000"
-                                value={registerPhone}
-                                onChange={(e) => setRegisterPhone(e.target.value)}
                                 className="w-full bg-muted/15 border border-border/30 rounded-xl py-3 pl-10 pr-4 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/45 focus:bg-muted/10 transition-all font-medium text-foreground placeholder:text-muted-foreground/60"
                               />
                             </div>

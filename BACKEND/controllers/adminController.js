@@ -23,7 +23,6 @@ export const listUsers = async (req, res, next) => {
       query.$or = [
         { name: { $regex: search, $options: "i" } },
         { email: { $regex: search, $options: "i" } },
-        { contact: { $regex: search, $options: "i" } },
       ];
     }
 

@@ -27,7 +27,7 @@ import {
 
 // ─── Register ────────────────────────────────────────────────
 export const register = async (req, res, next) => {
-  const { name, email, contact, password } = req.body;
+  const { name, email, password } = req.body;
   const session = await mongoose.startSession();
 
   try {
@@ -39,7 +39,6 @@ export const register = async (req, res, next) => {
             name,
             email,
             password,
-            contact,
           },
         ],
         { session },
@@ -99,14 +98,8 @@ export const register = async (req, res, next) => {
     });
   } catch (err) {
     if (err?.code === 11000 || err?.errorResponse?.code === 11000) {
-      const field = err.keyPattern
-        ? Object.keys(err.keyPattern)[0]
-        : "email";
       return res.status(409).json({
-        message:
-          field === "contact"
-            ? "Phone number already registered."
-            : "Email already registered.",
+        message: "Email already registered.",
       });
     }
     next(err);

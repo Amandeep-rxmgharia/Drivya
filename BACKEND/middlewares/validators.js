@@ -19,13 +19,6 @@ export const validateRegister = [
     .withMessage("Please enter a valid email.")
     .normalizeEmail(),
 
-  body("contact")
-    .trim()
-    .notEmpty()
-    .withMessage("Phone number is required.")
-    .matches(/^\d{10,15}$/)
-    .withMessage("Phone number must be 10–15 digits."),
-
   body("password")
     .notEmpty()
     .withMessage("Password is required.")
@@ -182,12 +175,6 @@ export const validateUpdateProfile = [
     .trim()
     .isLength({ min: 3, max: 50 })
     .withMessage("Name must be between 3 and 50 characters."),
-
-  body("contact")
-    .optional()
-    .trim()
-    .isLength({ max: 20 })
-    .withMessage("Phone number cannot exceed 20 characters."),
 
   body("language")
     .optional()

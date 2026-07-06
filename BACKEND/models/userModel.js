@@ -37,13 +37,6 @@ const userSchema = new Schema(
       type: Boolean,
       default: true,
     },
-    contact: {
-      type: String,
-      required: true,
-      unique: true,
-      trim: true,
-    },
-
     language: {
       type: String,
       trim: true,
