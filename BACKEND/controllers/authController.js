@@ -2,6 +2,7 @@ import mongoose, { Types } from "mongoose";
 import Directory from "../models/directoryModel.js";
 import User from "../models/userModel.js";
 import Session from "../models/sessionModel.js";
+import OTP from "../models/otpModel.js";
 import { parseUserAgent, parseIpAndLocation } from "../utils/uaParser.js";
 import bcrypt from "bcrypt";
 import {
@@ -11,8 +12,11 @@ import {
   clearTokenCookies,
   verifyRefreshToken,
   verifyAccessToken,
+  generatePasswordResetToken,
+  verifyPasswordResetToken,
 } from "../config/tokenUtils.js";
 import { createNotification } from "../services/notificationService.js";
+import { sendOTPEmail } from "../utils/mailer.js";
 import crypto from "node:crypto";
 import { encryptStringAesGcm, decryptStringAesGcm } from "../utils/cryptoUtils.js";
 import {
@@ -516,3 +520,214 @@ export const loginVerify2FA = async (req, res, next) => {
     next(err);
   }
 };
+
+// ─── Forgot Password / OTP Flow ──────────────────────────────
+export const forgotPassword = async (req, res, next) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ message: "Email is required." });
+
+  try {
+    const user = await User.findOne({ email }).lean();
+    if (!user) {
+      return res.status(404).json({ message: "User not found with this email." });
+    }
+
+    // Generate a 6-digit random OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Upsert the OTP document in the database
+    await OTP.findOneAndUpdate(
+      { email: email.toLowerCase() },
+      { otp, createdAt: new Date() },
+      { upsert: true, new: true }
+    );
+
+    // Send the email
+    await sendOTPEmail(user.email, otp);
+
+    return res.json({ message: "Verification OTP has been sent to your email." });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const verifyResetOtp = async (req, res, next) => {
+  const { email, otp } = req.body;
+  if (!email || !otp) {
+    return res.status(400).json({ message: "Email and OTP code are required." });
+  }
+
+  try {
+    const normalizedEmail = email.toLowerCase().trim();
+    const otpRecord = await OTP.findOne({ email: normalizedEmail, otp: String(otp).trim() });
+    if (!otpRecord) {
+      return res.status(400).json({ message: "Invalid or expired OTP code." });
+    }
+
+    // OTP is valid. Delete it
+    await OTP.deleteOne({ _id: otpRecord._id });
+
+    // Fetch the user to determine if 2FA is enabled
+    const user = await User.findOne({ email: normalizedEmail }).select("twoFAEnabled").lean();
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    // Generate a temporary reset token indicating that email OTP has been verified
+    const resetToken = generatePasswordResetToken(user._id.toString(), true, false);
+
+    return res.json({
+      message: "OTP verified successfully.",
+      requiresTwoFA: !!user.twoFAEnabled,
+      resetToken,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const verifyReset2FA = async (req, res, next) => {
+  const { resetToken, code } = req.body;
+  if (!resetToken) return res.status(400).json({ message: "Reset token is required." });
+  if (!code) return res.status(400).json({ message: "2FA code is required." });
+
+  try {
+    const decoded = verifyPasswordResetToken(resetToken);
+    if (!decoded.emailVerified) {
+      return res.status(403).json({ message: "Email verification is required first." });
+    }
+
+    const user = await User.findById(decoded.id).select(
+      "name email twoFAEnabled twoFASecretEnc twoFASecretIv twoFASecretAuthTag twoFABackupCodes"
+    );
+    if (!user) return res.status(404).json({ message: "User not found." });
+
+    if (!user.twoFAEnabled) {
+      return res.status(400).json({ message: "2FA is not enabled for this account." });
+    }
+
+    const secretBase32 = decryptStringAesGcm({
+      ciphertextB64: user.twoFASecretEnc,
+      ivB64: user.twoFASecretIv,
+      authTagB64: user.twoFASecretAuthTag,
+    });
+
+    const normalizedCode = String(code).trim();
+    let verified = false;
+
+    // 1. Try TOTP verification
+    if (verifyTotpCode(secretBase32, normalizedCode, { window: 1 })) {
+      verified = true;
+    }
+
+    // 2. Try backup codes verification
+    if (!verified && user.twoFABackupCodes?.length > 0) {
+      for (const entry of user.twoFABackupCodes) {
+        if (entry.used) continue;
+        const isMatch = await bcrypt.compare(normalizedCode, entry.hash);
+        if (isMatch) {
+          entry.used = true;
+          entry.usedAt = new Date();
+          await user.save();
+          verified = true;
+          break;
+        }
+      }
+    }
+
+    if (!verified) {
+      return res.status(401).json({ message: "Invalid 2FA code." });
+    }
+
+    // Generate token with 2FA verified
+    const newResetToken = generatePasswordResetToken(user._id.toString(), true, true);
+    return res.json({
+      message: "2FA verification successful.",
+      resetToken: newResetToken,
+    });
+  } catch (err) {
+    if (err.name === "JsonWebTokenError" || err.name === "TokenExpiredError") {
+      return res.status(401).json({ message: "Invalid or expired reset token." });
+    }
+    next(err);
+  }
+};
+
+export const resetPassword = async (req, res, next) => {
+  const { resetToken, newPassword } = req.body;
+  if (!resetToken) return res.status(400).json({ message: "Reset token is required." });
+
+  try {
+    const decoded = verifyPasswordResetToken(resetToken);
+    if (!decoded.emailVerified) {
+      return res.status(403).json({ message: "Email verification is required first." });
+    }
+
+    const user = await User.findById(decoded.id).select(
+      "+password name email rootDirId role twoFAEnabled loginAlerts"
+    );
+    if (!user) return res.status(404).json({ message: "User not found." });
+
+    // Check if 2FA was required and verified
+    if (user.twoFAEnabled && !decoded.twoFAVerified) {
+      return res.status(403).json({ message: "2FA verification is required." });
+    }
+
+    // If newPassword is provided, update password.
+    // If not provided (skipped), do nothing.
+    if (newPassword) {
+      if (newPassword.length < 8) {
+        return res.status(400).json({ message: "Password must be at least 8 characters long." });
+      }
+      user.password = newPassword;
+      await user.save();
+    }
+
+    // Create session and log the user in
+    const ua = parseUserAgent(req.headers["user-agent"]);
+    const ipLoc = parseIpAndLocation(req);
+
+    const sessionDoc = await Session.create({
+      userId: user._id,
+      device: ua.device,
+      browser: ua.browser,
+      os: ua.os,
+      ip: ipLoc.ip,
+      location: ipLoc.location,
+      lastActive: new Date(),
+      twoFAVerifiedAt: user.twoFAEnabled ? new Date() : null,
+    });
+
+    const accessToken = generateAccessToken(user._id.toString(), sessionDoc._id.toString(), user.role);
+    const refreshToken = generateRefreshToken(user._id.toString(), sessionDoc._id.toString());
+    setTokenCookies(res, accessToken, refreshToken);
+
+    if (user.loginAlerts !== false) {
+      createNotification(user._id, {
+        type: "security",
+        title: newPassword ? "Password reset successful" : "New sign-in detected",
+        description: newPassword
+          ? `Your password was successfully reset and a new session started from ${ua.browser} on ${ua.os} (${ipLoc.ip}).`
+          : `Account accessed from ${ua.browser} on ${ua.os} (${ipLoc.ip}) following identity verification.`,
+        actionLabel: "Review activity",
+        actionPath: "/dashboard/settings/security",
+      }).catch((err) => console.error("Notification[reset-login]:", err));
+    }
+
+    return res.json({
+      message: newPassword ? "Password reset and logged in successfully!" : "Logged in successfully!",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        rootDirId: user.rootDirId,
+      },
+    });
+  } catch (err) {
+    if (err.name === "JsonWebTokenError" || err.name === "TokenExpiredError") {
+      return res.status(401).json({ message: "Invalid or expired reset token." });
+    }
+    next(err);
+  }
+};
+

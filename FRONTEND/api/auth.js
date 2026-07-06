@@ -119,4 +119,24 @@ export const disable2FA = async ({ code }) => {
   return response.data;
 };
 
+export const forgotPassword = async ({ email }) => {
+  const response = await api.post("/auth/forgot-password", { email });
+  return response.data;
+};
+
+export const verifyResetOtp = async ({ email, otp }) => {
+  const response = await api.post("/auth/verify-reset-otp", { email, otp });
+  return response.data;
+};
+
+export const verifyReset2FA = async ({ resetToken, code }) => {
+  const response = await api.post("/auth/verify-reset-2fa", { resetToken, code });
+  return response.data;
+};
+
+export const resetPassword = async ({ resetToken, newPassword }) => {
+  const response = await api.post("/auth/reset-password", { resetToken, newPassword });
+  return response.data;
+};
+
 export default api;

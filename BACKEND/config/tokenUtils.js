@@ -172,10 +172,31 @@ export function generateShareDownloadToken(shareToken) {
  * @returns {{ shareToken: string, type: string }}
  */
 export function verifyShareDownloadToken(token) {
-  const decoded = jwt.verify(token, JWT_ACCESS_SECRET);
+  const decoded = verifyAccessToken(token);
   if (decoded.type !== "share_download") {
     throw new Error("Invalid share download token.");
   }
   return decoded;
 }
 
+/**
+ * Generate a short-lived token specifically for password reset/verification steps.
+ */
+export function generatePasswordResetToken(userId, emailVerified = false, twoFAVerified = false) {
+  return jwt.sign(
+    { id: userId, emailVerified, twoFAVerified, type: "password_reset" },
+    JWT_ACCESS_SECRET,
+    { expiresIn: "15m" }
+  );
+}
+
+/**
+ * Verify password reset token.
+ */
+export function verifyPasswordResetToken(token) {
+  const decoded = jwt.verify(token, JWT_ACCESS_SECRET);
+  if (decoded.type !== "password_reset") {
+    throw new Error("Invalid password reset token.");
+  }
+  return decoded;
+}

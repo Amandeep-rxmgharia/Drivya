@@ -22,7 +22,15 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
-import { loginUser, registerUser, loginVerify2FA } from "../../api/auth";
+import {
+  loginUser,
+  registerUser,
+  loginVerify2FA,
+  forgotPassword,
+  verifyResetOtp,
+  verifyReset2FA,
+  resetPassword,
+} from "../../api/auth";
 
 // Google Logo SVG
 const GoogleIcon = () => (
@@ -88,6 +96,18 @@ export default function Auth() {
   const [isBackupMode, setIsBackupMode] = useState(false);
   const [otpDigits, setOtpDigits] = useState(Array(6).fill(""));
 
+  // Forgot password flow states
+  const [resetStep, setResetStep] = useState(null); // null, 'forgot-password-email', 'forgot-password-otp', 'forgot-password-totp', 'forgot-password-reset'
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetOtpDigits, setResetOtpDigits] = useState(Array(6).fill(""));
+  const [resetToken, setResetToken] = useState("");
+  const [resetNewPassword, setResetNewPassword] = useState("");
+  const [resetConfirmPassword, setResetConfirmPassword] = useState("");
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [reset2FADigits, setReset2FADigits] = useState(Array(6).fill(""));
+  const [resetBackupCode, setResetBackupCode] = useState("");
+  const [isResetBackupMode, setIsResetBackupMode] = useState(false);
+
   const handleOtpChange = (index, value) => {
     if (!/^\d*$/.test(value)) return;
     const newDigits = [...otpDigits];
@@ -124,6 +144,217 @@ export default function Auth() {
     // Focus last input
     const lastInput = document.getElementById("otp-input-5");
     if (lastInput) lastInput.focus();
+  };
+
+  const handleResetOtpChange = (index, value) => {
+    if (!/^\d*$/.test(value)) return;
+    const newDigits = [...resetOtpDigits];
+    newDigits[index] = value.slice(-1);
+    setResetOtpDigits(newDigits);
+
+    // Auto-focus next input if value is filled
+    if (value && index < 5) {
+      const nextInput = document.getElementById(`reset-otp-input-${index + 1}`);
+      if (nextInput) nextInput.focus();
+    }
+  };
+
+  const handleResetOtpKeyDown = (index, e) => {
+    if (e.key === "Backspace" && !resetOtpDigits[index] && index > 0) {
+      const prevInput = document.getElementById(`reset-otp-input-${index - 1}`);
+      if (prevInput) {
+        prevInput.focus();
+        const newDigits = [...resetOtpDigits];
+        newDigits[index - 1] = "";
+        setResetOtpDigits(newDigits);
+      }
+    }
+  };
+
+  const handleResetOtpPaste = (e) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData("text").trim();
+    if (!/^\d{6}$/.test(pastedData)) return;
+
+    const newDigits = pastedData.split("");
+    setResetOtpDigits(newDigits);
+
+    // Focus last input
+    const lastInput = document.getElementById("reset-otp-input-5");
+    if (lastInput) lastInput.focus();
+  };
+
+  const handleReset2FAChange = (index, value) => {
+    if (!/^\d*$/.test(value)) return;
+    const newDigits = [...reset2FADigits];
+    newDigits[index] = value.slice(-1);
+    setReset2FADigits(newDigits);
+
+    // Auto-focus next input if value is filled
+    if (value && index < 5) {
+      const nextInput = document.getElementById(`reset-2fa-input-${index + 1}`);
+      if (nextInput) nextInput.focus();
+    }
+  };
+
+  const handleReset2FAKeyDown = (index, e) => {
+    if (e.key === "Backspace" && !reset2FADigits[index] && index > 0) {
+      const prevInput = document.getElementById(`reset-2fa-input-${index - 1}`);
+      if (prevInput) {
+        prevInput.focus();
+        const newDigits = [...reset2FADigits];
+        newDigits[index - 1] = "";
+        setReset2FADigits(newDigits);
+      }
+    }
+  };
+
+  const handleReset2FAPaste = (e) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData("text").trim();
+    if (!/^\d{6}$/.test(pastedData)) return;
+
+    const newDigits = pastedData.split("");
+    setReset2FADigits(newDigits);
+
+    // Focus last input
+    const lastInput = document.getElementById("reset-2fa-input-5");
+    if (lastInput) lastInput.focus();
+  };
+
+  const handleForgotPasswordSubmit = async (e) => {
+    e.preventDefault();
+    setErrorMsg("");
+
+    if (!resetEmail) {
+      setErrorMsg("Please enter your email address.");
+      return;
+    }
+
+    setIsLoading(true);
+    setLoadingStep("Sending verification OTP...");
+
+    try {
+      await forgotPassword({ email: resetEmail });
+      setIsLoading(false);
+      setResetStep("forgot-password-otp");
+    } catch (error) {
+      const msg =
+        error.response?.data?.message ||
+        "Failed to send OTP. Please check the email address.";
+      setErrorMsg(msg);
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyResetOtpSubmit = async (e) => {
+    e.preventDefault();
+    setErrorMsg("");
+
+    const joinedOtp = resetOtpDigits.join("");
+    if (joinedOtp.length < 6) {
+      setErrorMsg("Please enter the 6-digit OTP code.");
+      return;
+    }
+
+    setIsLoading(true);
+    setLoadingStep("Verifying OTP...");
+
+    try {
+      const data = await verifyResetOtp({ email: resetEmail, otp: joinedOtp });
+      setIsLoading(false);
+      setResetToken(data.resetToken);
+
+      if (data.requiresTwoFA) {
+        setResetStep("forgot-password-totp");
+      } else {
+        setResetStep("forgot-password-reset");
+      }
+    } catch (error) {
+      const msg =
+        error.response?.data?.message ||
+        "Invalid or expired OTP code.";
+      setErrorMsg(msg);
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyReset2FASubmit = async (e) => {
+    e.preventDefault();
+    setErrorMsg("");
+
+    let codeToVerify = "";
+    if (isResetBackupMode) {
+      if (!resetBackupCode) {
+        setErrorMsg("Please enter your backup code.");
+        return;
+      }
+      codeToVerify = resetBackupCode.trim();
+    } else {
+      const joinedDigits = reset2FADigits.join("");
+      if (joinedDigits.length < 6) {
+        setErrorMsg("Please enter a 6-digit TOTP code.");
+        return;
+      }
+      codeToVerify = joinedDigits;
+    }
+
+    setIsLoading(true);
+    setLoadingStep("Verifying 2FA...");
+
+    try {
+      const data = await verifyReset2FA({ resetToken, code: codeToVerify });
+      setIsLoading(false);
+      setResetToken(data.resetToken);
+      setResetStep("forgot-password-reset");
+    } catch (error) {
+      const msg =
+        error.response?.data?.message ||
+        "Invalid 2FA verification code.";
+      setErrorMsg(msg);
+      setIsLoading(false);
+    }
+  };
+
+  const handleResetPasswordSubmit = async (e, skipChange = false) => {
+    if (e) e.preventDefault();
+    setErrorMsg("");
+
+    let newPassword = "";
+    if (!skipChange) {
+      if (!resetNewPassword || !resetConfirmPassword) {
+        setErrorMsg("Please fill in all password fields.");
+        return;
+      }
+      if (resetNewPassword !== resetConfirmPassword) {
+        setErrorMsg("Passwords do not match.");
+        return;
+      }
+      if (resetNewPassword.length < 8) {
+        setErrorMsg("Password must be at least 8 characters long.");
+        return;
+      }
+      newPassword = resetNewPassword;
+    }
+
+    setIsLoading(true);
+    setLoadingStep(skipChange ? "Signing in..." : "Resetting password...");
+
+    try {
+      const data = await resetPassword({ resetToken, newPassword });
+      setLoadingStep("Welcome to Drivya! Loading dashboard...");
+      setIsSuccess(true);
+      setIsLoading(false);
+      const redirectTo = searchParams.get("redirect") || "/dashboard";
+      setTimeout(() => navigate(redirectTo), 600);
+    } catch (error) {
+      const msg =
+        error.response?.data?.message ||
+        "Failed to complete password reset.";
+      setErrorMsg(msg);
+      setIsSuccess(false);
+      setIsLoading(false);
+    }
   };
 
   const handleLoginSubmit = async (e) => {
@@ -591,7 +822,349 @@ export default function Auth() {
           {/* Glass Card Container */}
           <div className="glass mt-10 lg:mt-0 backdrop-blur-xl bg-card/45 shadow-elegant rounded-3xl border border-border/25 overflow-hidden">
             <div className="p-8 sm:p-10 space-y-6">
-              {twoFARequired ? (
+              {resetStep ? (
+                <motion.div
+                  key={resetStep}
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ duration: 0.3, ease: "easeOut" }}
+                  className="space-y-6"
+                >
+                  {resetStep === "forgot-password-email" && (
+                    <>
+                      <div className="space-y-3 text-center">
+                        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 border border-primary/25 text-primary shadow-[0_0_20px_rgba(var(--primary-rgb),0.15)]">
+                          <Mail className="h-6 w-6" />
+                        </div>
+                        <h2 className="font-display text-2xl font-bold tracking-tight text-foreground">
+                          Forgot Password
+                        </h2>
+                        <p className="text-xs text-muted-foreground leading-relaxed max-w-sm mx-auto">
+                          Enter your email address and we'll send you an OTP to verify your identity.
+                        </p>
+                      </div>
+
+                      {/* Error message */}
+                      <AnimatePresence>
+                        {errorMsg && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -8 }}
+                            className="p-3 text-xs bg-destructive/10 border border-destructive/20 text-destructive rounded-lg flex items-center gap-2 font-medium"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-destructive flex-shrink-0 animate-pulse" />
+                            <span>{errorMsg}</span>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      <form onSubmit={handleForgotPasswordSubmit} className="space-y-6">
+                        <div className="space-y-1.5 relative">
+                          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">
+                            Email Address
+                          </label>
+                          <div className="relative group">
+                            <Mail className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                            <input
+                              type="email"
+                              placeholder="name@example.com"
+                              value={resetEmail}
+                              onChange={(e) => setResetEmail(e.target.value)}
+                              className="w-full bg-muted/15 border border-border/30 rounded-xl py-3 pl-10 pr-4 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/45 focus:bg-muted/10 transition-all font-medium text-foreground placeholder:text-muted-foreground/60"
+                            />
+                          </div>
+                        </div>
+
+                        <motion.button
+                          whileHover={{ scale: 1.01 }}
+                          whileTap={{ scale: 0.99 }}
+                          type="submit"
+                          className="w-full cursor-pointer bg-gradient-primary text-primary-foreground font-semibold py-3 rounded-xl hover:opacity-90 shadow-glow transition-all flex items-center justify-center gap-2"
+                        >
+                          <span>Send Code</span>
+                        </motion.button>
+                      </form>
+                    </>
+                  )}
+
+                  {resetStep === "forgot-password-otp" && (
+                    <>
+                      <div className="space-y-3 text-center">
+                        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 border border-primary/25 text-primary shadow-[0_0_20px_rgba(var(--primary-rgb),0.15)]">
+                          <ShieldCheck className="h-6 w-6" />
+                        </div>
+                        <h2 className="font-display text-2xl font-bold tracking-tight text-foreground">
+                          Enter OTP
+                        </h2>
+                        <p className="text-xs text-muted-foreground leading-relaxed max-w-sm mx-auto">
+                          We've sent a 6-digit verification code to <span className="font-semibold text-foreground">{resetEmail}</span>.
+                        </p>
+                      </div>
+
+                      {/* Error message */}
+                      <AnimatePresence>
+                        {errorMsg && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -8 }}
+                            className="p-3 text-xs bg-destructive/10 border border-destructive/20 text-destructive rounded-lg flex items-center gap-2 font-medium"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-destructive flex-shrink-0 animate-pulse" />
+                            <span>{errorMsg}</span>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      <form onSubmit={handleVerifyResetOtpSubmit} className="space-y-6">
+                        <div className="space-y-3">
+                          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block text-center">
+                            Verification Code
+                          </label>
+                          <div className="flex justify-center gap-2" onPaste={handleResetOtpPaste}>
+                            {resetOtpDigits.map((digit, idx) => (
+                              <input
+                                key={idx}
+                                id={`reset-otp-input-${idx}`}
+                                type="text"
+                                maxLength={1}
+                                pattern="\d*"
+                                value={digit}
+                                onChange={(e) => handleResetOtpChange(idx, e.target.value)}
+                                onKeyDown={(e) => handleResetOtpKeyDown(idx, e)}
+                                className="w-11 h-12 text-center text-lg font-bold bg-primary/5 border border-primary/5 shadow-[0_0_20px_rgba(var(--primary-rgb),0.15)] rounded-xl outline-none focus:border-primary focus:ring-1 focus:ring-primary/45 focus:bg-muted/10 transition-all text-foreground"
+                              />
+                            ))}
+                          </div>
+                        </div>
+
+                        <motion.button
+                          whileHover={{ scale: 1.01 }}
+                          whileTap={{ scale: 0.99 }}
+                          type="submit"
+                          className="w-full cursor-pointer bg-gradient-primary text-primary-foreground font-semibold py-3 rounded-xl hover:opacity-90 shadow-glow transition-all flex items-center justify-center gap-2"
+                        >
+                          <span>Verify Code</span>
+                        </motion.button>
+                      </form>
+                    </>
+                  )}
+
+                  {resetStep === "forgot-password-totp" && (
+                    <>
+                      <div className="space-y-3 text-center">
+                        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 border border-primary/25 text-primary shadow-[0_0_20px_rgba(var(--primary-rgb),0.15)]">
+                          <ShieldCheck className="h-6 w-6" />
+                        </div>
+                        <h2 className="font-display text-2xl font-bold tracking-tight text-foreground">
+                          Two-Factor Authentication
+                        </h2>
+                        <p className="text-xs text-muted-foreground leading-relaxed max-w-sm mx-auto">
+                          {isResetBackupMode
+                            ? "Enter one of your 12-character backup codes to verify your identity."
+                            : "Enter the 6-digit verification code from your authenticator app."}
+                        </p>
+                      </div>
+
+                      {/* Error message */}
+                      <AnimatePresence>
+                        {errorMsg && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -8 }}
+                            className="p-3 text-xs bg-destructive/10 border border-destructive/20 text-destructive rounded-lg flex items-center gap-2 font-medium"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-destructive flex-shrink-0 animate-pulse" />
+                            <span>{errorMsg}</span>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      <form onSubmit={handleVerifyReset2FASubmit} className="space-y-6">
+                        {isResetBackupMode ? (
+                          <div className="space-y-1.5">
+                            <label className="text-[11px] ml-1 font-bold uppercase tracking-wider text-muted-foreground">
+                              Backup Code
+                            </label>
+                            <div className="relative my-2 group">
+                              <Lock className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                              <input
+                                type="text"
+                                placeholder="XXXX-XXXX-XXXX"
+                                value={resetBackupCode}
+                                onChange={(e) => setResetBackupCode(e.target.value)}
+                                className="w-full bg-muted/15 border border-border/30 rounded-xl py-3 pl-10 pr-4 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/45 focus:bg-muted/10 transition-all font-medium text-foreground placeholder:text-muted-foreground/60"
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block text-center">
+                              Verification Code
+                            </label>
+                            <div className="flex justify-center gap-2" onPaste={handleReset2FAPaste}>
+                              {reset2FADigits.map((digit, idx) => (
+                                <input
+                                  key={idx}
+                                  id={`reset-2fa-input-${idx}`}
+                                  type="text"
+                                  maxLength={1}
+                                  pattern="\d*"
+                                  value={digit}
+                                  onChange={(e) => handleReset2FAChange(idx, e.target.value)}
+                                  onKeyDown={(e) => handleReset2FAKeyDown(idx, e)}
+                                  className="w-11 h-12 text-center text-lg font-bold bg-primary/5 border border-primary/5 shadow-[0_0_20px_rgba(var(--primary-rgb),0.15)] rounded-xl outline-none focus:border-primary focus:ring-1 focus:ring-primary/45 focus:bg-muted/10 transition-all text-foreground"
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <motion.button
+                          whileHover={{ scale: 1.01 }}
+                          whileTap={{ scale: 0.99 }}
+                          type="submit"
+                          className="w-full cursor-pointer bg-gradient-primary text-primary-foreground font-semibold py-3 rounded-xl hover:opacity-90 shadow-glow transition-all flex items-center justify-center gap-2"
+                        >
+                          <span>Verify</span>
+                        </motion.button>
+                      </form>
+
+                      <div className="flex flex-col gap-2 items-center text-xs">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsResetBackupMode(!isResetBackupMode);
+                            setErrorMsg("");
+                            setReset2FADigits(Array(6).fill(""));
+                            setResetBackupCode("");
+                          }}
+                          className="text-primary hover:underline font-semibold"
+                        >
+                          {isResetBackupMode ? "Use Authenticator App" : "Use a Backup Code"}
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {resetStep === "forgot-password-reset" && (
+                    <>
+                      <div className="space-y-3 text-center">
+                        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 border border-primary/25 text-primary shadow-[0_0_20px_rgba(var(--primary-rgb),0.15)]">
+                          <Lock className="h-6 w-6" />
+                        </div>
+                        <h2 className="font-display text-2xl font-bold tracking-tight text-foreground">
+                          Reset Password
+                        </h2>
+                        <p className="text-xs text-muted-foreground leading-relaxed max-w-sm mx-auto">
+                          Enter your new password below, or choose to skip and log in with your current credentials.
+                        </p>
+                      </div>
+
+                      {/* Error message */}
+                      <AnimatePresence>
+                        {errorMsg && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -8 }}
+                            className="p-3 text-xs bg-destructive/10 border border-destructive/20 text-destructive rounded-lg flex items-center gap-2 font-medium"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-destructive flex-shrink-0 animate-pulse" />
+                            <span>{errorMsg}</span>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      <form onSubmit={(e) => handleResetPasswordSubmit(e, false)} className="space-y-4">
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                            New Password
+                          </label>
+                          <div className="relative group">
+                            <Lock className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                            <input
+                              type={showResetPassword ? "text" : "password"}
+                              placeholder="••••••••••••"
+                              value={resetNewPassword}
+                              onChange={(e) => setResetNewPassword(e.target.value)}
+                              className="w-full bg-muted/15 border border-border/30 rounded-xl py-3 pl-10 pr-10 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/45 focus:bg-muted/10 transition-all font-medium text-foreground placeholder:text-muted-foreground/60"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowResetPassword(!showResetPassword)}
+                              className="absolute right-3 top-3.5 text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              {showResetPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                            Confirm New Password
+                          </label>
+                          <div className="relative group">
+                            <Lock className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                            <input
+                              type={showResetPassword ? "text" : "password"}
+                              placeholder="••••••••••••"
+                              value={resetConfirmPassword}
+                              onChange={(e) => setResetConfirmPassword(e.target.value)}
+                              className="w-full bg-muted/15 border border-border/30 rounded-xl py-3 pl-10 pr-10 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/45 focus:bg-muted/10 transition-all font-medium text-foreground placeholder:text-muted-foreground/60"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex gap-3 pt-2">
+                          <motion.button
+                            whileHover={{ scale: 1.01 }}
+                            whileTap={{ scale: 0.99 }}
+                            type="button"
+                            onClick={(e) => handleResetPasswordSubmit(e, true)}
+                            className="flex-1 cursor-pointer bg-muted border border-border text-foreground font-semibold py-3 rounded-xl hover:bg-muted/80 transition-all flex items-center justify-center animate-none"
+                          >
+                            <span>Skip</span>
+                          </motion.button>
+
+                          <motion.button
+                            whileHover={{ scale: 1.01 }}
+                            whileTap={{ scale: 0.99 }}
+                            type="submit"
+                            className="flex-1 cursor-pointer bg-gradient-primary text-primary-foreground font-semibold py-3 rounded-xl hover:opacity-90 shadow-glow transition-all flex items-center justify-center"
+                          >
+                            <span>Save & Login</span>
+                          </motion.button>
+                        </div>
+                      </form>
+                    </>
+                  )}
+
+                  <div className="flex justify-center text-xs pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setResetStep(null);
+                        setErrorMsg("");
+                        setResetEmail("");
+                        setResetOtpDigits(Array(6).fill(""));
+                        setReset2FADigits(Array(6).fill(""));
+                        setResetBackupCode("");
+                        setResetNewPassword("");
+                        setResetConfirmPassword("");
+                        setIsResetBackupMode(false);
+                      }}
+                      className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 font-medium bg-transparent border-none cursor-pointer"
+                    >
+                      <ArrowLeft className="h-3 w-3" />
+                      Back to sign in
+                    </button>
+                  </div>
+                </motion.div>
+              ) : twoFARequired ? (
                 // ─── 2FA Verification View ──────────────────────────
                 <motion.div
                   key="twoFAForm"
@@ -885,12 +1458,16 @@ export default function Auth() {
                               </span>
                             </label>
 
-                            <a
-                              href="#forgot"
-                              className="text-primary hover:underline font-semibold transition-colors"
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setResetStep("forgot-password-email");
+                                setErrorMsg("");
+                              }}
+                              className="text-primary hover:underline font-semibold transition-colors bg-transparent border-none cursor-pointer"
                             >
                               Forgot password?
-                            </a>
+                            </button>
                           </div>
 
                           {/* Submit button */}

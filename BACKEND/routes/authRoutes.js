@@ -11,6 +11,10 @@ import {
   regenerateBackupCodes,
   disable2FA,
   loginVerify2FA,
+  forgotPassword,
+  verifyResetOtp,
+  verifyReset2FA,
+  resetPassword,
 } from "../controllers/authController.js";
 import { authenticate } from "../middlewares/authMiddleware.js";
 import {
@@ -37,6 +41,10 @@ router.post("/register", validateRegister, handleValidationErrors, register);
 router.post("/login", loginLimiter, validateLogin, handleValidationErrors, login);
 router.post("/refresh", refresh);
 router.post("/logout", logout);
+router.post("/forgot-password", forgotPassword);
+router.post("/verify-reset-otp", verifyResetOtp);
+router.post("/verify-reset-2fa", verifyReset2FA);
+router.post("/reset-password", resetPassword);
 
 /**
  * 2FA (protected)
