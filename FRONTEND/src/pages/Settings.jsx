@@ -33,9 +33,6 @@ const AppearanceSection = lazy(
 const BillingSection = lazy(
   () => import("@/components/settings/sections/BillingSection"),
 );
-const RecoverySection = lazy(
-  () => import("@/components/settings/sections/RecoverySection"),
-);
 const LabsSection = lazy(
   () => import("@/components/settings/sections/LabsSection"),
 );
@@ -47,7 +44,6 @@ const SECTION_COMPONENTS = {
   sharing: SharingSection,
   appearance: AppearanceSection,
   billing: BillingSection,
-  recovery: RecoverySection,
   labs: LabsSection,
 };
 

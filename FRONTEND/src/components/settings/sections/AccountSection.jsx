@@ -16,6 +16,7 @@ import {
   Trash2,
   Upload,
   ImageOff,
+  PauseCircle,
 } from "lucide-react";
 import {
   SettingSection,
@@ -929,7 +930,27 @@ export default function AccountSection({ userProfile, setUserProfile }) {
           </span>
         </SettingRow>
       </SettingSection>
-
+ {/* Account Deactivation */}
+      <SettingDangerZone
+        title="Account Deactivation"
+        description="Temporarily freeze your account without deleting data."
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-foreground">
+              Deactivate Account
+            </p>
+            <p className="text-[12px] text-muted-foreground mt-0.5">
+              Disables login and pauses sync. All data preserved. Reactivate
+              anytime.
+            </p>
+          </div>
+          <button className="inline-flex h-9 items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-4 text-xs font-semibold text-destructive hover:bg-destructive/20 transition-colors shrink-0">
+            <PauseCircle className="h-3.5 w-3.5" />
+            Deactivate
+          </button>
+        </div>
+      </SettingDangerZone>
       {/* ─── Danger Zone ─── */}
       <SettingDangerZone
         title="Danger Zone"
@@ -965,7 +986,6 @@ export default function AccountSection({ userProfile, setUserProfile }) {
           </div>
         </div>
       </SettingDangerZone>
-
       {/* ─── Modals ─── */}
       <EditProfileModal
         open={editOpen}

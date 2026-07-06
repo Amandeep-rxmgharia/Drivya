@@ -59,12 +59,6 @@ export const SETTINGS_SECTIONS = [
     group: "Platform",
   },
   {
-    id: "recovery",
-    label: "Recovery",
-    icon: RefreshCw,
-    group: "Enterprise",
-  },
-  {
     id: "labs",
     label: "Labs",
     icon: Beaker,

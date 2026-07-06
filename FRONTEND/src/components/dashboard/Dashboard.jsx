@@ -798,31 +798,6 @@ function Topbar({
                   </div>
                 </div>
 
-                {/* Status selector inline */}
-                <div className="px-2 py-1.5 border-b border-border/60">
-                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                    Set Status
-                  </span>
-                  <div className="grid grid-cols-3 gap-1">
-                    {Object.entries(STATUS_META).map(([statusKey, meta]) => {
-                      const isSelected = currentStatus === statusKey;
-                      return (
-                        <button
-                          key={statusKey}
-                          onClick={() => setUserProfile((p) => ({ ...p, status: statusKey }))}
-                          className={`flex items-center justify-center gap-1.5 px-1.5 py-1 rounded-lg text-[11px] font-medium border transition-all ${isSelected
-                            ? "bg-secondary border-border/80 text-foreground"
-                            : "bg-transparent border-transparent text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
-                            }`}
-                        >
-                          <span className={`h-2 w-2 rounded-full ${meta.color}`} />
-                          <span className="truncate">{meta.label.split(" ")[0]}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
                 {/* Appearance Theme Selector (Highly suitable according to user interaction) */}
                 <div className="md:hidden px-2 py-1.5 border-b border-border/60">
                   <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
