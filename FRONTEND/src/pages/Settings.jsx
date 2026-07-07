@@ -1,4 +1,6 @@
-import { lazy, Suspense, useState, useMemo } from "react";
+import { lazy, Suspense, useState, useMemo, useEffect } from "react";
+import { formatBytes } from "@/lib/file-types";
+import { getActiveSessions } from "../../api/account.js";
 import { useParams, Navigate, useOutletContext } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { Settings as SettingsIcon, Search, Sparkles } from "lucide-react";
@@ -58,17 +60,33 @@ function SettingsHero({ activeSection, userProfile }) {
     ? "Pro Plan · All features available" 
     : "Free Plan · Upgrade to unlock Pro features";
 
-  const storageStat = currentTier === "Team"
-    ? "156 GB / 5 TB"
-    : currentTier === "Pro"
-    ? "156 / 2000 GB"
-    : "8.4 / 10 GB";
+  const [sessionsCount, setSessionsCount] = useState(null);
 
-  const devicesStat = currentTier === "Team"
-    ? "Unlimited"
-    : currentTier === "Pro"
-    ? "Unlimited"
-    : "2";
+  useEffect(() => {
+    let active = true;
+    async function fetchSessions() {
+      try {
+        const data = await getActiveSessions();
+        if (active && data?.sessions) {
+          setSessionsCount(data.sessions.length);
+        }
+      } catch (err) {
+        console.error("Failed to fetch sessions for settings quick stats:", err);
+      }
+    }
+    fetchSessions();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const storageStat = userProfile
+    ? `${formatBytes(userProfile.storageUsed || 0)} / ${formatBytes(userProfile.storageLimit || 1024 * 1024 * 1024)}`
+    : "0 B / 1 GB";
+
+  const devicesStat = sessionsCount !== null 
+    ? `${sessionsCount}${sessionsCount === 1 ? "" : "s"}` 
+    : "Loading...";
 
   return (
     <section
