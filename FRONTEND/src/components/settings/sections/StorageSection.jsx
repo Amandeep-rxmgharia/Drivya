@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { HardDrive, Trash2, FileUp, Bell, RefreshCw, AlertTriangle, Clock } from "lucide-react";
+import { AnimatePresence } from "motion/react";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import {
   SettingSection,
   SettingRow,
@@ -115,7 +117,7 @@ export default function StorageSection({ userProfile, setUserProfile }) {
 
   // ── Empty trash state ──
   const [isEmptyingTrash, setIsEmptyingTrash] = useState(false);
-  const [showTrashConfirm, setShowTrashConfirm] = useState(false);
+  const [confirmAction, setConfirmAction] = useState(null);
 
   // ── Fetch overview data ──
   const fetchOverview = useCallback(async () => {
@@ -190,35 +192,6 @@ export default function StorageSection({ userProfile, setUserProfile }) {
     return () => clearTimeout(t);
   }, [prefsPayload, isLoadingPrefs]);
 
-  // ── Empty Trash handler ──
-  const handleEmptyTrash = async () => {
-    setIsEmptyingTrash(true);
-    try {
-      await emptyTrash();
-      // Refresh overview to reflect updated storage
-      await fetchOverview();
-      // Update the userProfile's storageUsed if possible
-      if (setUserProfile && overview?.trash?.totalSize) {
-        setUserProfile((prev) => ({
-          ...prev,
-          storageUsed: Math.max(0, (prev.storageUsed || 0) - overview.trash.totalSize),
-        }));
-      }
-      setShowTrashConfirm(false);
-    } catch (err) {
-      setOverviewError(
-        err.response?.data?.message || "Failed to empty trash."
-      );
-    } finally {
-      setIsEmptyingTrash(false);
-    }
-  };
-
-  // ── Loading state ──
-  if (isLoadingOverview && isLoadingPrefs) {
-    return <StorageSkeleton />;
-  }
-
   // ── Compute display values from overview ──
   const storageUsed = overview?.storageUsed ?? userProfile?.storageUsed ?? 0;
   const storageLimit = overview?.storageLimit ?? userProfile?.storageLimit ?? 1024 * 1024 * 1024;
@@ -232,6 +205,43 @@ export default function StorageSection({ userProfile, setUserProfile }) {
   // Trash display
   const trashSize = overview?.trash?.totalSize ?? 0;
   const trashCount = overview?.trash?.count ?? 0;
+
+  // ── Empty Trash handler ──
+  const handleEmptyTrash = useCallback(() => {
+    setConfirmAction({
+      title: "Empty trash?",
+      description: `All ${trashCount} item${trashCount !== 1 ? "s" : ""} (${formatBytes(trashSize)}) in your trash will be permanently deleted. This action cannot be undone.`,
+      confirmLabel: "Empty trash",
+      onConfirm: async () => {
+        setIsEmptyingTrash(true);
+        try {
+          await emptyTrash();
+          // Refresh overview to reflect updated storage
+          await fetchOverview();
+          // Update the userProfile's storageUsed if possible
+          if (setUserProfile && trashSize) {
+            setUserProfile((prev) => ({
+              ...prev,
+              storageUsed: Math.max(0, (prev.storageUsed || 0) - trashSize),
+            }));
+          }
+          setConfirmAction(null);
+        } catch (err) {
+          setConfirmAction(null);
+          setOverviewError(
+            err.response?.data?.message || "Failed to empty trash."
+          );
+        } finally {
+          setIsEmptyingTrash(false);
+        }
+      },
+    });
+  }, [trashCount, trashSize, fetchOverview, setUserProfile]);
+
+  // ── Loading state ──
+  if (isLoadingOverview && isLoadingPrefs) {
+    return <StorageSkeleton />;
+  }
 
   return (
     <>
@@ -263,7 +273,7 @@ export default function StorageSection({ userProfile, setUserProfile }) {
           description="Your current storage usage and plan limits."
         >
           <div className="px-6 py-5">
-            {isLoadingOverview ? (
+            {isLoadingOverview && !overview ? (
               <div className="animate-pulse space-y-3">
                 <div className="h-5 w-24 rounded bg-secondary/40" />
                 <div className="h-2 w-full rounded-full bg-secondary/30" />
@@ -284,9 +294,10 @@ export default function StorageSection({ userProfile, setUserProfile }) {
                   </button>
                   <button
                     onClick={fetchOverview}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border/60 bg-secondary/30 px-3 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+                    disabled={isLoadingOverview}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border/60 bg-secondary/30 px-3 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors disabled:opacity-50 cursor-pointer"
                   >
-                    <RefreshCw className="h-3 w-3" />
+                    <RefreshCw className={`h-3 w-3 ${isLoadingOverview ? "animate-spin" : ""}`} />
                     Refresh
                   </button>
                 </div>
@@ -307,31 +318,13 @@ export default function StorageSection({ userProfile, setUserProfile }) {
                   ({trashCount} {trashCount === 1 ? "file" : "files"})
                 </span>
               )}
-              {trashSize > 0 && !showTrashConfirm && (
+              {trashSize > 0 && (
                 <button
-                  onClick={() => setShowTrashConfirm(true)}
-                  className="text-xs font-semibold text-primary hover:text-primary/80 transition-colors"
+                  onClick={handleEmptyTrash}
+                  className="text-xs font-semibold text-primary hover:text-primary/80 transition-colors cursor-pointer"
                 >
                   Empty Trash
                 </button>
-              )}
-              {showTrashConfirm && (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleEmptyTrash}
-                    disabled={isEmptyingTrash}
-                    className="text-xs font-semibold text-destructive hover:text-destructive/80 transition-colors disabled:opacity-50"
-                  >
-                    {isEmptyingTrash ? "Emptying…" : "Confirm Delete"}
-                  </button>
-                  <button
-                    onClick={() => setShowTrashConfirm(false)}
-                    disabled={isEmptyingTrash}
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
               )}
             </div>
           </SettingRow>
@@ -466,6 +459,19 @@ export default function StorageSection({ userProfile, setUserProfile }) {
           </div>
         )}
       </div>
+
+      {/* Confirm modal */}
+      <AnimatePresence>
+        {confirmAction && (
+          <ConfirmModal
+            title={confirmAction.title}
+            description={confirmAction.description}
+            confirmLabel={confirmAction.confirmLabel}
+            onConfirm={confirmAction.onConfirm}
+            onCancel={() => setConfirmAction(null)}
+          />
+        )}
+      </AnimatePresence>
     </>
   );
 }
