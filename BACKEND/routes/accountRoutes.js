@@ -9,6 +9,7 @@ import {
   changePassword,
   setPassword,
   deleteAccount,
+  deactivateAccount,
   getSharingDefaults,
   updateSharingDefaults,
 } from "../controllers/accountController.js";
@@ -83,6 +84,9 @@ router.post(
 router.get("/sessions", listSessions);
 router.delete("/sessions/others", revokeOtherSessions);
 router.delete("/sessions/:id", revokeSession);
+
+// ─── Deactivate Account ──────────────────────────────────────
+router.patch("/deactivate", deactivateAccount);
 
 // ─── Delete Account ──────────────────────────────────────────
 // Sensitive: require 2FA

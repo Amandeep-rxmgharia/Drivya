@@ -14,6 +14,8 @@ import {
   verifyAccessToken,
   generatePasswordResetToken,
   verifyPasswordResetToken,
+  generateDeactivatedToken,
+  verifyDeactivatedToken,
 } from "../config/tokenUtils.js";
 import { createNotification } from "../services/notificationService.js";
 import { sendOTPEmail } from "../utils/mailer.js";
@@ -130,6 +132,23 @@ export const login = async (req, res, next) => {
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       return res.status(401).json({ message: "Invalid credentials." });
+    }
+
+    if (!user.isActive) {
+      return res.status(403).json({
+        message: "Your account has been suspended. Please contact support.",
+        code: "ACCOUNT_SUSPENDED"
+      });
+    }
+
+    if (user.isDeactivated) {
+      const deactivatedToken = generateDeactivatedToken(user._id.toString(), false, false);
+      return res.status(403).json({
+        message: "Account is deactivated.",
+        code: "ACCOUNT_DEACTIVATED",
+        email: user.email,
+        deactivatedToken,
+      });
     }
 
     const ua = parseUserAgent(req.headers["user-agent"]);
@@ -735,6 +754,268 @@ export const resetPassword = async (req, res, next) => {
       return res.status(401).json({ message: "Invalid or expired reset token." });
     }
     next(err);
+  }
+};
+
+export const sendDeactivatedOtp = async (req, res, next) => {
+  const { deactivatedToken } = req.body;
+  if (!deactivatedToken) {
+    return res.status(400).json({ message: "Deactivated token is required." });
+  }
+
+  try {
+    const decoded = verifyDeactivatedToken(deactivatedToken);
+    const user = await User.findById(decoded.id).lean();
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    // Generate a 6-digit random OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Upsert the OTP document in the database
+    await OTP.findOneAndUpdate(
+      { email: user.email.toLowerCase() },
+      { otp, createdAt: new Date() },
+      { upsert: true, new: true }
+    );
+
+    // Send the email
+    await sendOTPEmail(user.email, otp);
+
+    return res.json({ message: "Verification OTP has been sent to your email." });
+  } catch (err) {
+    if (err.name === "JsonWebTokenError" || err.name === "TokenExpiredError") {
+      return res.status(401).json({ message: "Invalid or expired deactivated token." });
+    }
+    next(err);
+  }
+};
+
+export const verifyDeactivatedOtp = async (req, res, next) => {
+  const { deactivatedToken, otp } = req.body;
+  if (!deactivatedToken || !otp) {
+    return res.status(400).json({ message: "Token and OTP code are required." });
+  }
+
+  try {
+    const decoded = verifyDeactivatedToken(deactivatedToken);
+    const user = await User.findById(decoded.id).select("email rootDirId role twoFAEnabled").lean();
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    const otpRecord = await OTP.findOne({ email: user.email.toLowerCase(), otp: String(otp).trim() });
+    if (!otpRecord) {
+      return res.status(400).json({ message: "Invalid or expired OTP code." });
+    }
+
+    // OTP is valid. Delete it
+    await OTP.deleteOne({ _id: otpRecord._id });
+
+    // Generate updated token indicating email verification is successful
+    const nextToken = generateDeactivatedToken(user._id.toString(), true, false);
+
+    if (user.twoFAEnabled) {
+      return res.json({
+        message: "OTP verified successfully. 2FA verification required.",
+        requiresTwoFA: true,
+        deactivatedToken: nextToken,
+      });
+    }
+
+    // If 2FA is not enabled, reactivate the user and log them in!
+    await User.findByIdAndUpdate(user._id, { isDeactivated: false });
+
+    // Create active session
+    const ua = parseUserAgent(req.headers["user-agent"]);
+    const ipLoc = parseIpAndLocation(req);
+    const sessionDoc = await Session.create({
+      userId: user._id,
+      device: ua.device,
+      browser: ua.browser,
+      os: ua.os,
+      ip: ipLoc.ip,
+      location: ipLoc.location,
+      lastActive: new Date(),
+      twoFAVerifiedAt: null,
+    });
+
+    const accessToken = generateAccessToken(user._id.toString(), sessionDoc._id.toString(), user.role || "user");
+    const refreshToken = generateRefreshToken(user._id.toString(), sessionDoc._id.toString());
+    setTokenCookies(res, accessToken, refreshToken);
+
+    return res.json({
+      message: "Account reactivated successfully!",
+      requiresTwoFA: false,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        rootDirId: user.rootDirId,
+      },
+    });
+  } catch (err) {
+    if (err.name === "JsonWebTokenError" || err.name === "TokenExpiredError") {
+      return res.status(401).json({ message: "Invalid or expired deactivated token." });
+    }
+    next(err);
+  }
+};
+
+export const verifyDeactivated2FA = async (req, res, next) => {
+  const { deactivatedToken, code } = req.body;
+  if (!deactivatedToken || !code) {
+    return res.status(400).json({ message: "Token and code are required." });
+  }
+
+  try {
+    const decoded = verifyDeactivatedToken(deactivatedToken);
+    if (!decoded.emailVerified) {
+      return res.status(403).json({ message: "Email verification is required first." });
+    }
+
+    const user = await User.findById(decoded.id).select(
+      "name email rootDirId role twoFAEnabled twoFASecretEnc twoFASecretIv twoFASecretAuthTag twoFABackupCodes"
+    );
+    if (!user) return res.status(404).json({ message: "User not found." });
+
+    if (!user.twoFAEnabled) {
+      return res.status(400).json({ message: "2FA is not enabled for this account." });
+    }
+
+    const secretBase32 = decryptStringAesGcm({
+      ciphertextB64: user.twoFASecretEnc,
+      ivB64: user.twoFASecretIv,
+      authTagB64: user.twoFASecretAuthTag,
+    });
+
+    const normalizedCode = String(code).trim();
+    let verified = false;
+
+    // 1. Try TOTP verification
+    if (verifyTotpCode(secretBase32, normalizedCode, { window: 1 })) {
+      verified = true;
+    }
+
+    // 2. Try backup codes verification
+    if (!verified && user.twoFABackupCodes?.length > 0) {
+      for (const entry of user.twoFABackupCodes) {
+        if (entry.used) continue;
+        const isMatch = await bcrypt.compare(normalizedCode, entry.hash);
+        if (isMatch) {
+          entry.used = true;
+          entry.usedAt = new Date();
+          await user.save();
+          verified = true;
+          break;
+        }
+      }
+    }
+
+    if (!verified) {
+      return res.status(401).json({ message: "Invalid 2FA code." });
+    }
+
+    // 2FA verified successfully! Reactivate the user and log them in!
+    user.isDeactivated = false;
+    await user.save();
+
+    // Create active session
+    const ua = parseUserAgent(req.headers["user-agent"]);
+    const ipLoc = parseIpAndLocation(req);
+    const sessionDoc = await Session.create({
+      userId: user._id,
+      device: ua.device,
+      browser: ua.browser,
+      os: ua.os,
+      ip: ipLoc.ip,
+      location: ipLoc.location,
+      lastActive: new Date(),
+      twoFAVerifiedAt: new Date(),
+    });
+
+    const accessToken = generateAccessToken(user._id.toString(), sessionDoc._id.toString(), user.role || "user");
+    const refreshToken = generateRefreshToken(user._id.toString(), sessionDoc._id.toString());
+    setTokenCookies(res, accessToken, refreshToken);
+
+    return res.json({
+      message: "Account reactivated and logged in successfully!",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        rootDirId: user.rootDirId,
+      },
+    });
+  } catch (err) {
+    if (err.name === "JsonWebTokenError" || err.name === "TokenExpiredError") {
+      return res.status(401).json({ message: "Invalid or expired deactivated token." });
+    }
+    next(err);
+  }
+};
+
+export const deleteDeactivatedAccount = async (req, res, next) => {
+  const { deactivatedToken } = req.body;
+  if (!deactivatedToken) {
+    return res.status(400).json({ message: "Deactivated token is required." });
+  }
+
+  const session = await mongoose.startSession();
+
+  try {
+    const decoded = verifyDeactivatedToken(deactivatedToken);
+    const user = await User.findById(decoded.id);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    await session.withTransaction(async () => {
+      // Delete all user files from storage
+      const File = (await import("../models/fileModel.js")).default;
+      const Directory = (await import("../models/directoryModel.js")).default;
+      const Notification = (await import("../models/notificationModel.js")).default;
+      const Share = (await import("../models/shareModel.js")).default;
+      const { deleteFile } = await import("../services/storageService.js");
+
+      const files = await File.find({ userId: user._id })
+        .lean()
+        .select("storagePath")
+        .session(session);
+
+      for (const file of files) {
+        if (file.storagePath) {
+          try {
+            await deleteFile(file.storagePath);
+          } catch (e) {
+            console.error(
+              `Failed to delete storage file ${file.storagePath}:`,
+              e.message,
+            );
+          }
+        }
+      }
+
+      // Delete all related data
+      await File.deleteMany({ userId: user._id }).session(session);
+      await Directory.deleteMany({ userId: user._id }).session(session);
+      await Notification.deleteMany({ userId: user._id }).session(session);
+      await Share.deleteMany({ ownerId: user._id }).session(session);
+      await User.findByIdAndDelete(user._id).session(session);
+    });
+
+    clearTokenCookies(res);
+
+    return res.json({ message: "Account deleted successfully." });
+  } catch (err) {
+    if (err.name === "JsonWebTokenError" || err.name === "TokenExpiredError") {
+      return res.status(401).json({ message: "Invalid or expired deactivated token." });
+    }
+    next(err);
+  } finally {
+    await session.endSession();
   }
 };
 

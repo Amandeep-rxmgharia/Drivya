@@ -151,4 +151,26 @@ export const getGoogleLoginUrl = async () => {
   return response.data;
 };
 
+// ─── Deactivated Account API Functions ──────────────────────
+
+export const sendDeactivatedOtp = async ({ deactivatedToken }) => {
+  const response = await api.post("/auth/deactivated/send-otp", { deactivatedToken });
+  return response.data;
+};
+
+export const verifyDeactivatedOtp = async ({ deactivatedToken, otp }) => {
+  const response = await api.post("/auth/deactivated/verify-otp", { deactivatedToken, otp });
+  return response.data;
+};
+
+export const verifyDeactivated2FA = async ({ deactivatedToken, code }) => {
+  const response = await api.post("/auth/deactivated/verify-2fa", { deactivatedToken, code });
+  return response.data;
+};
+
+export const deleteDeactivatedAccount = async ({ deactivatedToken }) => {
+  const response = await api.post("/auth/deactivated/delete", { deactivatedToken });
+  return response.data;
+};
+
 export default api;

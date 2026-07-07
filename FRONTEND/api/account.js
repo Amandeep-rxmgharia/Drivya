@@ -76,3 +76,8 @@ export const revokeOtherSessions = async () => {
   const response = await api.delete("/api/account/sessions/others");
   return response.data;
 };
+
+export const deactivateAccount = async () => {
+  const response = await api.patch("/api/account/deactivate");
+  return response.data;
+};

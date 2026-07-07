@@ -30,6 +30,7 @@ import {
   uploadAvatar,
   deleteAvatar,
   deleteAccount,
+  deactivateAccount,
 } from "../../../../api/account.js";
 import { logoutUser } from "../../../../api/auth.js";
 
@@ -676,6 +677,80 @@ function DeleteModal({ open, onClose, onConfirm, loading, email }) {
   );
 }
 
+/* ═══════════════════════ Deactivate Confirmation Modal ═══════════════════════ */
+
+function DeactivateModal({ open, onClose, onConfirm, loading }) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center">
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <div className="relative w-full max-w-md rounded-2xl border border-border bg-background shadow-2xl mx-4 overflow-hidden animate-modal-panel">
+        {/* Header */}
+        <div className="flex items-center gap-3 border-b border-border px-6 py-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-destructive/10 border border-destructive/20">
+            <PauseCircle className="h-5 w-5 text-destructive" />
+          </div>
+          <div>
+            <h3 className="text-base font-semibold text-foreground">
+              Deactivate Account
+            </h3>
+            <p className="text-[11px] text-muted-foreground">
+              Temporarily freeze your account
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary/60 hover:text-foreground transition-all"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Warning / Confirmation */}
+        <div className="px-6 py-5 space-y-4">
+          <p className="text-sm text-foreground/80 leading-relaxed">
+            Are you sure you want to deactivate your account? This will log you out, disable sign-in, and pause all sync activities.
+          </p>
+          <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-4 text-xs text-amber-600 dark:text-amber-400 leading-relaxed">
+            Your files, folders, and settings will be preserved safely. You can reactivate your account at any time by simply logging in again.
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={onClose}
+              disabled={loading}
+              className="flex-1 h-9 rounded-xl border border-border bg-secondary/40 text-xs font-semibold text-foreground hover:bg-secondary/60 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onConfirm}
+              disabled={loading}
+              className="flex-1 h-9 rounded-xl bg-destructive text-xs font-semibold text-white hover:bg-destructive/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Deactivating…
+                </>
+              ) : (
+                <>
+                  <PauseCircle className="h-3.5 w-3.5" />
+                  Deactivate Account
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ═══════════════════════ Main Component ═══════════════════════ */
 
 export default function AccountSection({ userProfile, setUserProfile }) {
@@ -692,6 +767,8 @@ export default function AccountSection({ userProfile, setUserProfile }) {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deactivateOpen, setDeactivateOpen] = useState(false);
+  const [deactivating, setDeactivating] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
 
   // ─── Helper: sync profile to parent ────────────────────────
@@ -785,6 +862,20 @@ export default function AccountSection({ userProfile, setUserProfile }) {
     await deleteAccount(password);
     await logoutUser();
     window.location.href = "/auth";
+  };
+
+  // ─── Deactivate account ────────────────────────────────────
+  const handleDeactivateAccount = async () => {
+    setDeactivating(true);
+    try {
+      await deactivateAccount();
+      await logoutUser();
+      window.location.href = "/auth";
+    } catch (err) {
+      console.error("Failed to deactivate account:", err);
+    } finally {
+      setDeactivating(false);
+    }
   };
 
   // ─── Derive tier label ────────────────────────────────────
@@ -894,7 +985,10 @@ export default function AccountSection({ userProfile, setUserProfile }) {
               anytime.
             </p>
           </div>
-          <button className="inline-flex h-9 items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-4 text-xs font-semibold text-destructive hover:bg-destructive/20 transition-colors shrink-0">
+          <button
+            onClick={() => setDeactivateOpen(true)}
+            className="inline-flex h-9 items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-4 text-xs font-semibold text-destructive hover:bg-destructive/20 transition-colors shrink-0"
+          >
             <PauseCircle className="h-3.5 w-3.5" />
             Deactivate
           </button>
@@ -951,6 +1045,12 @@ export default function AccountSection({ userProfile, setUserProfile }) {
         onConfirm={handleDeleteAccount}
         loading={deleting}
         email={profile.email}
+      />
+      <DeactivateModal
+        open={deactivateOpen}
+        onClose={() => setDeactivateOpen(false)}
+        onConfirm={handleDeactivateAccount}
+        loading={deactivating}
       />
     </div>
   );

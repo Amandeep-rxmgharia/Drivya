@@ -31,6 +31,10 @@ import {
   resetPassword,
   googleAuth,
   getGoogleLoginUrl,
+  sendDeactivatedOtp,
+  verifyDeactivatedOtp,
+  verifyDeactivated2FA,
+  deleteDeactivatedAccount,
 } from "../../api/auth";
 
 // Google Logo SVG
@@ -112,6 +116,15 @@ export default function Auth() {
   const [resetBackupCode, setResetBackupCode] = useState("");
   const [isResetBackupMode, setIsResetBackupMode] = useState(false);
 
+  // Deactivated account flow states
+  const [deactivatedState, setDeactivatedState] = useState(null); // null, 'options', 'otp', 'totp'
+  const [deactivatedEmail, setDeactivatedEmail] = useState("");
+  const [deactivatedToken, setDeactivatedToken] = useState("");
+  const [deactivatedOtpDigits, setDeactivatedOtpDigits] = useState(Array(6).fill(""));
+  const [deactivated2FADigits, setDeactivated2FADigits] = useState(Array(6).fill(""));
+  const [deactivatedBackupCode, setDeactivatedBackupCode] = useState("");
+  const [isDeactivatedBackupMode, setIsDeactivatedBackupMode] = useState(false);
+
   const handleGoogleCredentialResponse = async (response) => {
     const { credential } = response;
     setIsLoading(true);
@@ -132,6 +145,14 @@ export default function Auth() {
       const redirectTo = searchParams.get("redirect") || "/dashboard";
       setTimeout(() => navigate(redirectTo), 600);
     } catch (error) {
+      if (error.response?.data?.code === "ACCOUNT_DEACTIVATED") {
+        setDeactivatedEmail(error.response.data.email);
+        setDeactivatedToken(error.response.data.deactivatedToken);
+        setDeactivatedState("options");
+        setErrorMsg("");
+        setIsLoading(false);
+        return;
+      }
       const msg =
         error.response?.data?.message ||
         "Google authentication failed.";
@@ -209,6 +230,14 @@ export default function Auth() {
       setTimeout(() => navigate(redirectTo), 600);
     } else if (googleStatus === "2fa") {
       setTwoFARequired(true);
+    } else if (googleStatus === "suspended") {
+      setErrorMsg("Your account has been suspended. Please contact support.");
+    } else if (googleStatus === "deactivated") {
+      const email = searchParams.get("email");
+      const token = searchParams.get("deactivatedToken");
+      setDeactivatedEmail(email || "");
+      setDeactivatedToken(token || "");
+      setDeactivatedState("options");
     } else if (googleStatus === "error") {
       setErrorMsg(message || "Google authentication failed.");
     }
@@ -496,6 +525,14 @@ export default function Auth() {
       const redirectTo = searchParams.get("redirect") || "/dashboard";
       setTimeout(() => navigate(redirectTo), 600);
     } catch (error) {
+      if (error.response?.data?.code === "ACCOUNT_DEACTIVATED") {
+        setDeactivatedEmail(error.response.data.email);
+        setDeactivatedToken(error.response.data.deactivatedToken);
+        setDeactivatedState("options");
+        setErrorMsg("");
+        setIsLoading(false);
+        return;
+      }
       const msg =
         error.response?.data?.message ||
         error.response?.data?.errors?.[0]?.message ||
@@ -599,6 +636,175 @@ export default function Auth() {
       setIsSuccess(false);
       setIsLoading(false);
     }
+  };
+
+  const handleDeactivatedSendOtp = async () => {
+    setErrorMsg("");
+    setIsLoading(true);
+    setLoadingStep("Sending verification OTP...");
+    try {
+      await sendDeactivatedOtp({ deactivatedToken });
+      setIsLoading(false);
+      setDeactivatedState("otp");
+    } catch (error) {
+      const msg = error.response?.data?.message || "Failed to send OTP code.";
+      setErrorMsg(msg);
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeactivatedVerifyOtp = async (e) => {
+    e.preventDefault();
+    setErrorMsg("");
+    const joinedOtp = deactivatedOtpDigits.join("");
+    if (joinedOtp.length < 6) {
+      setErrorMsg("Please enter the 6-digit OTP code.");
+      return;
+    }
+
+    setIsLoading(true);
+    setLoadingStep("Verifying OTP...");
+    try {
+      const data = await verifyDeactivatedOtp({ deactivatedToken, otp: joinedOtp });
+      setIsLoading(false);
+      if (data?.requiresTwoFA) {
+        setDeactivatedToken(data.deactivatedToken);
+        setDeactivatedState("totp");
+      } else {
+        setLoadingStep("Reactivation successful! Welcome back...");
+        setIsSuccess(true);
+        const redirectTo = searchParams.get("redirect") || "/dashboard";
+        setTimeout(() => navigate(redirectTo), 600);
+      }
+    } catch (error) {
+      const msg = error.response?.data?.message || "Invalid or expired OTP code.";
+      setErrorMsg(msg);
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeactivatedVerify2FA = async (e) => {
+    e.preventDefault();
+    setErrorMsg("");
+
+    let codeToVerify = "";
+    if (isDeactivatedBackupMode) {
+      if (!deactivatedBackupCode) {
+        setErrorMsg("Please enter your backup code.");
+        return;
+      }
+      codeToVerify = deactivatedBackupCode.trim();
+    } else {
+      const joinedDigits = deactivated2FADigits.join("");
+      if (joinedDigits.length < 6) {
+        setErrorMsg("Please enter a 6-digit TOTP code.");
+        return;
+      }
+      codeToVerify = joinedDigits;
+    }
+
+    setIsLoading(true);
+    setLoadingStep("Verifying 2FA...");
+    try {
+      await verifyDeactivated2FA({ deactivatedToken, code: codeToVerify });
+      setLoadingStep("Reactivation successful! Welcome back...");
+      setIsSuccess(true);
+      setIsLoading(false);
+      const redirectTo = searchParams.get("redirect") || "/dashboard";
+      setTimeout(() => navigate(redirectTo), 600);
+    } catch (error) {
+      const msg = error.response?.data?.message || "Invalid 2FA verification code.";
+      setErrorMsg(msg);
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeactivatedDelete = async () => {
+    setErrorMsg("");
+    setIsLoading(true);
+    setLoadingStep("Deleting account...");
+    try {
+      await deleteDeactivatedAccount({ deactivatedToken });
+      setIsLoading(false);
+      setDeactivatedState(null);
+      setErrorMsg("Your account has been deleted successfully.");
+    } catch (error) {
+      const msg = error.response?.data?.message || "Failed to delete account.";
+      setErrorMsg(msg);
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeactivatedOtpChange = (index, value) => {
+    if (!/^\d*$/.test(value)) return;
+    const newDigits = [...deactivatedOtpDigits];
+    newDigits[index] = value.slice(-1);
+    setDeactivatedOtpDigits(newDigits);
+
+    if (value && index < 5) {
+      const nextInput = document.getElementById(`deactivated-otp-input-${index + 1}`);
+      if (nextInput) nextInput.focus();
+    }
+  };
+
+  const handleDeactivatedOtpKeyDown = (index, e) => {
+    if (e.key === "Backspace" && !deactivatedOtpDigits[index] && index > 0) {
+      const prevInput = document.getElementById(`deactivated-otp-input-${index - 1}`);
+      if (prevInput) {
+        prevInput.focus();
+        const newDigits = [...deactivatedOtpDigits];
+        newDigits[index - 1] = "";
+        setDeactivatedOtpDigits(newDigits);
+      }
+    }
+  };
+
+  const handleDeactivatedOtpPaste = (e) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData("text").trim();
+    if (!/^\d{6}$/.test(pastedData)) return;
+
+    const newDigits = pastedData.split("");
+    setDeactivatedOtpDigits(newDigits);
+
+    const lastInput = document.getElementById("deactivated-otp-input-5");
+    if (lastInput) lastInput.focus();
+  };
+
+  const handleDeactivated2FAChange = (index, value) => {
+    if (!/^\d*$/.test(value)) return;
+    const newDigits = [...deactivated2FADigits];
+    newDigits[index] = value.slice(-1);
+    setDeactivated2FADigits(newDigits);
+
+    if (value && index < 5) {
+      const nextInput = document.getElementById(`deactivated-2fa-input-${index + 1}`);
+      if (nextInput) nextInput.focus();
+    }
+  };
+
+  const handleDeactivated2FAKeyDown = (index, e) => {
+    if (e.key === "Backspace" && !deactivated2FADigits[index] && index > 0) {
+      const prevInput = document.getElementById(`deactivated-2fa-input-${index - 1}`);
+      if (prevInput) {
+        prevInput.focus();
+        const newDigits = [...deactivated2FADigits];
+        newDigits[index - 1] = "";
+        setDeactivated2FADigits(newDigits);
+      }
+    }
+  };
+
+  const handleDeactivated2FAPaste = (e) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData("text").trim();
+    if (!/^\d{6}$/.test(pastedData)) return;
+
+    const newDigits = pastedData.split("");
+    setDeactivated2FADigits(newDigits);
+
+    const lastInput = document.getElementById("deactivated-2fa-input-5");
+    if (lastInput) lastInput.focus();
   };
 
   return (
@@ -940,7 +1146,269 @@ export default function Auth() {
           {/* Glass Card Container */}
           <div className="glass mt-10 lg:mt-0 backdrop-blur-xl bg-card/45 shadow-elegant rounded-3xl border border-border/25 overflow-hidden">
             <div className="p-8 sm:p-10 space-y-6">
-              {resetStep ? (
+              {deactivatedState ? (
+                // ─── Deactivated Account Flow Views ──────────────────
+                <motion.div
+                  key="deactivatedFlow"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ duration: 0.3, ease: "easeOut" }}
+                  className="space-y-6"
+                >
+                  {deactivatedState === "options" && (
+                    <>
+                      <div className="space-y-3 text-center">
+                        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-destructive/10 border border-destructive/25 text-destructive shadow-[0_0_20px_rgba(239,68,68,0.15)]">
+                          <Activity className="h-6 w-6 animate-pulse" />
+                        </div>
+                        <h2 className="font-display text-2xl font-bold tracking-tight text-foreground">
+                          Account Deactivated
+                        </h2>
+                        <p className="text-xs text-muted-foreground leading-relaxed max-w-sm mx-auto">
+                          This account (<strong>{deactivatedEmail}</strong>) is currently deactivated. You can choose to reactivate it or permanently delete all associated data.
+                        </p>
+                      </div>
+
+                      {/* Error / Success messages */}
+                      <AnimatePresence>
+                        {errorMsg && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -8 }}
+                            className="p-3 text-xs bg-destructive/10 border border-destructive/20 text-destructive rounded-lg flex items-center gap-2 font-medium"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-destructive flex-shrink-0 animate-pulse" />
+                            <span>{errorMsg}</span>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      <div className="space-y-3 pt-2">
+                        <motion.button
+                          whileHover={{ scale: 1.01 }}
+                          whileTap={{ scale: 0.99 }}
+                          onClick={handleDeactivatedSendOtp}
+                          className="w-full cursor-pointer bg-gradient-primary text-primary-foreground font-semibold py-3 rounded-xl hover:opacity-90 shadow-glow transition-all flex items-center justify-center gap-2"
+                        >
+                          <span>Reactivate Account</span>
+                        </motion.button>
+
+                        <motion.button
+                          whileHover={{ scale: 1.01 }}
+                          whileTap={{ scale: 0.99 }}
+                          onClick={() => {
+                            if (window.confirm("Are you absolutely sure you want to permanently delete your account and all its data? This cannot be undone.")) {
+                              handleDeactivatedDelete();
+                            }
+                          }}
+                          className="w-full cursor-pointer bg-destructive/10 border border-destructive/20 text-destructive font-semibold py-3 rounded-xl hover:bg-destructive/20 transition-all flex items-center justify-center gap-2"
+                        >
+                          <span>Delete Account Permanently</span>
+                        </motion.button>
+                      </div>
+
+                      <div className="flex justify-center text-xs pt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDeactivatedState(null);
+                            setErrorMsg("");
+                          }}
+                          className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 font-medium bg-transparent border-none cursor-pointer"
+                        >
+                          <ArrowLeft className="h-3 w-3" />
+                          Back to sign in
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {deactivatedState === "otp" && (
+                    <>
+                      <div className="space-y-3 text-center">
+                        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 border border-primary/25 text-primary shadow-[0_0_20px_rgba(var(--primary-rgb),0.15)]">
+                          <Mail className="h-6 w-6" />
+                        </div>
+                        <h2 className="font-display text-2xl font-bold tracking-tight text-foreground">
+                          Reactivate Account
+                        </h2>
+                        <p className="text-xs text-muted-foreground leading-relaxed max-w-sm mx-auto">
+                          We have sent a verification code to <strong>{deactivatedEmail}</strong>. Please enter the 6-digit code below to reactivate your account.
+                        </p>
+                      </div>
+
+                      {/* Error message */}
+                      <AnimatePresence>
+                        {errorMsg && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -8 }}
+                            className="p-3 text-xs bg-destructive/10 border border-destructive/20 text-destructive rounded-lg flex items-center gap-2 font-medium"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-destructive flex-shrink-0 animate-pulse" />
+                            <span>{errorMsg}</span>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      <form onSubmit={handleDeactivatedVerifyOtp} className="space-y-6">
+                        <div className="space-y-3">
+                          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block text-center">
+                            Verification Code
+                          </label>
+                          <div className="flex justify-center gap-2" onPaste={handleDeactivatedOtpPaste}>
+                            {deactivatedOtpDigits.map((digit, idx) => (
+                              <input
+                                key={idx}
+                                id={`deactivated-otp-input-${idx}`}
+                                type="text"
+                                maxLength={1}
+                                pattern="\d*"
+                                value={digit}
+                                onChange={(e) => handleDeactivatedOtpChange(idx, e.target.value)}
+                                onKeyDown={(e) => handleDeactivatedOtpKeyDown(idx, e)}
+                                className="w-11 h-12 text-center text-lg font-bold bg-primary/5 border border-primary/5 shadow-[0_0_20px_rgba(var(--primary-rgb),0.15)] rounded-xl outline-none focus:border-primary focus:ring-1 focus:ring-primary/45 focus:bg-muted/10 transition-all text-foreground"
+                              />
+                            ))}
+                          </div>
+                        </div>
+
+                        <motion.button
+                          whileHover={{ scale: 1.01 }}
+                          whileTap={{ scale: 0.99 }}
+                          type="submit"
+                          className="w-full cursor-pointer bg-gradient-primary text-primary-foreground font-semibold py-3 rounded-xl hover:opacity-90 shadow-glow transition-all flex items-center justify-center gap-2"
+                        >
+                          <span>Verify & Reactivate</span>
+                        </motion.button>
+                      </form>
+
+                      <div className="flex flex-col gap-2 items-center text-xs">
+                        <button
+                          type="button"
+                          onClick={handleDeactivatedSendOtp}
+                          className="text-primary hover:underline font-semibold"
+                        >
+                          Resend Code
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDeactivatedState("options");
+                            setErrorMsg("");
+                            setDeactivatedOtpDigits(Array(6).fill(""));
+                          }}
+                          className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 font-medium bg-transparent border-none cursor-pointer mt-2"
+                        >
+                          <ArrowLeft className="h-3 w-3" />
+                          Back to options
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {deactivatedState === "totp" && (
+                    <>
+                      <div className="space-y-3 text-center">
+                        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 border border-primary/25 text-primary shadow-[0_0_20px_rgba(var(--primary-rgb),0.15)]">
+                          <ShieldCheck className="h-6 w-6" />
+                        </div>
+                        <h2 className="font-display text-2xl font-bold tracking-tight text-foreground">
+                          Two-Factor Security
+                        </h2>
+                        <p className="text-xs text-muted-foreground leading-relaxed max-w-sm mx-auto">
+                          {isDeactivatedBackupMode
+                            ? "Please enter one of your 12-character backup codes below to verify your identity."
+                            : "Please enter the 6-digit verification code from your authenticator app."}
+                        </p>
+                      </div>
+
+                      {/* Error message */}
+                      <AnimatePresence>
+                        {errorMsg && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -8 }}
+                            className="p-3 text-xs bg-destructive/10 border border-destructive/20 text-destructive rounded-lg flex items-center gap-2 font-medium"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-destructive flex-shrink-0 animate-pulse" />
+                            <span>{errorMsg}</span>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      <form onSubmit={handleDeactivatedVerify2FA} className="space-y-6">
+                        {isDeactivatedBackupMode ? (
+                          <div className="space-y-1.5">
+                            <label className="text-[11px] ml-1 font-bold uppercase tracking-wider text-muted-foreground">
+                              Backup Code
+                            </label>
+                            <div className="relative my-2 group">
+                              <Lock className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                              <input
+                                type="text"
+                                placeholder="XXXX-XXXX-XXXX"
+                                value={deactivatedBackupCode}
+                                onChange={(e) => setDeactivatedBackupCode(e.target.value)}
+                                className="w-full bg-muted/15 border border-border/30 rounded-xl py-3 pl-10 pr-4 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/45 focus:bg-muted/10 transition-all font-medium text-foreground placeholder:text-muted-foreground/60"
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block text-center">
+                              Verification Code
+                            </label>
+                            <div className="flex justify-center gap-2" onPaste={handleDeactivated2FAPaste}>
+                              {deactivated2FADigits.map((digit, idx) => (
+                                <input
+                                  key={idx}
+                                  id={`deactivated-2fa-input-${idx}`}
+                                  type="text"
+                                  maxLength={1}
+                                  pattern="\d*"
+                                  value={digit}
+                                  onChange={(e) => handleDeactivated2FAChange(idx, e.target.value)}
+                                  onKeyDown={(e) => handleDeactivated2FAKeyDown(idx, e)}
+                                  className="w-11 h-12 text-center text-lg font-bold bg-primary/5 border border-primary/5 shadow-[0_0_20px_rgba(var(--primary-rgb),0.15)] rounded-xl outline-none focus:border-primary focus:ring-1 focus:ring-primary/45 focus:bg-muted/10 transition-all text-foreground"
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <motion.button
+                          whileHover={{ scale: 1.01 }}
+                          whileTap={{ scale: 0.99 }}
+                          type="submit"
+                          className="w-full cursor-pointer bg-gradient-primary text-primary-foreground font-semibold py-3 rounded-xl hover:opacity-90 shadow-glow transition-all flex items-center justify-center gap-2"
+                        >
+                          <span>Verify & Reactivate</span>
+                        </motion.button>
+                      </form>
+
+                      <div className="flex flex-col gap-2 items-center text-xs">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsDeactivatedBackupMode(!isDeactivatedBackupMode);
+                            setErrorMsg("");
+                            setDeactivated2FADigits(Array(6).fill(""));
+                            setDeactivatedBackupCode("");
+                          }}
+                          className="text-primary hover:underline font-semibold"
+                        >
+                          {isDeactivatedBackupMode ? "Use Authenticator App" : "Use a Backup Code"}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </motion.div>
+              ) : resetStep ? (
                 <motion.div
                   key={resetStep}
                   initial={{ opacity: 0, y: 15 }}

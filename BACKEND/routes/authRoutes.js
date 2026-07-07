@@ -15,6 +15,10 @@ import {
   verifyResetOtp,
   verifyReset2FA,
   resetPassword,
+  sendDeactivatedOtp,
+  verifyDeactivatedOtp,
+  verifyDeactivated2FA,
+  deleteDeactivatedAccount,
 } from "../controllers/authController.js";
 import {
   googleLogin,
@@ -51,6 +55,12 @@ router.post("/forgot-password", forgotPassword);
 router.post("/verify-reset-otp", verifyResetOtp);
 router.post("/verify-reset-2fa", verifyReset2FA);
 router.post("/reset-password", resetPassword);
+
+// ─── Deactivated Account Flows ────────────────────────────────
+router.post("/deactivated/send-otp", sendDeactivatedOtp);
+router.post("/deactivated/verify-otp", verifyDeactivatedOtp);
+router.post("/deactivated/verify-2fa", verifyDeactivated2FA);
+router.post("/deactivated/delete", deleteDeactivatedAccount);
 
 /**
  * 2FA (protected)

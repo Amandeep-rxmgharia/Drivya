@@ -33,12 +33,15 @@ export async function authenticate(req, res, next) {
     }
 
     // Fetch user details for RBAC & suspension checks
-    const user = await User.findById(decoded.id).select("role isActive").lean();
+    const user = await User.findById(decoded.id).select("role isActive isDeactivated").lean();
     if (!user) {
       return res.status(401).json({ message: "User not found." });
     }
     if (!user.isActive) {
-      return res.status(403).json({ message: "Account suspended.", code: "ACCOUNT_SUSPENDED" });
+      return res.status(403).json({ message: "Your account has been suspended. Please contact support.", code: "ACCOUNT_SUSPENDED" });
+    }
+    if (user.isDeactivated) {
+      return res.status(403).json({ message: "Account is deactivated.", code: "ACCOUNT_DEACTIVATED" });
     }
 
     req.user = {
@@ -75,10 +78,13 @@ export async function softAuthenticate(req, res, next) {
       }
       
       if (sessionExists) {
-        const user = await User.findById(decoded.id).select("role isActive").lean();
+        const user = await User.findById(decoded.id).select("role isActive isDeactivated").lean();
         if (user) {
           if (!user.isActive) {
-            return res.status(403).json({ message: "Account suspended.", code: "ACCOUNT_SUSPENDED" });
+            return res.status(403).json({ message: "Your account has been suspended. Please contact support.", code: "ACCOUNT_SUSPENDED" });
+          }
+          if (user.isDeactivated) {
+            return res.status(403).json({ message: "Account is deactivated.", code: "ACCOUNT_DEACTIVATED" });
           }
           req.user = {
             id: decoded.id,

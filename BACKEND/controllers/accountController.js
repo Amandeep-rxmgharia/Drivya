@@ -476,3 +476,25 @@ export const deleteAccount = async (req, res, next) => {
     await session.endSession();
   }
 };
+
+export const deactivateAccount = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    user.isDeactivated = true;
+    await user.save();
+
+    // Revoke all active sessions for this user
+    const Session = (await import("../models/sessionModel.js")).default;
+    await Session.deleteMany({ userId: user._id });
+
+    clearTokenCookies(res);
+
+    return res.json({ message: "Account deactivated successfully." });
+  } catch (err) {
+    next(err);
+  }
+};

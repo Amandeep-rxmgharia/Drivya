@@ -11,6 +11,7 @@ import {
   generateAccessToken,
   generateRefreshToken,
   setTokenCookies,
+  generateDeactivatedToken,
 } from "../config/tokenUtils.js";
 import { createNotification } from "../services/notificationService.js";
 
@@ -198,6 +199,23 @@ export const googleLogin = async (req, res, next) => {
       req,
     );
 
+    if (!user.isActive) {
+      return res.status(403).json({
+        message: "Your account has been suspended. Please contact support.",
+        code: "ACCOUNT_SUSPENDED"
+      });
+    }
+
+    if (user.isDeactivated) {
+      const deactivatedToken = generateDeactivatedToken(user._id.toString(), false, false);
+      return res.status(403).json({
+        message: "Account is deactivated.",
+        code: "ACCOUNT_DEACTIVATED",
+        email: user.email,
+        deactivatedToken,
+      });
+    }
+
     await createSessionAndSetCookies(user, req, res);
 
     // If user has 2FA enabled, require verification
@@ -281,6 +299,19 @@ export const googleLoginCallback = async (req, res, next) => {
       { googleId, email, name, picture },
       req,
     );
+
+    if (!user.isActive) {
+      return res.redirect(
+        `${frontendBase}/auth?google=suspended`
+      );
+    }
+
+    if (user.isDeactivated) {
+      const deactivatedToken = generateDeactivatedToken(user._id.toString(), false, false);
+      return res.redirect(
+        `${frontendBase}/auth?google=deactivated&email=${encodeURIComponent(user.email)}&deactivatedToken=${encodeURIComponent(deactivatedToken)}`
+      );
+    }
 
     await createSessionAndSetCookies(user, req, res);
 

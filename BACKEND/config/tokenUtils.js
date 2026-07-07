@@ -207,3 +207,25 @@ export function verifyPasswordResetToken(token) {
   }
   return decoded;
 }
+
+/**
+ * Generate a short-lived token specifically for deactivated account actions.
+ */
+export function generateDeactivatedToken(userId, emailVerified = false, twoFAVerified = false) {
+  return jwt.sign(
+    { id: userId, emailVerified, twoFAVerified, type: "deactivated_action" },
+    JWT_ACCESS_SECRET,
+    { expiresIn: "15m" }
+  );
+}
+
+/**
+ * Verify deactivated action token.
+ */
+export function verifyDeactivatedToken(token) {
+  const decoded = jwt.verify(token, JWT_ACCESS_SECRET);
+  if (decoded.type !== "deactivated_action") {
+    throw new Error("Invalid deactivated action token.");
+  }
+  return decoded;
+}
