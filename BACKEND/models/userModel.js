@@ -93,6 +93,28 @@ const userSchema = new Schema(
       min: [0, "Storage limit cannot be negative"],
     },
 
+    // ─── Storage Preferences ─────────────────────────────────
+    storagePreferences: {
+      trashAutoEmptyDays: {
+        type: Number,
+        default: 30,
+        validate: {
+          validator: function (v) {
+            return v === null || [7, 30, 60, 90].includes(v);
+          },
+          message: "trashAutoEmptyDays must be one of: null, 7, 30, 60, 90",
+        },
+      },
+      alertAt80: {
+        type: Boolean,
+        default: true,
+      },
+      alertAt95: {
+        type: Boolean,
+        default: true,
+      },
+    },
+
     // ─── Sharing defaults (used when creating new share links) ───
     defaultShareAccess: {
       type: String,

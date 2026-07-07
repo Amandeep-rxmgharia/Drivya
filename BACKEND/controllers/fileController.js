@@ -50,7 +50,7 @@ export const uploadFiles = async (req, res, next) => {
 
     // Check quota
     const user = await User.findById(userId)
-      .select("storageUsed storageLimit")
+      .select("storageUsed storageLimit storagePreferences")
       .lean();
 
     if (user.storageUsed + totalUploadSize > user.storageLimit) {
@@ -155,7 +155,7 @@ export const uploadFiles = async (req, res, next) => {
 
     const newStorageUsed = user.storageUsed + totalUploadSize;
     const usagePct = (newStorageUsed / user.storageLimit) * 100;
-    if (usagePct >= 80 && usagePct < 95) {
+    if (usagePct >= 80 && usagePct < 95 && user.storagePreferences?.alertAt80 !== false) {
       createNotification(userId, {
         type: "storage",
         title: "Storage running low",
@@ -163,6 +163,15 @@ export const uploadFiles = async (req, res, next) => {
         actionLabel: "Manage storage",
         actionPath: "/dashboard/settings/storage",
       }).catch((err) => console.error("Notification[storage-warn]:", err));
+    }
+    if (usagePct >= 95 && user.storagePreferences?.alertAt95 !== false) {
+      createNotification(userId, {
+        type: "storage",
+        title: "Storage critically low",
+        description: `You've used ${Math.round(usagePct)}% of your storage. Free up space or upgrade immediately.`,
+        actionLabel: "Manage storage",
+        actionPath: "/dashboard/settings/storage",
+      }).catch((err) => console.error("Notification[storage-critical]:", err));
     }
 
     return res.status(201).json({

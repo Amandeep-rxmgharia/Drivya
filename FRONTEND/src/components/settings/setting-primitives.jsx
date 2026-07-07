@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import { Lock, Sparkles } from "lucide-react";
+import { formatBytes } from "@/lib/file-types";
 
 /* ═══════════════════════ Section Wrapper ═══════════════════════ */
 
@@ -152,24 +153,20 @@ export function TierBadge({ tier = "Pro" }) {
 
 export function StorageMeter({
   used = 0,
-  total = 100,
-  unit = "GB",
+  total = 0,
   breakdown = [],
 }) {
-  const pct = Math.min((used / total) * 100, 100);
+  const pct = total > 0 ? Math.min((used / total) * 100, 100) : 0;
   const isWarning = pct >= 80;
   const isCritical = pct >= 95;
   return (
     <div className="space-y-3">
       <div className="flex items-baseline justify-between">
         <div className="font-display text-lg font-semibold tracking-tight text-foreground tabular-nums">
-          {used}{" "}
-          <span className="text-sm font-medium text-muted-foreground">
-            {unit}
-          </span>
+          {formatBytes(used)}
         </div>
         <span className="text-xs text-muted-foreground">
-          of {total} {unit}
+          of {formatBytes(total)}
         </span>
       </div>
       <div className="h-2 w-full rounded-full bg-secondary/60 overflow-hidden">
@@ -195,7 +192,7 @@ export function StorageMeter({
               />
               <span className="text-muted-foreground flex-1">{item.label}</span>
               <span className="font-semibold text-foreground tabular-nums">
-                {item.value} {unit}
+                {formatBytes(item.value)}
               </span>
             </div>
           ))}

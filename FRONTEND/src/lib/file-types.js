@@ -182,3 +182,34 @@ export function detectFileKind(filename, override) {
 export function getFileTypeStyle(kind) {
   return FILE_TYPE_STYLES[kind] ?? FILE_TYPE_STYLES.file;
 }
+
+/**
+ * Format a byte count into a human-readable string.
+ * @param {number} bytes
+ * @param {number} [decimals=1]
+ * @returns {string} e.g. "4.2 GB", "128 MB", "0 B"
+ */
+export function formatBytes(bytes, decimals = 1) {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(decimals))} ${sizes[i]}`;
+}
+
+/**
+ * Format bytes into a value + unit pair (for StorageMeter which takes separate props).
+ * @param {number} bytes
+ * @param {number} [decimals=1]
+ * @returns {{ value: number, unit: string }}
+ */
+export function formatBytesUnit(bytes, decimals = 1) {
+  if (bytes === 0) return { value: 0, unit: "B" };
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return {
+    value: parseFloat((bytes / Math.pow(k, i)).toFixed(decimals)),
+    unit: sizes[i],
+  };
+}
