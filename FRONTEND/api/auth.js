@@ -151,6 +151,14 @@ export const getGoogleLoginUrl = async () => {
   return response.data;
 };
 
+// ─── GitHub OAuth API Functions ──────────────────────────────
+
+export const getGithubLoginUrl = async () => {
+  const response = await api.get("/auth/github/login-url");
+  return response.data;
+};
+
+
 // ─── Deactivated Account API Functions ──────────────────────
 
 export const sendDeactivatedOtp = async ({ deactivatedToken }) => {

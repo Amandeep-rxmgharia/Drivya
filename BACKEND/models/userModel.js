@@ -62,11 +62,16 @@ const userSchema = new Schema(
       type: String,
       unique: true,
       sparse: true, // allows null (non-Google users)
-      default: null,
+    },
+    // ─── GitHub OAuth Login ─────────────────────────────────
+    githubId: {
+      type: String,
+      unique: true,
+      sparse: true, // allows null (non-GitHub users)
     },
     authProvider: {
       type: String,
-      enum: ["local", "google"],
+      enum: ["local", "google", "github"],
       default: "local",
     },
 

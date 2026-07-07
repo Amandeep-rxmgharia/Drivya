@@ -24,6 +24,9 @@ import {
   googleLogin,
   googleLoginUrl,
 } from "../controllers/googleAuthController.js";
+import {
+  githubLoginUrl,
+} from "../controllers/githubAuthController.js";
 import { authenticate } from "../middlewares/authMiddleware.js";
 import {
   validateRegister,
@@ -49,6 +52,7 @@ router.post("/register", validateRegister, handleValidationErrors, register);
 router.post("/login", loginLimiter, validateLogin, handleValidationErrors, login);
 router.post("/google", googleLogin);
 router.get("/google/login-url", googleLoginUrl);
+router.get("/github/login-url", githubLoginUrl);
 router.post("/refresh", refresh);
 router.post("/logout", logout);
 router.post("/forgot-password", forgotPassword);

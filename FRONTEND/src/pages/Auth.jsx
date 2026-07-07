@@ -18,6 +18,7 @@ import {
   TrendingUp,
   ShieldCheck,
   Sparkles,
+  Github,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
@@ -31,6 +32,7 @@ import {
   resetPassword,
   googleAuth,
   getGoogleLoginUrl,
+  getGithubLoginUrl,
   sendDeactivatedOtp,
   verifyDeactivatedOtp,
   verifyDeactivated2FA,
@@ -180,6 +182,24 @@ export default function Auth() {
     }
   };
 
+  const handleGithubButtonClick = async () => {
+    setIsLoading(true);
+    setLoadingStep("Connecting to GitHub...");
+    setErrorMsg("");
+    try {
+      const data = await getGithubLoginUrl();
+      if (data?.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error("No URL returned");
+      }
+    } catch (error) {
+      const msg = error.response?.data?.message || "Failed to initiate GitHub sign-in.";
+      setErrorMsg(msg);
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
     if (!clientId) {
@@ -221,25 +241,26 @@ export default function Auth() {
 
   useEffect(() => {
     const googleStatus = searchParams.get("google");
+    const githubStatus = searchParams.get("github");
     const message = searchParams.get("message");
 
-    if (googleStatus === "success") {
+    if (googleStatus === "success" || githubStatus === "success") {
       setLoadingStep("Access granted! Loading dashboard...");
       setIsSuccess(true);
       const redirectTo = searchParams.get("redirect") || "/dashboard";
       setTimeout(() => navigate(redirectTo), 600);
-    } else if (googleStatus === "2fa") {
+    } else if (googleStatus === "2fa" || githubStatus === "2fa") {
       setTwoFARequired(true);
-    } else if (googleStatus === "suspended") {
+    } else if (googleStatus === "suspended" || githubStatus === "suspended") {
       setErrorMsg("Your account has been suspended. Please contact support.");
-    } else if (googleStatus === "deactivated") {
+    } else if (googleStatus === "deactivated" || githubStatus === "deactivated") {
       const email = searchParams.get("email");
       const token = searchParams.get("deactivatedToken");
       setDeactivatedEmail(email || "");
       setDeactivatedToken(token || "");
       setDeactivatedState("options");
-    } else if (googleStatus === "error") {
-      setErrorMsg(message || "Google authentication failed.");
+    } else if (googleStatus === "error" || githubStatus === "error") {
+      setErrorMsg(message || "Authentication failed.");
     }
   }, [searchParams, navigate]);
 
@@ -2238,10 +2259,11 @@ export default function Auth() {
                       whileHover={{ scale: 1.02, y: -1 }}
                       whileTap={{ scale: 0.98 }}
                       type="button"
+                      onClick={handleGithubButtonClick}
                       className="flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl border border-border/30 bg-muted/10 hover:bg-muted/20 hover:border-border/60 text-sm font-semibold transition-all cursor-pointer"
                     >
-                      <AppleIcon />
-                      <span>Apple</span>
+                      <Github className="w-4 h-4" />
+                      <span>GitHub</span>
                     </motion.button>
                   </div>
                 </motion.div>

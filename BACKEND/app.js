@@ -17,6 +17,7 @@ import accountRoutes from "./routes/accountRoutes.js";
 import storageRoutes from "./routes/storageRoutes.js";
 import googleDriveRoutes, { googleCallbackHandler } from "./routes/googleDriveRoutes.js";
 import { googleLoginCallbackHandler } from "./controllers/googleAuthController.js";
+import { githubLoginCallbackHandler } from "./controllers/githubAuthController.js";
 import dropboxRoutes, { dropboxCallbackHandler } from "./routes/dropboxRoutes.js";
 import { connectDb } from "./config/db.js";
 import { ensureStorageRoot } from "./services/storageService.js";
@@ -106,6 +107,7 @@ app.use("/api/google", googleDriveRoutes);
 app.use("/api/dropbox", dropboxRoutes);
 app.get("/auth/google/callback", googleCallbackHandler);
 app.get("/auth/google/login/callback", googleLoginCallbackHandler);
+app.get("/auth/github/callback", githubLoginCallbackHandler);
 app.get("/auth/dropbox/callback", dropboxCallbackHandler);
 
 // ─── Global Error Handler ────────────────────────────────────
