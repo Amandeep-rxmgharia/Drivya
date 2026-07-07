@@ -21,6 +21,7 @@ import dropboxRoutes, { dropboxCallbackHandler } from "./routes/dropboxRoutes.js
 import { connectDb } from "./config/db.js";
 import { ensureStorageRoot } from "./services/storageService.js";
 import { migrateActivityDate } from "./scripts/migrateActivityDate.js";
+import { startTrashCronJob } from "./jobs/trashCronJob.js";
 
 const { PORT = 3000, CORS_ORIGIN = "http://localhost:5173", NODE_ENV } = process.env;
 
@@ -32,6 +33,9 @@ await ensureStorageRoot();
 
 // ─── Run Migrations ──────────────────────────────────────────
 await migrateActivityDate();
+
+// ─── Start Cron Jobs ─────────────────────────────────────────
+startTrashCronJob();
 
 const app = express();
 

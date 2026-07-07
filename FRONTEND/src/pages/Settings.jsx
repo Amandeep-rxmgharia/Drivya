@@ -116,7 +116,7 @@ function SettingsHero({ activeSection, userProfile }) {
           {[
             { label: "Plan", value: currentTier },
             { label: "Storage", value: storageStat },
-            { label: "Devices", value: devicesStat },
+            sessionsCount ? { label: "Devices", value: devicesStat } : {},
           ].map((stat) => (
             <div
               key={stat.label}

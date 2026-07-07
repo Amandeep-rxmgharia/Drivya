@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { HardDrive, Trash2, FileUp, Bell, RefreshCw, AlertTriangle } from "lucide-react";
+import { HardDrive, Trash2, FileUp, Bell, RefreshCw, AlertTriangle, Clock } from "lucide-react";
 import {
   SettingSection,
   SettingRow,
@@ -38,6 +38,28 @@ function selectValueToDays(val) {
   if (val === "90d") return 90;
   if (val === "never") return null;
   return 30;
+}
+
+/** Compute a human-friendly display of the next cron run (daily at 2:00 AM UTC). */
+function getNextCleanupDisplay() {
+  const now = new Date();
+  const next = new Date(now);
+  next.setUTCHours(2, 0, 0, 0);
+  // If 2 AM UTC already passed today, schedule for tomorrow
+  if (next <= now) {
+    next.setUTCDate(next.getUTCDate() + 1);
+  }
+  const diffMs = next - now;
+  const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+  const timeStr = next.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const dateStr = next.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+
+  if (diffHrs > 0) {
+    return `${dateStr} at ${timeStr} (in ~${diffHrs}h ${diffMins}m)`;
+  }
+  return `${dateStr} at ${timeStr} (in ~${diffMins}m)`;
 }
 
 // ─── Loading Skeleton ────────────────────────────────────────────
@@ -340,19 +362,33 @@ export default function StorageSection({ userProfile, setUserProfile }) {
           </SettingRow>
 
           {trashAutoEmpty !== "never" && (
-            <SettingRow>
-              <SettingBanner variant="info" icon={Trash2}>
-                Files in trash will be permanently deleted after{" "}
-                {trashAutoEmpty === "7d"
-                  ? "7 days"
-                  : trashAutoEmpty === "30d"
-                    ? "30 days"
-                    : trashAutoEmpty === "60d"
-                      ? "60 days"
-                      : "90 days"}
-                . This cannot be undone.
-              </SettingBanner>
-            </SettingRow>
+            <>
+              <SettingRow
+                label="Next Scheduled Cleanup"
+                description="Expired trash files are automatically deleted on a daily schedule."
+              >
+                <div className="flex items-center gap-2">
+                  <Clock className="h-3.5 w-3.5 text-primary" />
+                  <span className="text-sm font-medium text-foreground tabular-nums">
+                    {getNextCleanupDisplay()}
+                  </span>
+                </div>
+              </SettingRow>
+
+              <SettingRow>
+                <SettingBanner variant="info" icon={Trash2}>
+                  Files in trash will be permanently deleted after{" "}
+                  {trashAutoEmpty === "7d"
+                    ? "7 days"
+                    : trashAutoEmpty === "30d"
+                      ? "30 days"
+                      : trashAutoEmpty === "60d"
+                        ? "60 days"
+                        : "90 days"}
+                  . This cannot be undone.
+                </SettingBanner>
+              </SettingRow>
+            </>
           )}
         </SettingSection>
 
