@@ -27,6 +27,8 @@ import { iconBtn } from "@/components/dashboard/dashboard-tokens";
 // Import mock files from RecentFiles
 // import { RECENT_FILES } from "@/pages/RecentFiles";
 import { listActivities } from "../../../api/activities.js";
+import { chatWithAi } from "../../../api/ai.js";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
 /* ───────────────────────── Helpers ───────────────────────── */
 
@@ -105,6 +107,9 @@ export function AiAssistantPanel({
   const [organizing, setOrganizing] = useState(false);
   const [recentFiles, setRecentFiles] = useState([]);
 
+  const [freeModeOpen, setFreeModeOpen] = useState(false);
+  const [freeModeAnswer, setFreeModeAnswer] = useState("");
+
   const chatContainerRef = useRef(null);
 
   // Fetch real activity data for AI search/summarize
@@ -161,6 +166,38 @@ export function AiAssistantPanel({
     };
   };
 
+  const makeFreeModeAnswer = (query) => {
+    const lower = (query || "").toLowerCase();
+    const recent = recentFiles || [];
+    const top = recent.slice(0, 5).map((f) => f?.name).filter(Boolean);
+
+    const prefix = "Free Mode (limited) — here’s my best answer based on your vault metadata:";
+
+    if (lower.includes("summar") || lower.includes("sum up")) {
+      if (top.length) {
+        return `${prefix}\n\nI can’t access full document intelligence right now, but you can summarize a file by name. Top recent files: ${top.join(
+          ", ",
+        )}. Example prompt: “summarize ${top[0]}”.`;
+      }
+      return `${prefix}\n\nTry opening a file preview and using “Ask AI to Summarize”.`;
+    }
+
+    if (lower.includes("find") || lower.includes("search") || lower.includes("show")) {
+      if (top.length) {
+        return `${prefix}\n\nTop recent files: ${top.join(
+          ", ",
+        )}. Try: “find ${top[0]}” or “show ${top[0]}”.`;
+      }
+      return `${prefix}\n\nNo recent files found yet—upload or open a file, then try again.`;
+    }
+
+    if (lower.includes("organize") || lower.includes("folder") || lower.includes("categor")) {
+      return `${prefix}\n\nEnable “AI Organization” in Labs to get real organization suggestions. Meanwhile, group by file type (PDF/keynote/docs) and move drafts to a “release-docs” folder.`;
+    }
+
+    return `${prefix}\n\nAsk me for: “find <filename>”, “summarize <filename>”, “organize my files”, or “draft a launch email”.`;
+  };
+
   const handleSend = (textToSend) => {
     const query = (textToSend || inputValue).trim();
     if (!query) return;
@@ -177,10 +214,8 @@ export function AiAssistantPanel({
     setMessages((prev) => [...prev, userMsg]);
     setIsTyping(true);
 
-    // Simulate AI response delay
-    setTimeout(() => {
-      processAiResponse(query);
-    }, 1200);
+    // Real AI response via backend
+    processAiResponse(query);
   };
 
   const handleSummarizeFile = (file) => {
@@ -223,12 +258,11 @@ export function AiAssistantPanel({
     }, 1500);
   };
 
-  // Process AI Responses
-  const processAiResponse = (query) => {
+  // Process AI Responses (real LLM via backend, but keep Labs gating)
+  const processAiResponse = async (query) => {
     const lower = query.toLowerCase();
 
-    // 1. Search Query
-    if (
+    const needsSearch =
       lower.includes("find") ||
       lower.includes("search") ||
       lower.includes("show") ||
@@ -236,45 +270,67 @@ export function AiAssistantPanel({
       lower.includes("pdf") ||
       lower.includes("keynote") ||
       lower.includes("deck") ||
-      lower.includes("file")
-    ) {
-      if (!isFeatureEnabled("ai-search")) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: crypto.randomUUID(),
-            ...getDisabledWarning("AI File Search", "ai-search"),
-          },
-        ]);
-        setIsTyping(false);
-        return;
-      }
+      lower.includes("file");
 
-      // Filter files based on simple matching keywords
-      let searchKeyword = lower
-        .replace(/find|search|show|files?|documents?/gi, "")
-        .trim();
-      let matched = [];
-      if (searchKeyword.length === 0) {
-        matched = recentFiles.slice(0, 5);
-      } else {
-        matched = recentFiles.filter(
-          (f) =>
-            f.name.toLowerCase().includes(searchKeyword) ||
-            (f.kind && f.kind.toLowerCase().includes(searchKeyword)),
-        );
-      }
+    const needsSummary = lower.includes("summar") || lower.includes("sum up");
+    const needsOrganize =
+      lower.includes("organi") ||
+      lower.includes("categor") ||
+      lower.includes("folders") ||
+      lower.includes("clean");
+    const needsWriting =
+      lower.includes("write") ||
+      lower.includes("draft") ||
+      lower.includes("email") ||
+      lower.includes("assistant") ||
+      lower.includes("create");
 
+    if (needsSearch && !isFeatureEnabled("ai-search")) {
       setMessages((prev) => [
         ...prev,
         {
           id: crypto.randomUUID(),
           sender: "ai",
-          text:
-            matched.length > 0
-              ? `I found ${matched.length} files matching your query "${searchKeyword || "recent"}":`
-              : `I couldn't find any files matching "${searchKeyword}" in your drive. Try searching for "Guidelines" or "pdf".`,
-          searchResults: matched,
+          ...getDisabledWarning("AI File Search", "ai-search"),
+          timestamp: new Date(),
+        },
+      ]);
+      setIsTyping(false);
+      return;
+    }
+    if (needsSummary && !isFeatureEnabled("ai-summary")) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          sender: "ai",
+          ...getDisabledWarning("AI Summarization", "ai-summary"),
+          timestamp: new Date(),
+        },
+      ]);
+      setIsTyping(false);
+      return;
+    }
+    if (needsOrganize && !isFeatureEnabled("ai-organize")) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          sender: "ai",
+          ...getDisabledWarning("AI Organization", "ai-organize"),
+          timestamp: new Date(),
+        },
+      ]);
+      setIsTyping(false);
+      return;
+    }
+    if (needsWriting && !isFeatureEnabled("ai-writing")) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          sender: "ai",
+          ...getDisabledWarning("AI Writing Assistant", "ai-writing"),
           timestamp: new Date(),
         },
       ]);
@@ -282,152 +338,81 @@ export function AiAssistantPanel({
       return;
     }
 
-    // 2. Summarize Query
-    if (lower.includes("summar") || lower.includes("sum up")) {
-      if (!isFeatureEnabled("ai-summary")) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: crypto.randomUUID(),
-            ...getDisabledWarning("AI Summarization", "ai-summary"),
-          },
-        ]);
-        setIsTyping(false);
-        return;
-      }
+    const recentFilesForAi = (recentFiles || []).map((f) => ({
+      id: f.id,
+      name: f.name,
+      kind: f.kind,
+      owner: f.owner,
+      size: f.size,
+    }));
 
-      // Check if user named a file
-      const foundFile = recentFiles.find((f) =>
-        lower.includes(f.name.toLowerCase().split(".")[0]),
+    let fileContext = null;
+    if (needsSummary) {
+      const foundFile = recentFilesForAi.find((f) =>
+        lower.includes((f.name || "").toLowerCase().split(".")[0]),
       );
-      if (foundFile) {
-        handleSummarizeFile(foundFile);
-      } else {
+      fileContext = foundFile || null;
+    }
+
+    try {
+      const data = await chatWithAi({
+        query,
+        featureFlags: labsSettings,
+        fileContext,
+        recentFiles: recentFilesForAi,
+      });
+
+      // Backend-driven: free/quota hit from provider (e.g., Gemini 429)
+      if (data?.freeLimitHit) {
+        const fallback = makeFreeModeAnswer(query);
+        setFreeModeAnswer(fallback);
+        setFreeModeOpen(true);
+
+        // Immediately show fallback answer in chat as well
         setMessages((prev) => [
           ...prev,
           {
             id: crypto.randomUUID(),
             sender: "ai",
-            text: "Which file would you like me to summarize? I can summarize documents like *Brand Guidelines* or *Q4 keynote*. Try clicking 'Ask AI to Summarize' from a file preview, or type: \n\n`Summarize Q4-keynote`",
+            text: fallback,
             timestamp: new Date(),
           },
         ]);
-        setIsTyping(false);
-      }
-      return;
-    }
-
-    // 3. Organization Query
-    if (
-      lower.includes("organi") ||
-      lower.includes("categor") ||
-      lower.includes("folders") ||
-      lower.includes("clean")
-    ) {
-      if (!isFeatureEnabled("ai-organize")) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: crypto.randomUUID(),
-            ...getDisabledWarning("AI Organization", "ai-organize"),
-          },
-        ]);
-        setIsTyping(false);
         return;
       }
+
+      const aiText = data?.message || data?.reply?.message || "AI did not return a message.";
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          sender: "ai",
+          text: aiText,
+          timestamp: new Date(),
+        },
+      ]);
+    } catch (err) {
+      console.error("AI panel: failed to get AI response", err);
+
+      // If backend errors (not a structured freeLimitHit), treat as "different free modal hit"
+      const fallback = makeFreeModeAnswer(query);
+      setFreeModeAnswer(fallback);
+
+      // Second-stage confirm modal (as per your requirement: if all modal hits free limit)
+      setFreeModeOpen(true);
 
       setMessages((prev) => [
         ...prev,
         {
           id: crypto.randomUUID(),
           sender: "ai",
-          text: "I analyzed your drive structure and found 3 uncategorized files in your root directory. Here are my suggestions for a clean setup:",
-          suggestions: [
-            { file: "Hero-shot-005.png", action: "Move to launch-assets" },
-            { file: "investor-deck.key", action: "Move to launch-assets" },
-            {
-              file: "api-routes.ts",
-              action: "Move to new developer-core folder",
-            },
-          ],
+          text: fallback,
           timestamp: new Date(),
         },
       ]);
+    } finally {
       setIsTyping(false);
-      return;
     }
-
-    // 4. Writing Assistant Query
-    if (
-      lower.includes("write") ||
-      lower.includes("draft") ||
-      lower.includes("email") ||
-      lower.includes("assistant") ||
-      lower.includes("create")
-    ) {
-      if (!isFeatureEnabled("ai-writing")) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: crypto.randomUUID(),
-            ...getDisabledWarning("AI Writing Assistant", "ai-writing"),
-          },
-        ]);
-        setIsTyping(false);
-        return;
-      }
-
-      // Mock text template draft
-      const isEmail = lower.includes("email");
-      const codeBlock = isEmail
-        ? `Subject: Launch Assets & Brand Guidelines Update 🚀
-
-Hi Team,
-
-I have updated the corporate brand kits in our Drivya drive vault:
-1. Brand Guidelines v3.pdf (Revised fonts and logo grids)
-2. Hero-shot-005.png (Official launch render)
-
-Please review them prior to our Q4 kickoff keynote next Monday. Let me know if any updates are needed!
-
-Best,
-Amelia`
-        : `# Project Launch Outline
-
-## 1. Overview
-Next-generation file management portal. Ensuring end-to-end security compliance, real-time sync, and intelligent organizational pipelines.
-
-## 2. Key Milestones
-- [x] Front-end Prototype (Vite, React 19)
-- [ ] AI Search Engine integration (Labs Beta)
-- [ ] End-to-end Vault security audits
-- [ ] general release (Q4 2026)`;
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          sender: "ai",
-          text: `I have drafted a template for you. Feel free to copy and edit:`,
-          draft: codeBlock,
-          timestamp: new Date(),
-        },
-      ]);
-      setIsTyping(false);
-      return;
-    }
-
-    // 5. Default General Response
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        sender: "ai",
-        text: "I'm here to help with your files! You can ask me to:\n\n* **Search**: *'find keynote pdf'* or *'show guidelines'*\n* **Summarize**: *'summarize Brand Guidelines'*\n* **Organize**: *'organize my files'*\n* **Write**: *'draft a launch email'*",
-        timestamp: new Date(),
-      },
-    ]);
-    setIsTyping(false);
   };
 
   const getMockSummary = (file) => {
@@ -817,6 +802,19 @@ Next-generation file management portal. Ensuring end-to-end security compliance,
               </footer>
             </motion.div>
 
+            {/* Free mode fallback modal */}
+            <AnimatePresence>
+              {freeModeOpen && (
+                <ConfirmModal
+                  title="Switching to Free Mode"
+                  description="The AI model failed to respond. Switching to a limited Free Mode answer using your vault metadata."
+                  confirmLabel="Use Free Mode"
+                  onCancel={() => setFreeModeOpen(false)}
+                  onConfirm={() => setFreeModeOpen(false)}
+                />
+              )}
+            </AnimatePresence>
+
             {/* Custom file preview launcher from inside AI assistant chat results */}
             <AnimatePresence>
               {previewFile && (
@@ -824,8 +822,8 @@ Next-generation file management portal. Ensuring end-to-end security compliance,
                   file={previewFile}
                   onClose={() => setPreviewFile(null)}
                   formatTime={formatRelativeTime}
-                  onStar={() => {}}
-                  onShare={() => {}}
+                  onStar={() => { }}
+                  onShare={() => { }}
                 />
               )}
             </AnimatePresence>

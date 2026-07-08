@@ -19,6 +19,7 @@ import googleDriveRoutes, { googleCallbackHandler } from "./routes/googleDriveRo
 import { googleLoginCallbackHandler } from "./controllers/googleAuthController.js";
 import { githubLoginCallbackHandler } from "./controllers/githubAuthController.js";
 import dropboxRoutes, { dropboxCallbackHandler } from "./routes/dropboxRoutes.js";
+import aiRoutes from "./routes/aiRoutes.js";
 import { connectDb } from "./config/db.js";
 import { ensureStorageRoot } from "./services/storageService.js";
 import { migrateActivityDate } from "./scripts/migrateActivityDate.js";
@@ -73,7 +74,7 @@ app.use(
       return callback(new Error(msg), false);
     },
     credentials: true,
-  
+
   }),
 );
 
@@ -105,6 +106,7 @@ app.use("/api/account", accountRoutes);
 app.use("/api/storage", storageRoutes);
 app.use("/api/google", googleDriveRoutes);
 app.use("/api/dropbox", dropboxRoutes);
+app.use("/api/ai", aiRoutes);
 app.get("/auth/google/callback", googleCallbackHandler);
 app.get("/auth/google/login/callback", googleLoginCallbackHandler);
 app.get("/auth/github/callback", githubLoginCallbackHandler);

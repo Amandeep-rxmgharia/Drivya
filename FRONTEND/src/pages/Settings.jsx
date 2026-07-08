@@ -85,7 +85,7 @@ function SettingsHero({ activeSection, userProfile }) {
     : "0 B / 1 GB";
 
   const devicesStat = sessionsCount !== null 
-    ? `${sessionsCount}${sessionsCount === 1 ? "" : "s"}` 
+    ? sessionsCount 
     : "Loading...";
 
   return (

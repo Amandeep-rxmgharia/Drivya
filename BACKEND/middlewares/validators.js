@@ -17,7 +17,7 @@ export const validateRegister = [
     .withMessage("Email is required.")
     .isEmail()
     .withMessage("Please enter a valid email.")
-    .normalizeEmail(),
+    ,
 
   body("password")
     .notEmpty()
@@ -40,7 +40,7 @@ export const validateLogin = [
     .withMessage("Email is required.")
     .isEmail()
     .withMessage("Please enter a valid email.")
-    .normalizeEmail(),
+    ,
 
   body("password").notEmpty().withMessage("Password is required."),
 ];
@@ -141,7 +141,7 @@ export const validateInviteCollaborator = [
     .withMessage("Email is required.")
     .isEmail()
     .withMessage("Please enter a valid email.")
-    .normalizeEmail(),
+    ,
 
   body("role")
     .optional()
