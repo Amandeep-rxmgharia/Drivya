@@ -354,12 +354,12 @@ export default function PublicShare() {
         headers.Authorization = `Bearer ${accessToken}`;
       }
       const response = await api.get(`/public/shares/${token}`, { headers });
-      console.log(response.data);
       setMetadata(response.data.share);
       setRequiresPassword(response.data.share.requiresPassword);
       setAuthRequired(response.data.share.requiresAuth);
       setIsAuthenticated(response.data.share.isAuthenticated);
       setIsAuthorized(response.data.share.isAuthorized);
+      setSignedAccount(response.data?.share.signedAccount)
     } catch (err) {
       if (err.response?.status === 401) {
         if (err.response?.data?.code === "AUTH_REQUIRED") {

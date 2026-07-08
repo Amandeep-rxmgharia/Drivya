@@ -78,7 +78,7 @@ export async function softAuthenticate(req, res, next) {
       }
       
       if (sessionExists) {
-        const user = await User.findById(decoded.id).select("role isActive isDeactivated").lean();
+        const user = await User.findById(decoded.id).select("role isActive isDeactivated email").lean();
         if (user) {
           if (!user.isActive) {
             return res.status(403).json({ message: "Your account has been suspended. Please contact support.", code: "ACCOUNT_SUSPENDED" });
@@ -90,6 +90,7 @@ export async function softAuthenticate(req, res, next) {
             id: decoded.id,
             sessionId: decoded.sid || null,
             role: user.role,
+            signedAccount: user.email
           };
           return next();
         }

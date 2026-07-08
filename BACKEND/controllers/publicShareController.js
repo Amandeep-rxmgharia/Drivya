@@ -74,6 +74,7 @@ export async function getShareMetadata(req, res, next) {
 
     // Clean up internal fields before sending to client
     delete metadata._passwordHash;
+    if(req.user?.signedAccount) metadata.signedAccount = req.user?.signedAccount
     return res.json({ share: metadata });
   } catch (err) {
     handlePublicShareError(err, res, next);
