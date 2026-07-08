@@ -146,15 +146,17 @@ export const googleAuth = async ({ credential }) => {
   return response.data;
 };
 
-export const getGoogleLoginUrl = async () => {
-  const response = await api.get("/auth/google/login-url");
+export const getGoogleLoginUrl = async ({ redirect } = {}) => {
+  const params = redirect ? { redirect } : {};
+  const response = await api.get("/auth/google/login-url", { params });
   return response.data;
 };
 
 // ─── GitHub OAuth API Functions ──────────────────────────────
 
-export const getGithubLoginUrl = async () => {
-  const response = await api.get("/auth/github/login-url");
+export const getGithubLoginUrl = async ({ redirect } = {}) => {
+  const params = redirect ? { redirect } : {};
+  const response = await api.get("/auth/github/login-url", { params });
   return response.data;
 };
 

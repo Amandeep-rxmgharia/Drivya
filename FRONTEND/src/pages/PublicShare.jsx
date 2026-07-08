@@ -354,6 +354,7 @@ export default function PublicShare() {
         headers.Authorization = `Bearer ${accessToken}`;
       }
       const response = await api.get(`/public/shares/${token}`, { headers });
+      console.log(response.data);
       setMetadata(response.data.share);
       setRequiresPassword(response.data.share.requiresPassword);
       setAuthRequired(response.data.share.requiresAuth);

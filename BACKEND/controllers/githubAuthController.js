@@ -178,23 +178,39 @@ export const githubLoginUrl = async (req, res) => {
   }
 
   const scopes = ["read:user", "user:email"];
+
+  // Preserve the redirect path through the OAuth flow via the state parameter
+  const redirectPath = req.query.redirect || "";
+  const statePayload = JSON.stringify({ provider: "github_login", redirect: redirectPath });
+  const stateEncoded = Buffer.from(statePayload).toString("base64url");
+
   const url = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${encodeURIComponent(
     GITHUB_REDIRECT_URI
-  )}&scope=${encodeURIComponent(scopes.join(" "))}&state=github_login`;
+  )}&scope=${encodeURIComponent(scopes.join(" "))}&state=${encodeURIComponent(stateEncoded)}`;
 
   return res.json({ url });
 };
 
 // ─── GET /auth/github/callback ───────────────────────────────
 export const githubLoginCallback = async (req, res, next) => {
-  const { code, error, error_description } = req.query;
+  const { code, error, error_description, state } = req.query;
   const frontendBase = CORS_ORIGIN;
+
+  // Decode the redirect path from the OAuth state parameter
+  let redirectPath = "";
+  if (state) {
+    try {
+      const decoded = JSON.parse(Buffer.from(state, "base64url").toString());
+      redirectPath = decoded.redirect || "";
+    } catch (_) { /* ignore malformed state */ }
+  }
+  const redirectSuffix = redirectPath ? `&redirect=${encodeURIComponent(redirectPath)}` : "";
 
   if (error) {
     return res.redirect(
       `${frontendBase}/auth?github=error&message=${encodeURIComponent(
         error_description || error
-      )}`
+      )}${redirectSuffix}`
     );
   }
 
@@ -202,7 +218,7 @@ export const githubLoginCallback = async (req, res, next) => {
     return res.redirect(
       `${frontendBase}/auth?github=error&message=${encodeURIComponent(
         "Missing authorization code."
-      )}`
+      )}${redirectSuffix}`
     );
   }
 
@@ -311,7 +327,7 @@ export const githubLoginCallback = async (req, res, next) => {
     );
 
     if (!user.isActive) {
-      return res.redirect(`${frontendBase}/auth?github=suspended`);
+      return res.redirect(`${frontendBase}/auth?github=suspended${redirectSuffix}`);
     }
 
     if (user.isDeactivated) {
@@ -319,7 +335,7 @@ export const githubLoginCallback = async (req, res, next) => {
       return res.redirect(
         `${frontendBase}/auth?github=deactivated&email=${encodeURIComponent(
           user.email
-        )}&deactivatedToken=${encodeURIComponent(deactivatedToken)}`
+        )}&deactivatedToken=${encodeURIComponent(deactivatedToken)}${redirectSuffix}`
       );
     }
 
@@ -327,16 +343,16 @@ export const githubLoginCallback = async (req, res, next) => {
 
     // If 2FA is enabled, redirect with flag
     if (user.twoFAEnabled) {
-      return res.redirect(`${frontendBase}/auth?github=2fa`);
+      return res.redirect(`${frontendBase}/auth?github=2fa${redirectSuffix}`);
     }
 
-    return res.redirect(`${frontendBase}/auth?github=success`);
+    return res.redirect(`${frontendBase}/auth?github=success${redirectSuffix}`);
   } catch (err) {
     console.error("[GitHub Login Callback] Error:", err.message);
     return res.redirect(
       `${frontendBase}/auth?github=error&message=${encodeURIComponent(
         err.message || "GitHub authentication failed."
-      )}`
+      )}${redirectSuffix}`
     );
   }
 };

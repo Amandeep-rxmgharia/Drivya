@@ -169,7 +169,8 @@ export default function Auth() {
     setLoadingStep("Connecting to Google...");
     setErrorMsg("");
     try {
-      const data = await getGoogleLoginUrl();
+      const redirectParam = searchParams.get("redirect");
+      const data = await getGoogleLoginUrl({ redirect: redirectParam || undefined });
       if (data?.url) {
         window.location.href = data.url;
       } else {
@@ -187,7 +188,8 @@ export default function Auth() {
     setLoadingStep("Connecting to GitHub...");
     setErrorMsg("");
     try {
-      const data = await getGithubLoginUrl();
+      const redirectParam = searchParams.get("redirect");
+      const data = await getGithubLoginUrl({ redirect: redirectParam || undefined });
       if (data?.url) {
         window.location.href = data.url;
       } else {

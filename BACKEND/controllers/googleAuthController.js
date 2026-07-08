@@ -254,11 +254,15 @@ export const googleLogin = async (req, res, next) => {
 export const googleLoginUrl = async (req, res) => {
   const scopes = ["openid", "email", "profile"];
 
+  // Preserve the redirect path through the OAuth flow via the state parameter
+  const redirectPath = req.query.redirect || "";
+  const statePayload = JSON.stringify({ provider: "google_login", redirect: redirectPath });
+  const stateEncoded = Buffer.from(statePayload).toString("base64url");
   const url = oAuth2Client.generateAuthUrl({
     access_type: "offline",
     scope: scopes,
     prompt: "consent",
-    state: "google_login", // Simple state to differentiate from Drive OAuth
+    state: stateEncoded,
   });
 
   return res.json({ url });
@@ -266,16 +270,26 @@ export const googleLoginUrl = async (req, res) => {
 
 // ─── GET /auth/google/login/callback — OAuth redirect callback
 export const googleLoginCallback = async (req, res, next) => {
-  const { code, error } = req.query;
-
+  const { code, error, state } = req.query;
+console.log(state);
   const frontendBase = CORS_ORIGIN;
 
+  // Decode the redirect path from the OAuth state parameter
+  let redirectPath = "";
+  if (state) {
+    try {
+      const decoded = JSON.parse(Buffer.from(state, "base64url").toString());
+      redirectPath = decoded.redirect || "";
+    } catch (_) { /* ignore malformed state */ }
+  }
+  const redirectSuffix = redirectPath ? `&redirect=${encodeURIComponent(redirectPath)}` : "";
+
   if (error) {
-    return res.redirect(`${frontendBase}/auth?google=error&message=${encodeURIComponent(error)}`);
+    return res.redirect(`${frontendBase}/auth?google=error&message=${encodeURIComponent(error)}${redirectSuffix}`);
   }
 
   if (!code) {
-    return res.redirect(`${frontendBase}/auth?google=error&message=${encodeURIComponent("Missing authorization code.")}`);
+    return res.redirect(`${frontendBase}/auth?google=error&message=${encodeURIComponent("Missing authorization code.")}${redirectSuffix}`);
   }
 
   try {
@@ -290,7 +304,7 @@ export const googleLoginCallback = async (req, res, next) => {
 
     const payload = ticket.getPayload();
     if (!payload || !payload.email) {
-      return res.redirect(`${frontendBase}/auth?google=error&message=${encodeURIComponent("Failed to retrieve Google profile.")}`);
+      return res.redirect(`${frontendBase}/auth?google=error&message=${encodeURIComponent("Failed to retrieve Google profile.")}${redirectSuffix}`);
     }
 
     const { sub: googleId, email, name, picture } = payload;
@@ -302,14 +316,14 @@ export const googleLoginCallback = async (req, res, next) => {
 
     if (!user.isActive) {
       return res.redirect(
-        `${frontendBase}/auth?google=suspended`
+        `${frontendBase}/auth?google=suspended${redirectSuffix}`
       );
     }
 
     if (user.isDeactivated) {
       const deactivatedToken = generateDeactivatedToken(user._id.toString(), false, false);
       return res.redirect(
-        `${frontendBase}/auth?google=deactivated&email=${encodeURIComponent(user.email)}&deactivatedToken=${encodeURIComponent(deactivatedToken)}`
+        `${frontendBase}/auth?google=deactivated&email=${encodeURIComponent(user.email)}&deactivatedToken=${encodeURIComponent(deactivatedToken)}${redirectSuffix}`
       );
     }
 
@@ -317,13 +331,13 @@ export const googleLoginCallback = async (req, res, next) => {
 
     // If 2FA is enabled, redirect with flag
     if (user.twoFAEnabled) {
-      return res.redirect(`${frontendBase}/auth?google=2fa`);
+      return res.redirect(`${frontendBase}/auth?google=2fa${redirectSuffix}`);
     }
 
-    return res.redirect(`${frontendBase}/auth?google=success`);
+    return res.redirect(`${frontendBase}/auth?google=success${redirectSuffix}`);
   } catch (err) {
     console.error("[Google Login Callback] Error:", err.message);
-    return res.redirect(`${frontendBase}/auth?google=error&message=${encodeURIComponent("Google authentication failed.")}`);
+    return res.redirect(`${frontendBase}/auth?google=error&message=${encodeURIComponent("Google authentication failed.")}${redirectSuffix}`);
   }
 };
 

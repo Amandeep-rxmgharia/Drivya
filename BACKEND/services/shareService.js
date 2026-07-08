@@ -584,9 +584,10 @@ export async function getPublicShareMetadata(token, userId = null) {
   if (!isShareAccessible(share)) throw gone("This share link is no longer available.");
 
   const owner = await User.findById(share.ownerId)
-    .select("name defaultSharePublicProfile")
+    .select("name defaultSharePublicProfile isDeactivated")
     .lean();
-
+  const isDeactivated = owner?.isDeactivated
+  if(isDeactivated)  throw gone("This share link is no longer available. Due to source account Deactivation!");
   const isAuthorized = await isUserAuthorizedForShare(share, userId);
   const requiresAuth = share.visibility === VISIBILITY.RESTRICTED;
 
