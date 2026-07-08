@@ -3,6 +3,7 @@ import File from "../models/fileModel.js";
 import Directory from "../models/directoryModel.js";
 import User from "../models/userModel.js";
 import Share from "../models/shareModel.js";
+import mime from "mime-types";
 import {
   saveFile,
   getFileStream,
@@ -13,10 +14,17 @@ import {
 import { deleteSharesForResource } from "../services/shareService.js";
 import { RESOURCE_TYPES } from "../constants/shareConstants.js";
 import { generateStorageName } from "../middlewares/uploadMiddleware.js";
-import { recordActivity, deleteActivitiesForResources } from "../services/activityService.js";
+import {
+  recordActivity,
+  deleteActivitiesForResources,
+} from "../services/activityService.js";
 import { ACTIVITY_ACTIONS } from "../constants/activityConstants.js";
-import { generateDownloadToken, verifyDownloadToken } from "../config/tokenUtils.js";
+import {
+  generateDownloadToken,
+  verifyDownloadToken,
+} from "../config/tokenUtils.js";
 import { createNotification } from "../services/notificationService.js";
+import { cacheDelByPrefix, invalidateShareTokenCache } from "../services/cacheService.js";
 
 // ─── Upload Files ────────────────────────────────────────────────
 export const uploadFiles = async (req, res, next) => {
@@ -144,7 +152,10 @@ export const uploadFiles = async (req, res, next) => {
 
     if (savedFiles.length > 0) {
       const names = savedFiles.map((f) => f.originalName);
-      const title = names.length === 1 ? `Uploaded "${names[0]}"` : `${names.length} files uploaded`;
+      const title =
+        names.length === 1
+          ? `Uploaded "${names[0]}"`
+          : `${names.length} files uploaded`;
       createNotification(userId, {
         type: "upload",
         title,
@@ -155,7 +166,11 @@ export const uploadFiles = async (req, res, next) => {
 
     const newStorageUsed = user.storageUsed + totalUploadSize;
     const usagePct = (newStorageUsed / user.storageLimit) * 100;
-    if (usagePct >= 80 && usagePct < 95 && user.storagePreferences?.alertAt80 !== false) {
+    if (
+      usagePct >= 80 &&
+      usagePct < 95 &&
+      user.storagePreferences?.alertAt80 !== false
+    ) {
       createNotification(userId, {
         type: "storage",
         title: "Storage running low",
@@ -264,7 +279,9 @@ export const downloadFileByToken = async (req, res, next) => {
     try {
       decoded = verifyDownloadToken(token);
     } catch (err) {
-      return res.status(401).json({ message: "Invalid or expired download link." });
+      return res
+        .status(401)
+        .json({ message: "Invalid or expired download link." });
     }
 
     const file = await File.findOne({
@@ -412,11 +429,19 @@ export const renameFile = async (req, res, next) => {
       });
     }
 
+    const sharedFile = await Share.findOne({ resourceId: file._id });
+    const mimeType = mime.lookup(trimmedName);
     const oldName = file.originalName;
+    file.mimeType = mimeType;
     file.originalName = trimmedName;
+    sharedFile.resourceSnapshot.name = trimmedName;
+    sharedFile.resourceSnapshot.mimeType = mimeType;
     await file.save();
+    await sharedFile.save();
+    await invalidateShareTokenCache(sharedFile.token)
+    await cacheDelByPrefix(`share:list:${sharedFile.ownerId.toString()}`);
 
-    // Record rename activity (fire-and-forget)
+    await // Record rename activity (fire-and-forget)
     recordActivity({
       userId,
       action: ACTIVITY_ACTIONS.RENAMED,
@@ -504,7 +529,10 @@ export const restoreFile = async (req, res, next) => {
     }
 
     // Check if the original parent directory still exists, otherwise move to user root directory
-    const dirExists = await Directory.findOne({ _id: file.directoryId, userId }).lean();
+    const dirExists = await Directory.findOne({
+      _id: file.directoryId,
+      userId,
+    }).lean();
     let targetDirId = file.directoryId;
     if (!dirExists) {
       const user = await User.findById(userId).select("rootDirId").lean();
@@ -569,7 +597,7 @@ export const listTrash = async (req, res, next) => {
     // Batch fetch immediate parent directories
     const parents = await Directory.find({
       userId,
-      _id: { $in: Array.from(parentDirIds) }
+      _id: { $in: Array.from(parentDirIds) },
     }).lean();
 
     // Gather all unique ancestor directory IDs from parents' paths
@@ -594,7 +622,7 @@ export const listTrash = async (req, res, next) => {
     if (ancestorIds.size > 0) {
       const ancestors = await Directory.find({
         userId,
-        _id: { $in: Array.from(ancestorIds) }
+        _id: { $in: Array.from(ancestorIds) },
       }).lean();
       for (const dir of ancestors) {
         dirMap.set(dir._id.toString(), dir);
@@ -669,7 +697,11 @@ export const emptyTrash = async (req, res, next) => {
       await deleteActivitiesForResources(fileIds, userId);
       await Promise.all(
         fileIds.map((fileId) =>
-          deleteSharesForResource(userId, RESOURCE_TYPES.FILE, fileId.toString()),
+          deleteSharesForResource(
+            userId,
+            RESOURCE_TYPES.FILE,
+            fileId.toString(),
+          ),
         ),
       );
 
@@ -749,7 +781,7 @@ export const restoreAllFiles = async (req, res, next) => {
 
     const result = await File.updateMany(
       { userId, isTrashed: true },
-      { isTrashed: false, trashedAt: null }
+      { isTrashed: false, trashedAt: null },
     );
 
     // Record restore activity for each restored file
@@ -758,7 +790,10 @@ export const restoreAllFiles = async (req, res, next) => {
 
       for (const file of trashedFiles) {
         let targetDirId = file.directoryId;
-        const dirExists = await Directory.findOne({ _id: file.directoryId, userId }).lean();
+        const dirExists = await Directory.findOne({
+          _id: file.directoryId,
+          userId,
+        }).lean();
         if (!dirExists && user?.rootDirId) {
           targetDirId = user.rootDirId.toString();
           await File.updateOne({ _id: file._id }, { directoryId: targetDirId });
@@ -813,7 +848,7 @@ export const editFileContent = async (req, res, next) => {
     // Sync any active share snapshots
     await Share.updateMany(
       { resourceId: file._id, resourceType: RESOURCE_TYPES.FILE },
-      { "resourceSnapshot.size": newSize }
+      { "resourceSnapshot.size": newSize },
     );
 
     // Record edit activity (fire-and-forget)
