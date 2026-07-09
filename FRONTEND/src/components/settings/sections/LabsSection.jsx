@@ -121,6 +121,7 @@ export default function LabsSection() {
     setAiFeatures((prev) => {
       const next = { ...prev, [id]: !prev[id] };
       localStorage.setItem("drivya-ai-features", JSON.stringify(next));
+      window.dispatchEvent(new Event("drivya-labs-updated"));
       return next;
     });
   };

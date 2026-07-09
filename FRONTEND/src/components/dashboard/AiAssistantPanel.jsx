@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
   X,
@@ -50,6 +51,63 @@ function formatRelativeTime(date) {
   });
 }
 
+function parseAiResponseContent(text, recentFiles = []) {
+  let cleanedText = text || "";
+  let summary = null;
+  let draft = null;
+  let searchResults = null;
+  let suggestions = null;
+
+  // Extract <summary>...</summary>
+  const summaryMatch = cleanedText.match(/<summary>([\s\S]*?)<\/summary>/i);
+  if (summaryMatch) {
+    summary = summaryMatch[1].trim();
+    cleanedText = cleanedText.replace(/<summary>[\s\S]*?<\/summary>/i, "");
+  }
+
+  // Extract <draft>...</draft>
+  const draftMatch = cleanedText.match(/<draft>([\s\S]*?)<\/draft>/i);
+  if (draftMatch) {
+    draft = draftMatch[1].trim();
+    cleanedText = cleanedText.replace(/<draft>[\s\S]*?<\/draft>/i, "");
+  }
+
+  // Extract <search_results>...</search_results>
+  const searchMatch = cleanedText.match(/<search_results>([\s\S]*?)<\/search_results>/i);
+  if (searchMatch) {
+    const rawResults = searchMatch[1].trim();
+    cleanedText = cleanedText.replace(/<search_results>[\s\S]*?<\/search_results>/i, "");
+    
+    // Split searchResults by comma or newline and match against recentFiles
+    const names = rawResults.split(/,|\n/).map(n => n.trim().toLowerCase()).filter(Boolean);
+    if (names.length > 0 && Array.isArray(recentFiles)) {
+      searchResults = recentFiles.filter(f => 
+        names.some(name => (f.name || "").toLowerCase().includes(name))
+      );
+    }
+  }
+
+  // Extract <suggestions>...</suggestions>
+  const suggestionsMatch = cleanedText.match(/<suggestions>([\s\S]*?)<\/suggestions>/i);
+  if (suggestionsMatch) {
+    const rawSug = suggestionsMatch[1].trim();
+    try {
+      suggestions = JSON.parse(rawSug);
+    } catch (e) {
+      console.warn("Failed to parse AI suggestions JSON", e);
+    }
+    cleanedText = cleanedText.replace(/<suggestions>[\s\S]*?<\/suggestions>/i, "");
+  }
+
+  return {
+    text: cleanedText.trim(),
+    summary,
+    draft,
+    searchResults,
+    suggestions
+  };
+}
+
 // Custom simple hook to get Labs settings
 function useLabsSettings() {
   const [settings, setSettings] = useState({
@@ -91,6 +149,7 @@ export function AiAssistantPanel({
   clearInitialRequest,
 }) {
   const labsSettings = useLabsSettings();
+  const navigate = useNavigate();
   const [messages, setMessages] = useState([
     {
       id: "welcome",
@@ -229,8 +288,8 @@ export function AiAssistantPanel({
     setMessages((prev) => [...prev, userMsg]);
     setIsTyping(true);
 
-    setTimeout(() => {
-      if (!isFeatureEnabled("ai-summary")) {
+    if (!isFeatureEnabled("ai-summary")) {
+      setTimeout(() => {
         setMessages((prev) => [
           ...prev,
           {
@@ -239,27 +298,16 @@ export function AiAssistantPanel({
           },
         ]);
         setIsTyping(false);
-        return;
-      }
+      }, 800);
+      return;
+    }
 
-      // Generate custom file summary content
-      const summaryText = getMockSummary(file);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          sender: "ai",
-          text: `Here is the AI Summary for **${file.name}**:`,
-          summary: summaryText,
-          timestamp: new Date(),
-        },
-      ]);
-      setIsTyping(false);
-    }, 1500);
+    // Call real AI processing with file context
+    processAiResponse(`Summarize document "${file.name}"`, file);
   };
 
   // Process AI Responses (real LLM via backend, but keep Labs gating)
-  const processAiResponse = async (query) => {
+  const processAiResponse = async (query, customFileContext = null) => {
     const lower = query.toLowerCase();
 
     const needsSearch =
@@ -339,7 +387,7 @@ export function AiAssistantPanel({
     }
 
     const recentFilesForAi = (recentFiles || []).map((f) => ({
-      id: f.id,
+      id: f.id || f.resourceId,
       name: f.name,
       kind: f.kind,
       owner: f.owner,
@@ -347,11 +395,27 @@ export function AiAssistantPanel({
     }));
 
     let fileContext = null;
-    if (needsSummary) {
-      const foundFile = recentFilesForAi.find((f) =>
+    if (customFileContext) {
+      fileContext = {
+        id: customFileContext.id || customFileContext.resourceId,
+        name: customFileContext.name,
+        kind: customFileContext.kind,
+        owner: customFileContext.owner,
+        size: customFileContext.size,
+      };
+    } else if (needsSummary) {
+      const foundFile = recentFiles.find((f) =>
         lower.includes((f.name || "").toLowerCase().split(".")[0]),
       );
-      fileContext = foundFile || null;
+      if (foundFile) {
+        fileContext = {
+          id: foundFile.id || foundFile.resourceId,
+          name: foundFile.name,
+          kind: foundFile.kind,
+          owner: foundFile.owner,
+          size: foundFile.size,
+        };
+      }
     }
 
     try {
@@ -368,13 +432,18 @@ export function AiAssistantPanel({
         setFreeModeAnswer(fallback);
         setFreeModeOpen(true);
 
+        const parsed = parseAiResponseContent(fallback, recentFiles);
         // Immediately show fallback answer in chat as well
         setMessages((prev) => [
           ...prev,
           {
             id: crypto.randomUUID(),
             sender: "ai",
-            text: fallback,
+            text: parsed.text,
+            summary: parsed.summary,
+            draft: parsed.draft,
+            suggestions: parsed.suggestions,
+            searchResults: parsed.searchResults,
             timestamp: new Date(),
           },
         ]);
@@ -382,12 +451,18 @@ export function AiAssistantPanel({
       }
 
       const aiText = data?.message || data?.reply?.message || "AI did not return a message.";
+      const parsed = parseAiResponseContent(aiText, recentFiles);
+
       setMessages((prev) => [
         ...prev,
         {
           id: crypto.randomUUID(),
           sender: "ai",
-          text: aiText,
+          text: parsed.text,
+          summary: parsed.summary,
+          draft: parsed.draft,
+          suggestions: parsed.suggestions,
+          searchResults: parsed.searchResults,
           timestamp: new Date(),
         },
       ]);
@@ -401,12 +476,17 @@ export function AiAssistantPanel({
       // Second-stage confirm modal (as per your requirement: if all modal hits free limit)
       setFreeModeOpen(true);
 
+      const parsed = parseAiResponseContent(fallback, recentFiles);
       setMessages((prev) => [
         ...prev,
         {
           id: crypto.randomUUID(),
           sender: "ai",
-          text: fallback,
+          text: parsed.text,
+          summary: parsed.summary,
+          draft: parsed.draft,
+          suggestions: parsed.suggestions,
+          searchResults: parsed.searchResults,
           timestamp: new Date(),
         },
       ]);
@@ -582,7 +662,7 @@ export function AiAssistantPanel({
                             <button
                               onClick={() => {
                                 onClose();
-                                window.location.href = `/dashboard/settings/labs`;
+                                navigate("/dashboard/settings/labs");
                               }}
                               className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline font-display"
                             >
@@ -738,42 +818,103 @@ export function AiAssistantPanel({
               </div>
 
               {/* Chat Suggestions Quick links */}
-              {messages.length === 1 && (
-                <div className="px-5 py-3 border-t border-border/50 bg-secondary/10 shrink-0">
-                  <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 mb-2 font-display">
-                    Suggested Actions
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    {[
-                      {
-                        text: "🔍 AI Search 'guidelines'",
-                        query: "find guidelines",
-                      },
-                      {
-                        text: "📄 Summarize Brand Guidelines",
-                        query: "summarize Brand Guidelines",
-                      },
-                      {
-                        text: "📁 Suggest folder categorizations",
-                        query: "organize my files",
-                      },
-                      {
-                        text: "✍️ Write a launch email draft",
-                        query: "write a launch email draft",
-                      },
-                    ].map((chipItem, index) => (
+              {messages.length === 1 && (() => {
+                const availableChips = [];
+                
+                // 1. Search suggestion
+                if (isFeatureEnabled("ai-search")) {
+                  const searchFile = recentFiles && recentFiles[0];
+                  if (searchFile && searchFile.name) {
+                    availableChips.push({
+                      text: `🔍 AI Search '${searchFile.name}'`,
+                      query: `find ${searchFile.name}`,
+                    });
+                  } else {
+                    availableChips.push({
+                      text: "🔍 AI Search your vault",
+                      query: "find my files",
+                    });
+                  }
+                }
+
+                // 2. Summary suggestion
+                if (isFeatureEnabled("ai-summary")) {
+                  const docFile = recentFiles && recentFiles[0];
+                  if (docFile && docFile.name) {
+                    availableChips.push({
+                      text: `📄 Summarize "${docFile.name}"`,
+                      query: `summarize ${docFile.name}`,
+                    });
+                  } else {
+                    availableChips.push({
+                      text: "📄 Summarize a document",
+                      query: "summarize",
+                    });
+                  }
+                }
+
+                // 3. Organization suggestion
+                if (isFeatureEnabled("ai-organize")) {
+                  availableChips.push({
+                    text: "📁 Suggest folder categorizations",
+                    query: "organize my files",
+                  });
+                }
+
+                // 4. Writing/Draft suggestion
+                if (isFeatureEnabled("ai-writing")) {
+                  availableChips.push({
+                    text: "✍️ Write a launch email draft",
+                    query: "write a launch email draft",
+                  });
+                }
+
+                const allDisabled = !isFeatureEnabled("ai-search") && 
+                                    !isFeatureEnabled("ai-summary") && 
+                                    !isFeatureEnabled("ai-organize") && 
+                                    !isFeatureEnabled("ai-writing");
+
+                if (allDisabled) {
+                  return (
+                    <div className="px-5 py-4 border-t border-border/50 bg-destructive/5 shrink-0 space-y-2.5">
+                      <p className="text-[12px] text-muted-foreground leading-relaxed">
+                        ⚠️ All Drivya AI capabilities are currently disabled in your settings. Enable them in Labs to ask queries or view suggestions.
+                      </p>
                       <button
-                        key={index}
-                        onClick={() => handleSend(chipItem.query)}
-                        className="w-full flex items-center justify-between rounded-xl border border-border bg-background/50 px-3.5 py-2.5 text-xs text-foreground/80 hover:bg-secondary/60 hover:text-foreground hover:border-primary/20 transition-all font-medium font-display text-left group cursor-pointer"
+                        onClick={() => {
+                          onClose();
+                          navigate("/dashboard/settings/labs");
+                        }}
+                        className="inline-flex h-9 items-center justify-center rounded-xl bg-primary px-4 text-xs font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 transition-all font-display cursor-pointer"
                       >
-                        <span>{chipItem.text}</span>
-                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/45 group-hover:translate-x-0.5 transition-transform" />
+                        Go to Labs Settings
                       </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+                    </div>
+                  );
+                }
+
+                return (
+                  availableChips.length > 0 && (
+                    <div className="px-5 py-3 border-t border-border/50 bg-secondary/10 shrink-0">
+                      <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 mb-2 font-display">
+                        Suggested Actions
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        {availableChips.map((chipItem, index) => (
+                          <button
+                            key={index}
+                            onClick={() => handleSend(chipItem.query)}
+                            className="w-full flex items-center justify-between rounded-xl border border-border bg-background/50 px-3.5 py-2.5 text-xs text-foreground/80 hover:bg-secondary/60 hover:text-foreground hover:border-primary/20 transition-all font-medium font-display text-left group cursor-pointer"
+                          >
+                            <span>{chipItem.text}</span>
+                            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/45 group-hover:translate-x-0.5 transition-transform" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                );
+              })()}
 
               {/* Input Form Footer */}
               <footer className="border-t border-border/60 p-4 bg-background shrink-0">

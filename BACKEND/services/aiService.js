@@ -41,7 +41,14 @@ Rules:
 - Respect feature flags strictly. If a capability is disabled, do NOT claim you can do it; instead ask the user to enable it in Labs settings.
 - Be concise and practical for a file-management assistant.
 - When you mention files, prefer using the provided file names from metadata.
-- If summarizing, summarize based on context provided. If context is missing, ask for the file to summarize.`;
+- If summarizing, summarize based on context provided. If context is missing, ask for the file to summarize.
+
+Structured Responses:
+If you generate summaries, drafts, file searches, or file organization recommendations, you MUST wrap that content in the following XML-like tags within your response so the system can render interactive widgets:
+1. For document summaries: Wrap the summary inside <summary>...</summary> tags.
+2. For drafting text (emails, code, reports): Wrap the complete draft inside <draft>...</draft> tags.
+3. For file searches (user looking for/asking to find files): Wrap the list of matching file names (matching from recent files list) separated by commas inside <search_results>...</search_results> tags. E.g., <search_results>api-routes.ts, Hero-shot-005.png</search_results>.
+4. For file organization (user asking to clean/organize/categorize files): Wrap a JSON array of suggestions inside <suggestions>...</suggestions> tags. The array should contain objects with "file" and "action" (indicating destination folder). E.g., <suggestions>[{"file": "Hero-shot-005.png", "action": "launch-assets"}]</suggestions>.`;
 
     const user = `Feature flags:
 ${flagsText}
@@ -55,8 +62,8 @@ User request:
 ${query}
 
 Respond with:
-- A short assistant message (max ~600 chars).
-- If you are able to produce a summary/draft/search results, include it plainly in the same response.`;
+- A short assistant message (max ~600 chars) explaining what you did.
+- Ensure any summary, draft, search results, or organization suggestions are formatted in their respective tags as instructed.`;
 
     return { system, user };
 }
