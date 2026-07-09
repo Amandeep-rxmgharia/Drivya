@@ -42,11 +42,42 @@ import {
   restoreAllFiles as restoreAllFilesApi,
   downloadFile,
 } from "../../api/drive.js";
-
+import { useOutletContext } from "react-router-dom";
+import {getStoragePreferences} from '../../api/storage.js'
 /* ───────────────────────── Helpers ───────────────────────── */
+function useAutoDeleteDays() {
+  const [value, setValue] = useState(null);
 
-const AUTO_DELETE_DAYS = 30;
+  useEffect(() => {
+    async function loadPreferences() {
+      try {
+        const autoTrashDays = await getStoragePreferences();
+        setValue(autoTrashDays?.preferences?.trashAutoEmptyDays);
+      } catch (error) {
+        console.error(error);
+      }
+    }
 
+    loadPreferences();
+  }, []);
+
+  return value;
+}
+
+// function getAutoDeleteDays() {
+// // console.log(autoTrashDays);
+// const [value,setValue] = useState(null)
+// useEffect(async() => {
+// try {
+//   const autoTrashDays = await getStoragePreferences()
+// setValue(autoTrashDays?.preferences?.trashAutoEmptyDays)
+// } catch (error) {
+//   console.log('failed to load storagePreferences');
+// }
+// },[])
+// // return useOutletContext().userProfile?.trashAutoEmptyDays
+// return value
+// }
 function formatRelativeTime(date) {
   const now = Date.now();
   const diff = now - date.getTime();
@@ -61,7 +92,7 @@ function formatRelativeTime(date) {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function daysUntilAutoDelete(deletedAt) {
+function daysUntilAutoDelete(deletedAt,AUTO_DELETE_DAYS) {
   const elapsed = Math.floor(
     (Date.now() - deletedAt.getTime()) / (1000 * 60 * 60 * 24),
   );
@@ -154,13 +185,13 @@ const StatMini = memo(function StatMini({
 
 /* ───────────────────────── Hero ───────────────────────── */
 
-function TrashHero({ files }) {
+function TrashHero({ files,AUTO_DELETE_DAYS }) {
   const totalItems = files.length;
   const totalSizeBytes = files.reduce((sum, f) => sum + (f.rawSize || 0), 0);
   const expiringCount = files.filter(
-    (f) => daysUntilAutoDelete(f.deletedAt) <= 7,
+    (f) => daysUntilAutoDelete(f.deletedAt,AUTO_DELETE_DAYS) <= 7,
   ).length;
-
+console.log(AUTO_DELETE_DAYS);
   return (
     <section
       className={`${card} ${subtleHover} relative overflow-hidden p-5 sm:p-6 md:p-10 animate-fade-in`}
@@ -348,12 +379,12 @@ function TrashFileActions({
 
 /* ───────────────────────── Trash File Row ───────────────────────── */
 
-function TrashFileRow({ file, view, onRestore, onDeletePermanently, onPreview }) {
+function TrashFileRow({ file, view, onRestore, onDeletePermanently, onPreview,AUTO_DELETE_DAYS }) {
   const [hovered, setHovered] = useState(false);
   const { ref: revealRef, isVisible } = useScrollReveal();
   const kind = detectFileKind(file.name, file.kind);
   const isGrid = view === "grid";
-  const daysLeft = daysUntilAutoDelete(file.deletedAt);
+  const daysLeft = daysUntilAutoDelete(file.deletedAt,AUTO_DELETE_DAYS);
 
   if (isGrid) {
     return (
@@ -518,6 +549,7 @@ function CategoryGroup({
   onRestore,
   onDeletePermanently,
   onPreview,
+  AUTO_DELETE_DAYS
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const CatIcon = CATEGORY_ICONS[category] || FileStack;
@@ -584,6 +616,7 @@ function CategoryGroup({
           {files.map((file) => (
             <TrashFileRow
               key={file.id}
+              AUTO_DELETE_DAYS={AUTO_DELETE_DAYS}
               file={file}
               view={view}
               onRestore={onRestore}
@@ -629,6 +662,7 @@ function EmptyState({ hasFilters }) {
 /* ───────────────────────── Main Page ───────────────────────── */
 
 export default function TrashFiles() {
+  const AUTO_DELETE_DAYS = useAutoDeleteDays()
   const [files, setFiles] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -896,7 +930,7 @@ export default function TrashFiles() {
       }
       if (sortBy === "expiry") {
         return (
-          daysUntilAutoDelete(a.deletedAt) - daysUntilAutoDelete(b.deletedAt)
+          daysUntilAutoDelete(a.deletedAt,AUTO_DELETE_DAYS) - daysUntilAutoDelete(b.deletedAt,AUTO_DELETE_DAYS)
         );
       }
       // Default: date deleted (newest first)
@@ -928,7 +962,7 @@ export default function TrashFiles() {
   return (
     <>
       {/* Hero */}
-      <TrashHero files={files} />
+      <TrashHero files={files} AUTO_DELETE_DAYS={AUTO_DELETE_DAYS}/>
 
       {/* Main content card */}
       <section
@@ -1182,6 +1216,7 @@ export default function TrashFiles() {
             grouped.map((group, gi) => (
               <CategoryGroup
                 key={group.category}
+                AUTO_DELETE_DAYS={AUTO_DELETE_DAYS}
                 category={group.category}
                 files={group.files}
                 view={view}

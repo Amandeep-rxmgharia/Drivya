@@ -173,8 +173,8 @@ function Sidebar({ collapsed, onClose, mobileOpen, userProfile }) {
                     100,
                     Math.round(
                       ((userProfile?.storageUsed || 0) * 100) /
-                      (userProfile?.storageLimit || 1024 * 1024 * 1024)
-                    )
+                        (userProfile?.storageLimit || 1024 * 1024 * 1024),
+                    ),
                   )}%`,
                 }}
                 transition={{
@@ -191,7 +191,11 @@ function Sidebar({ collapsed, onClose, mobileOpen, userProfile }) {
                 {formatBytes(userProfile?.storageUsed || 0)} of{" "}
                 {formatBytes(userProfile?.storageLimit || 1024 * 1024 * 1024)}
               </span>
-              <Link to='/dashboard/payment?plan=pro' onClick={onClose} className="font-semibold text-foreground hover:text-primary transition-colors">
+              <Link
+                to="/dashboard/payment?plan=pro"
+                onClick={onClose}
+                className="font-semibold text-foreground hover:text-primary transition-colors"
+              >
                 Upgrade
               </Link>
             </div>
@@ -284,9 +288,18 @@ function SidebarGroup({ label, items, active, collapsed, onClose }) {
 /* ───────────────────────── Topbar ───────────────────────── */
 
 const STATUS_META = {
-  active: { color: "bg-emerald-500 shadow-[0_0_8px_oklch(0.55_0.22_150)]", label: "Active" },
-  away: { color: "bg-amber-500 shadow-[0_0_8px_oklch(0.79_0.16_85)]", label: "Away" },
-  dnd: { color: "bg-rose-500 shadow-[0_0_8px_oklch(0.62_0.24_27)]", label: "Do Not Disturb" },
+  active: {
+    color: "bg-emerald-500 shadow-[0_0_8px_oklch(0.55_0.22_150)]",
+    label: "Active",
+  },
+  away: {
+    color: "bg-amber-500 shadow-[0_0_8px_oklch(0.79_0.16_85)]",
+    label: "Away",
+  },
+  dnd: {
+    color: "bg-rose-500 shadow-[0_0_8px_oklch(0.62_0.24_27)]",
+    label: "Do Not Disturb",
+  },
 };
 
 const NOTIFICATION_TYPES = {
@@ -351,8 +364,6 @@ const formatTimeAgo = (isoString) => {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 };
 
-
-
 const getInitials = (name) => {
   if (!name) return "AM";
   const parts = name.trim().split(/\s+/);
@@ -383,7 +394,9 @@ function Topbar({
   const navigate = useNavigate();
   const { mode, setMode } = useTheme();
 
-  const isMac = typeof window !== "undefined" && /Mac|iPod|iPhone|iPad/.test(navigator.platform || "");
+  const isMac =
+    typeof window !== "undefined" &&
+    /Mac|iPod|iPhone|iPad/.test(navigator.platform || "");
   const modKeySymbol = "Alt";
 
   // Close dropdown on click outside
@@ -402,7 +415,10 @@ function Topbar({
   useEffect(() => {
     if (!bellOpen) return;
     const handleClickOutside = (event) => {
-      if (bellDropdownRef.current && !bellDropdownRef.current.contains(event.target)) {
+      if (
+        bellDropdownRef.current &&
+        !bellDropdownRef.current.contains(event.target)
+      ) {
         setBellOpen(false);
       }
     };
@@ -485,7 +501,10 @@ function Topbar({
         <ThemeToggle className="hidden sm:inline-flex" />
 
         {/* Bell Icon & Dropdown */}
-        <div className="relative flex items-center justify-center" ref={bellDropdownRef}>
+        <div
+          className="relative flex items-center justify-center"
+          ref={bellDropdownRef}
+        >
           <button
             onClick={() => {
               const next = !bellOpen;
@@ -513,7 +532,9 @@ function Topbar({
                 {/* Header */}
                 <div className="flex items-center justify-between pb-2 mb-2 border-b border-border/60">
                   <div className="flex items-center gap-2">
-                    <span className="font-display font-semibold text-foreground text-sm">Notifications</span>
+                    <span className="font-display font-semibold text-foreground text-sm">
+                      Notifications
+                    </span>
                     {notifications.filter((n) => !n.read).length > 0 && (
                       <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
                         {notifications.filter((n) => !n.read).length} new
@@ -534,26 +555,29 @@ function Topbar({
                 <div className="flex gap-1.5 p-0.5 mb-2 rounded-lg bg-secondary/35 border border-border/40">
                   <button
                     onClick={() => setFilter("all")}
-                    className={`flex-1 py-1 px-2 text-[11px] font-semibold rounded-md transition-all ${filter === "all"
-                      ? "bg-secondary text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                      }`}
+                    className={`flex-1 py-1 px-2 text-[11px] font-semibold rounded-md transition-all ${
+                      filter === "all"
+                        ? "bg-secondary text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
                   >
                     All ({notifications.length})
                   </button>
                   <button
                     onClick={() => setFilter("unread")}
-                    className={`flex-1 py-1 px-2 text-[11px] font-semibold rounded-md transition-all ${filter === "unread"
-                      ? "bg-secondary text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                      }`}
+                    className={`flex-1 py-1 px-2 text-[11px] font-semibold rounded-md transition-all ${
+                      filter === "unread"
+                        ? "bg-secondary text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
                   >
                     Unread ({notifications.filter((n) => !n.read).length})
                   </button>
                 </div>
 
                 {/* Notifications List */}
-                {notifications.filter((n) => filter === "all" || !n.read).length === 0 ? (
+                {notifications.filter((n) => filter === "all" || !n.read)
+                  .length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
                     <div className="h-12 w-12 rounded-full bg-secondary/35 border border-border/40 flex items-center justify-center text-muted-foreground/60 mb-3">
                       <Bell className="h-5 w-5 opacity-40 animate-bounce" />
@@ -572,7 +596,9 @@ function Topbar({
                     {notifications
                       .filter((n) => filter === "all" || !n.read)
                       .map((n) => {
-                        const typeConfig = NOTIFICATION_TYPES[n.type] || NOTIFICATION_TYPES.system;
+                        const typeConfig =
+                          NOTIFICATION_TYPES[n.type] ||
+                          NOTIFICATION_TYPES.system;
                         return (
                           <div
                             key={n.id}
@@ -583,15 +609,20 @@ function Topbar({
                                 setBellOpen(false);
                               }
                             }}
-                            className={`group/item relative flex gap-3 p-2.5 rounded-xl border transition-all cursor-pointer ${n.read
-                              ? "bg-transparent border-transparent hover:bg-secondary/40 text-muted-foreground"
-                              : "bg-secondary/40 border-border/40 hover:bg-secondary/60 text-foreground"
-                              }`}
+                            className={`group/item relative flex gap-3 p-2.5 rounded-xl border transition-all cursor-pointer ${
+                              n.read
+                                ? "bg-transparent border-transparent hover:bg-secondary/40 text-muted-foreground"
+                                : "bg-secondary/40 border-border/40 hover:bg-secondary/60 text-foreground"
+                            }`}
                           >
                             {/* Left Icon */}
                             <div className="relative shrink-0 mt-0.5">
-                              <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${typeConfig.bgColor}`}>
-                                <typeConfig.icon className={`h-4 w-4 ${typeConfig.iconColor}`} />
+                              <div
+                                className={`h-8 w-8 rounded-lg flex items-center justify-center ${typeConfig.bgColor}`}
+                              >
+                                <typeConfig.icon
+                                  className={`h-4 w-4 ${typeConfig.iconColor}`}
+                                />
                               </div>
                               {!n.read && (
                                 <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-popover" />
@@ -601,7 +632,9 @@ function Topbar({
                             {/* Text Content */}
                             <div className="flex-1 min-w-0 pr-1">
                               <div className="flex items-start justify-between gap-2">
-                                <span className={`text-xs font-semibold truncate ${n.read ? "text-foreground/80 font-medium" : "text-foreground"}`}>
+                                <span
+                                  className={`text-xs font-semibold truncate ${n.read ? "text-foreground/80 font-medium" : "text-foreground"}`}
+                                >
                                   {n.title}
                                 </span>
                                 <span className="text-[9.5px] text-muted-foreground shrink-0 mt-0.5 font-medium">
@@ -632,7 +665,8 @@ function Topbar({
                               )}
 
                               {/* Copy-only action for 1-time share password */}
-                              {n.metadata?.notificationKind === "share_password" &&
+                              {n.metadata?.notificationKind ===
+                                "share_password" &&
                                 typeof n.description === "string" &&
                                 n.description.trim().length > 0 && (
                                   <div className="mt-2 flex items-center gap-2">
@@ -674,7 +708,9 @@ function Topbar({
                             <div className="absolute right-2 bottom-2 opacity-0 group-hover/item:opacity-100 transition-opacity flex items-center gap-1 bg-popover/90 backdrop-blur-sm pl-1 py-0.5 rounded-md shadow-sm border border-border/40">
                               <button
                                 onClick={(e) => toggleRead(n.id, e)}
-                                title={n.read ? "Mark as unread" : "Mark as read"}
+                                title={
+                                  n.read ? "Mark as unread" : "Mark as read"
+                                }
                                 className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
                               >
                                 {n.read ? (
@@ -738,7 +774,8 @@ function Topbar({
                   className="h-8 w-8 rounded-lg object-cover ring-1 ring-border shadow-glow"
                   onError={(e) => {
                     e.target.style.display = "none";
-                    if (e.target.nextSibling) e.target.nextSibling.style.display = "flex";
+                    if (e.target.nextSibling)
+                      e.target.nextSibling.style.display = "flex";
                   }}
                 />
               ) : null}
@@ -748,7 +785,9 @@ function Topbar({
               >
                 {initials}
               </div>
-              <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-background ${STATUS_META[currentStatus]?.color}`} />
+              <span
+                className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-background ${STATUS_META[currentStatus]?.color}`}
+              />
             </div>
             <ChevronDown className="h-3.5 w-3.5 text-muted-foreground hidden sm:block" />
           </button>
@@ -771,7 +810,8 @@ function Topbar({
                         className="h-10 w-10 rounded-xl object-cover shadow-glow"
                         onError={(e) => {
                           e.target.style.display = "none";
-                          if (e.target.nextSibling) e.target.nextSibling.style.display = "flex";
+                          if (e.target.nextSibling)
+                            e.target.nextSibling.style.display = "flex";
                         }}
                       />
                     ) : null}
@@ -781,7 +821,9 @@ function Topbar({
                     >
                       {initials}
                     </div>
-                    <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ring-2 ring-popover ${STATUS_META[currentStatus]?.color}`} />
+                    <span
+                      className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ring-2 ring-popover ${STATUS_META[currentStatus]?.color}`}
+                    />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-semibold text-foreground truncate flex items-center gap-1.5">
@@ -814,10 +856,11 @@ function Topbar({
                         <button
                           key={themeItem.id}
                           onClick={() => setMode(themeItem.id)}
-                          className={`flex items-center justify-center gap-1.5 px-1.5 py-1 rounded-lg text-[11px] font-medium border transition-all ${isSelected
-                            ? "bg-secondary border-border/80 text-foreground"
-                            : "bg-transparent border-transparent text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
-                            }`}
+                          className={`flex items-center justify-center gap-1.5 px-1.5 py-1 rounded-lg text-[11px] font-medium border transition-all ${
+                            isSelected
+                              ? "bg-secondary border-border/80 text-foreground"
+                              : "bg-transparent border-transparent text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
+                          }`}
                         >
                           <themeItem.icon className="h-3 w-3" />
                           <span>{themeItem.label}</span>
@@ -849,9 +892,21 @@ function Topbar({
                 {/* Menu items */}
                 <div className="space-y-0.5 mt-1.5">
                   {[
-                    { label: "Account & Profile", icon: User, path: "/dashboard/settings/account" },
-                    { label: "Storage details", icon: HardDrive, path: "/dashboard/settings/storage" },
-                    { label: "Security & 2FA", icon: ShieldCheck, path: "/dashboard/settings/security" },
+                    {
+                      label: "Account & Profile",
+                      icon: User,
+                      path: "/dashboard/settings/account",
+                    },
+                    {
+                      label: "Storage details",
+                      icon: HardDrive,
+                      path: "/dashboard/settings/storage",
+                    },
+                    {
+                      label: "Security & 2FA",
+                      icon: ShieldCheck,
+                      path: "/dashboard/settings/security",
+                    },
                   ].map((item) => (
                     <button
                       key={item.label}
@@ -936,7 +991,9 @@ export function DashboardLayout() {
 
     function connectSSE() {
       try {
-        const es = new EventSource(NOTIFICATION_STREAM_BASE, { withCredentials: true });
+        const es = new EventSource(NOTIFICATION_STREAM_BASE, {
+          withCredentials: true,
+        });
 
         es.onopen = () => {
           if (pollInterval) {
@@ -963,11 +1020,11 @@ export function DashboardLayout() {
 
               const toastPayload = isSharePassword
                 ? {
-                  id: toastId,
-                  type: n.type,
-                  title: "Password delivered to inbox",
-                  description: `Password for ${n.metadata?.resourceName || "your shared file"} is ready. Open notifications to copy (it will auto-delete shortly).`,
-                }
+                    id: toastId,
+                    type: n.type,
+                    title: "Password delivered to inbox",
+                    description: `Password for ${n.metadata?.resourceName || "your shared file"} is ready. Open notifications to copy (it will auto-delete shortly).`,
+                  }
                 : { id: toastId, ...n };
 
               setToasts((prev) => [...prev, toastPayload]);
@@ -976,7 +1033,7 @@ export function DashboardLayout() {
                 setToasts((prev) => prev.filter((t) => t.id !== toastId));
               }, 6500);
             }
-          } catch (e) { }
+          } catch (e) {}
         };
 
         es.onerror = () => {
@@ -1013,9 +1070,9 @@ export function DashboardLayout() {
 
   // ─── Handlers that call the API ────────────────────────────
   const markAsRead = (id) => {
-    apiMarkAsRead(id).catch(() => { });
+    apiMarkAsRead(id).catch(() => {});
     setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
     );
   };
 
@@ -1028,34 +1085,33 @@ export function DashboardLayout() {
         const nid = n._id || n.id;
         if (nid === id) return { ...n, read: !currentlyRead };
         return n;
-      })
+      }),
     );
     if (currentlyRead) {
-      apiMarkAsRead(id).catch(() => { });
+      apiMarkAsRead(id).catch(() => {});
     }
   };
 
   const deleteNotification = (id, event) => {
     event?.stopPropagation();
-    setNotifications((prev) =>
-      prev.filter((n) => (n._id || n.id) !== id)
-    );
-    apiDeleteNotification(id).catch(() => { });
+    setNotifications((prev) => prev.filter((n) => (n._id || n.id) !== id));
+    apiDeleteNotification(id).catch(() => {});
   };
 
   const markAllRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    apiMarkAllAsRead().catch(() => { });
+    apiMarkAllAsRead().catch(() => {});
   };
 
   const clearAllNotifications = () => {
     setNotifications([]);
-    apiClearNotifications().catch(() => { });
+    apiClearNotifications().catch(() => {});
   };
 
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
-      const shortcutsEnabled = localStorage.getItem("drivya-shortcuts") !== "false";
+      const shortcutsEnabled =
+        localStorage.getItem("drivya-shortcuts") !== "false";
       if (!shortcutsEnabled) return;
 
       const isShift = e.shiftKey;
@@ -1063,11 +1119,11 @@ export function DashboardLayout() {
 
       // Check if user is typing in input or textarea
       const activeEl = document.activeElement;
-      const isTyping = activeEl && (
-        activeEl.tagName === "INPUT" ||
-        activeEl.tagName === "TEXTAREA" ||
-        activeEl.isContentEditable
-      );
+      const isTyping =
+        activeEl &&
+        (activeEl.tagName === "INPUT" ||
+          activeEl.tagName === "TEXTAREA" ||
+          activeEl.isContentEditable);
 
       // Search shortcut (Alt+K) - focus search bar
       if (e.altKey && !isShift && key === "k") {
@@ -1150,6 +1206,7 @@ export function DashboardLayout() {
       try {
         const data = await getCurrentUser();
         if (data?.user) {
+          console.log(data.user);
           setUserProfile((prev) => ({
             ...prev,
             id: data.user._id,
@@ -1161,12 +1218,14 @@ export function DashboardLayout() {
             avatarUrl: data.user.avatarUrl || "",
             storageUsed: data.user.storageUsed || 0,
             storageLimit: data.user.storageLimit || 1024 * 1024 * 1024,
-            tier: data.user.storageLimit > 2 * 1024 * 1024 * 1024 ? "Pro" : "Free",
+            tier:
+              data.user.storageLimit > 2 * 1024 * 1024 * 1024 ? "Pro" : "Free",
             loginAlerts: data.user.loginAlerts !== false,
             twoFAEnabled: data.user.twoFAEnabled,
             role: data.user.role || "user",
             isActive: data.user.isActive !== false,
             hasPassword: !!data.user.hasPassword,
+            trashAutoEmptyDays: data.user?.storagePreferences?.trashAutoEmptyDays,
           }));
         }
       } catch (err) {
@@ -1259,17 +1318,26 @@ export function DashboardLayout() {
         <div className="fixed bottom-24 right-6 z-[100] pointer-events-none flex flex-col gap-2.5 max-w-sm w-full">
           <AnimatePresence>
             {toasts.map((toast) => {
-              const typeConfig = NOTIFICATION_TYPES[toast.type] || NOTIFICATION_TYPES.system;
+              const typeConfig =
+                NOTIFICATION_TYPES[toast.type] || NOTIFICATION_TYPES.system;
               return (
                 <motion.div
                   key={toast.id}
                   initial={{ opacity: 0, y: 50, scale: 0.9 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.85, transition: { duration: 0.2 } }}
+                  exit={{
+                    opacity: 0,
+                    scale: 0.85,
+                    transition: { duration: 0.2 },
+                  }}
                   className="pointer-events-auto flex w-full gap-3 rounded-2xl glass shadow-elegant border border-border/80 bg-popover/90 p-4"
                 >
-                  <div className={`h-9 w-9 shrink-0 rounded-xl flex items-center justify-center ${typeConfig.bgColor}`}>
-                    <typeConfig.icon className={`h-4 w-4 ${typeConfig.iconColor}`} />
+                  <div
+                    className={`h-9 w-9 shrink-0 rounded-xl flex items-center justify-center ${typeConfig.bgColor}`}
+                  >
+                    <typeConfig.icon
+                      className={`h-4 w-4 ${typeConfig.iconColor}`}
+                    />
                   </div>
                   <div className="flex-1 min-w-0 pr-2">
                     <span className="text-xs font-semibold text-foreground block">
@@ -1280,7 +1348,9 @@ export function DashboardLayout() {
                     </p>
                   </div>
                   <button
-                    onClick={() => setToasts((prev) => prev.filter((t) => t.id !== toast.id))}
+                    onClick={() =>
+                      setToasts((prev) => prev.filter((t) => t.id !== toast.id))
+                    }
                     className="h-6 w-6 shrink-0 inline-flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/65 transition-colors"
                   >
                     <X className="h-3.5 w-3.5" />
@@ -1300,13 +1370,41 @@ export function DashboardLayout() {
 function ShortcutHelpModal({ onClose }) {
   const shortcutsList = [
     { keys: ["Alt", "K"], action: "Search", desc: "Focus search bar" },
-    { keys: ["Alt", "U"], action: "Upload Files", desc: "Open upload files dialog" },
-    { keys: ["Alt", "N"], action: "New Folder", desc: "Create a new folder in the current directory" },
-    { keys: ["Alt", "S"], action: "Settings", desc: "Navigate to the Settings panel" },
-    { keys: ["Alt", "D"], action: "Download", desc: "Download the selected file" },
-    { keys: ["Alt", "C"], action: "Copy Share Link", desc: "Copy sharing link of selected file" },
-    { keys: ["Del"], action: "Move to Trash", desc: "Delete the selected file" },
-    { keys: ["Alt", "/"], action: "Shortcut Help", desc: "Toggle this shortcut reference dialog" },
+    {
+      keys: ["Alt", "U"],
+      action: "Upload Files",
+      desc: "Open upload files dialog",
+    },
+    {
+      keys: ["Alt", "N"],
+      action: "New Folder",
+      desc: "Create a new folder in the current directory",
+    },
+    {
+      keys: ["Alt", "S"],
+      action: "Settings",
+      desc: "Navigate to the Settings panel",
+    },
+    {
+      keys: ["Alt", "D"],
+      action: "Download",
+      desc: "Download the selected file",
+    },
+    {
+      keys: ["Alt", "C"],
+      action: "Copy Share Link",
+      desc: "Copy sharing link of selected file",
+    },
+    {
+      keys: ["Del"],
+      action: "Move to Trash",
+      desc: "Delete the selected file",
+    },
+    {
+      keys: ["Alt", "/"],
+      action: "Shortcut Help",
+      desc: "Toggle this shortcut reference dialog",
+    },
   ];
 
   useEffect(() => {
@@ -1388,8 +1486,19 @@ function ShortcutHelpModal({ onClose }) {
           </div>
 
           <div className="mt-5 pt-4 border-t border-border/40 flex items-center justify-between text-[11px] text-muted-foreground font-medium font-semibold">
-            <span>Press <kbd className="border border-border bg-secondary/40 px-1 rounded">Esc</kbd> to close</span>
-            <span>Shortcuts are {localStorage.getItem("drivya-shortcuts") !== "false" ? "Enabled" : "Disabled"}</span>
+            <span>
+              Press{" "}
+              <kbd className="border border-border bg-secondary/40 px-1 rounded">
+                Esc
+              </kbd>{" "}
+              to close
+            </span>
+            <span>
+              Shortcuts are{" "}
+              {localStorage.getItem("drivya-shortcuts") !== "false"
+                ? "Enabled"
+                : "Disabled"}
+            </span>
           </div>
         </div>
       </motion.div>

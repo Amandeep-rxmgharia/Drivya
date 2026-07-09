@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Cloud, Menu, X } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { easeSmooth, tweenEnter } from "@/lib/motion-presets";
+import { getCurrentUser } from "../../../api/auth";
 
 const links = [
   { label: "Features", href: "#features" },
@@ -15,13 +16,19 @@ const links = [
 
 export function Navbar({open,closeMobileMenu}) {
   const [scrolled, setScrolled] = useState(false);
+  const navigate = useNavigate()
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);
     onScroll();
     window.addEventListener("scroll", onScroll);
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
-
+  async function handleLogin() {
+    try {
+      const data =  await getCurrentUser()
+      navigate('/dashboard/home',{state:data?.user})
+    } catch (error) {}
+  }
   return (
     <motion.header
       initial={{ y: -8, opacity: 0 }}
@@ -63,8 +70,9 @@ export function Navbar({open,closeMobileMenu}) {
               size="sm"
               className="text-foreground/80"
               asChild
+              
             >
-              <Link to="/auth?tab=login">Login</Link>
+              <Link onClick={handleLogin} to="/auth?tab=login">Login</Link>
             </Button>
             <Button
               size="sm"
