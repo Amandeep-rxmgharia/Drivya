@@ -601,14 +601,18 @@ export const getGoogleThumbnail = async (req, res, next) => {
       return res.status(400).json({ message: "File ID is required." });
     }
 
+    let thumbnailLink = req.query.thumbnailLink;
     const { drive, oauth2Client } = createDriveClient(tokens, req.user.id);
-    const metaRes = await drive.files.get({
-      fileId,
-      fields: "thumbnailLink",
-      supportsAllDrives: true,
-    });
 
-    const thumbnailLink = metaRes.data.thumbnailLink;
+    if (!thumbnailLink) {
+      const metaRes = await drive.files.get({
+        fileId,
+        fields: "thumbnailLink",
+        supportsAllDrives: true,
+      });
+      thumbnailLink = metaRes.data.thumbnailLink;
+    }
+
     if (!thumbnailLink) {
       return res.status(404).json({ message: "Thumbnail not available for this file." });
     }

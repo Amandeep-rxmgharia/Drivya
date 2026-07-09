@@ -660,7 +660,7 @@ function PasswordSetForm({ onClose, setUserProfile }) {
 
 /* ═══════════════════════ Security Section ═══════════════════════ */
 
-export default function SecuritySection({ userProfile, setUserProfile }) {
+export default function SecuritySection({ userProfile, setUserProfile, setSessionsCount }) {
   const [showPasswordForm, setShowPasswordForm] = useState(false);
 
   const [twoFAEnabled, setTwoFAEnabled] = useState(!!userProfile?.twoFAEnabled);
@@ -728,6 +728,9 @@ export default function SecuritySection({ userProfile, setUserProfile }) {
         const data = await getActiveSessions();
         if (!cancelled && data?.sessions) {
           setSessions(data.sessions);
+          if (setSessionsCount) {
+            setSessionsCount(data.sessions.length);
+          }
         }
       } catch (err) {
         console.error("Failed to load active sessions:", err);
@@ -739,12 +742,18 @@ export default function SecuritySection({ userProfile, setUserProfile }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [setSessionsCount]);
 
   const handleRevokeSession = async (sessionId) => {
     try {
       await revokeSession(sessionId);
-      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      setSessions((prev) => {
+        const updated = prev.filter((s) => s.id !== sessionId);
+        if (setSessionsCount) {
+          setSessionsCount(updated.length);
+        }
+        return updated;
+      });
     } catch (err) {
       console.error("Failed to revoke session:", err);
       alert(err?.response?.data?.message || "Failed to revoke session.");
@@ -757,7 +766,13 @@ export default function SecuritySection({ userProfile, setUserProfile }) {
     }
     try {
       await revokeOtherSessions();
-      setSessions((prev) => prev.filter((s) => s.current));
+      setSessions((prev) => {
+        const updated = prev.filter((s) => s.current);
+        if (setSessionsCount) {
+          setSessionsCount(updated.length);
+        }
+        return updated;
+      });
     } catch (err) {
       console.error("Failed to revoke other sessions:", err);
       alert(err?.response?.data?.message || "Failed to revoke other sessions.");

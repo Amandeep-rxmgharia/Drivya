@@ -23,11 +23,23 @@ export function Navbar({open,closeMobileMenu}) {
     window.addEventListener("scroll", onScroll);
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
-  async function handleLogin() {
+  async function handleLogin(e) {
+    if (e) {
+      e.preventDefault();
+      if (open) {
+        closeMobileMenu(e);
+      }
+    }
     try {
-      const data =  await getCurrentUser()
-      navigate('/dashboard/home',{state:data?.user})
-    } catch (error) {}
+      const data = await getCurrentUser();
+      if (data?.user) {
+        navigate('/dashboard/home', { state: data.user });
+      } else {
+        navigate('/auth?tab=login');
+      }
+    } catch (error) {
+      navigate('/auth?tab=login');
+    }
   }
   return (
     <motion.header
@@ -118,7 +130,7 @@ export function Navbar({open,closeMobileMenu}) {
               ))}
               <div className="flex gap-2 pt-2">
                 <Button variant="outline" className="flex-1" asChild>
-                  <Link to="/auth?tab=login" onClick={closeMobileMenu}>
+                  <Link to="/auth?tab=login" onClick={handleLogin}>
                     Login
                   </Link>
                 </Button>

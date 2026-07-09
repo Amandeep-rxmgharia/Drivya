@@ -51,7 +51,7 @@ const SECTION_COMPONENTS = {
 
 /* ═══════════════════════ Settings Hero ═══════════════════════ */
 
-function SettingsHero({ activeSection, userProfile }) {
+function SettingsHero({ activeSection, userProfile, sessionsCount }) {
   const sectionMeta = SETTINGS_SECTIONS.find((s) => s.id === activeSection);
   const currentTier = userProfile?.tier || "Free";
   const planInfo = currentTier === "Team" 
@@ -59,26 +59,6 @@ function SettingsHero({ activeSection, userProfile }) {
     : currentTier === "Pro" 
     ? "Pro Plan · All features available" 
     : "Free Plan · Upgrade to unlock Pro features";
-
-  const [sessionsCount, setSessionsCount] = useState(null);
-
-  useEffect(() => {
-    let active = true;
-    async function fetchSessions() {
-      try {
-        const data = await getActiveSessions();
-        if (active && data?.sessions) {
-          setSessionsCount(data.sessions.length);
-        }
-      } catch (err) {
-        console.error("Failed to fetch sessions for settings quick stats:", err);
-      }
-    }
-    fetchSessions();
-    return () => {
-      active = false;
-    };
-  }, []);
 
   const storageStat = userProfile
     ? `${formatBytes(userProfile.storageUsed || 0)} / ${formatBytes(userProfile.storageLimit || 1024 * 1024 * 1024)}`
@@ -116,20 +96,22 @@ function SettingsHero({ activeSection, userProfile }) {
           {[
             { label: "Plan", value: currentTier },
             { label: "Storage", value: storageStat },
-            sessionsCount ? { label: "Devices", value: devicesStat } : {},
-          ].map((stat) => (
-            <div
-              key={stat.label}
-              className="rounded-xl border border-border/60 bg-secondary/30 px-4 py-2.5 text-center min-w-[80px]"
-            >
-              <div className="font-display text-sm font-semibold text-foreground">
-                {stat.value}
+            sessionsCount !== null ? { label: "Devices", value: devicesStat } : null,
+          ]
+            .filter(Boolean)
+            .map((stat) => (
+              <div
+                key={stat.label}
+                className="rounded-xl border border-border/60 bg-secondary/30 px-4 py-2.5 text-center min-w-[80px]"
+              >
+                <div className="font-display text-sm font-semibold text-foreground">
+                  {stat.value}
+                </div>
+                <div className="text-[10px] font-medium text-muted-foreground mt-0.5">
+                  {stat.label}
+                </div>
               </div>
-              <div className="text-[10px] font-medium text-muted-foreground mt-0.5">
-                {stat.label}
-              </div>
-            </div>
-          ))}
+            ))}
         </div>
       </div>
     </section>
@@ -155,6 +137,25 @@ export default function Settings() {
   const activeSection = section || "account";
   const [searchQuery, setSearchQuery] = useState("");
   const { userProfile, setUserProfile } = useOutletContext();
+  const [sessionsCount, setSessionsCount] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    async function fetchSessions() {
+      try {
+        const data = await getActiveSessions();
+        if (active && data?.sessions) {
+          setSessionsCount(data.sessions.length);
+        }
+      } catch (err) {
+        console.error("Failed to fetch sessions for settings quick stats:", err);
+      }
+    }
+    fetchSessions();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Validate section ID
   const isValid = SETTINGS_SECTIONS.some((s) => s.id === activeSection);
@@ -168,7 +169,11 @@ export default function Settings() {
   return (
     <div className="space-y-6 pb-8">
       {/* Hero */}
-      <SettingsHero activeSection={activeSection} userProfile={userProfile} />
+      <SettingsHero 
+        activeSection={activeSection} 
+        userProfile={userProfile} 
+        sessionsCount={sessionsCount} 
+      />
 
       {/* Mobile section picker */}
       <SettingsMobilePicker />
@@ -208,6 +213,7 @@ export default function Settings() {
                   <ActiveComponent
                     userProfile={userProfile}
                     setUserProfile={setUserProfile}
+                    setSessionsCount={setSessionsCount}
                   />
                 )}
               </Suspense>

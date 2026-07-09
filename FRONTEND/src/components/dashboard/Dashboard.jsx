@@ -956,6 +956,28 @@ function Topbar({
 
 /* ───────────────────────── Dashboard Layout ───────────────────────── */
 
+const mapUserProfile = (user) => {
+  if (!user) return null;
+  return {
+    id: user._id || user.id,
+    name: user.name,
+    displayName: user.name,
+    email: user.email,
+    language: user.language || "en",
+    timezone: user.timezone || "auto",
+    avatarUrl: user.avatarUrl || "",
+    storageUsed: user.storageUsed || 0,
+    storageLimit: user.storageLimit || 1024 * 1024 * 1024,
+    tier: user.storageLimit > 2 * 1024 * 1024 * 1024 ? "Pro" : "Free",
+    loginAlerts: user.loginAlerts !== false,
+    twoFAEnabled: user.twoFAEnabled,
+    role: user.role || "user",
+    isActive: user.isActive !== false,
+    hasPassword: !!user.hasPassword,
+    trashAutoEmptyDays: user?.storagePreferences?.trashAutoEmptyDays,
+  };
+};
+
 export function DashboardLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -1174,6 +1196,10 @@ export function DashboardLayout() {
   }, [navigate]);
 
   const [userProfile, setUserProfile] = useState(() => {
+    if (location.state && (location.state.email || location.state.id || location.state._id)) {
+      const mapped = mapUserProfile(location.state);
+      if (mapped) return mapped;
+    }
     const saved = localStorage.getItem("drivya-user-profile");
     if (saved) {
       try {
@@ -1233,7 +1259,11 @@ export function DashboardLayout() {
         navigate("/auth");
       }
     };
-    fetchUser();
+    
+    const hasPassedState = location.state && (location.state.email || location.state.id || location.state._id);
+    if (!hasPassedState) {
+      fetchUser();
+    }
 
     const handleRefresh = () => fetchUser();
     window.addEventListener("refresh-drive", handleRefresh);
