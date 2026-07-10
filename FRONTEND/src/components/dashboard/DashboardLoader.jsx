@@ -41,8 +41,7 @@ export function DashboardLoader() {
       
       <div className="flex flex-col items-center gap-1">
         <span className="text-[10px] font-bold tracking-[0.3em] text-foreground/80 uppercase">
-          Initializing
-        </span>
+Loading...        </span>
         <span className="text-[8px] font-semibold tracking-[0.2em] text-primary uppercase opacity-60 animate-pulse">
           Secure Tunnel
         </span>
