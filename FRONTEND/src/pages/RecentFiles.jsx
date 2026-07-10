@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useOutletContext } from "react-router-dom";
 import {
   Eye,
   Loader2,
@@ -73,9 +74,19 @@ function StatMini({ icon: Icon, label, value, accent }) {
 /* ───────────────────────── Main Page ───────────────────────── */
 
 export default function RecentFiles() {
+  const { setIsOutletLoading } = useOutletContext?.() || {};
   const [stats, setStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
+
+  useEffect(() => {
+    if (setIsOutletLoading) {
+      setIsOutletLoading(statsLoading);
+    }
+    return () => {
+      if (setIsOutletLoading) setIsOutletLoading(false);
+    };
+  }, [statsLoading, setIsOutletLoading]);
 
   // Fetch stats on mount
   useEffect(() => {

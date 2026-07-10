@@ -662,9 +662,19 @@ function EmptyState({ hasFilters }) {
 /* ───────────────────────── Main Page ───────────────────────── */
 
 export default function TrashFiles() {
+  const { setIsOutletLoading } = useOutletContext?.() || {};
   const AUTO_DELETE_DAYS = useAutoDeleteDays()
   const [files, setFiles] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (setIsOutletLoading) {
+      setIsOutletLoading(isLoading);
+    }
+    return () => {
+      if (setIsOutletLoading) setIsOutletLoading(false);
+    };
+  }, [isLoading, setIsOutletLoading]);
   const [error, setError] = useState(null);
 
   const [activeFilter, setActiveFilter] = useState("all");

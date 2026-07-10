@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, memo } from "react";
+import { useOutletContext } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 import { AnimatePresence, motion } from "motion/react";
@@ -1983,9 +1984,19 @@ function EmptyState() {
 /* ───────────────────────── Page Export ───────────────────────── */
 
 export default function SharedFiles() {
+  const { setIsOutletLoading } = useOutletContext?.() || {};
   const [shares, setShares] = useState([]);
   const [stats, setStats] = useState({});
   const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (setIsOutletLoading) {
+      setIsOutletLoading(isLoading);
+    }
+    return () => {
+      if (setIsOutletLoading) setIsOutletLoading(false);
+    };
+  }, [isLoading, setIsOutletLoading]);
   const [error, setError] = useState(null);
 
   const fetchData = useCallback(async () => {

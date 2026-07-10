@@ -42,6 +42,7 @@ import {
   unstarAll as unstarAllApi,
 } from "../../api/starred.js";
 import { downloadFile } from "../../api/drive.js";
+import { useOutletContext } from "react-router-dom";
 
 /* ───────────────────────── Mock Data ───────────────────────── */
 
@@ -587,8 +588,18 @@ function EmptyState({ hasFilters }) {
 /* ───────────────────────── Main Page ───────────────────────── */
 
 export default function StarredFiles() {
+  const { setIsOutletLoading } = useOutletContext?.() || {};
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (setIsOutletLoading) {
+      setIsOutletLoading(loading);
+    }
+    return () => {
+      if (setIsOutletLoading) setIsOutletLoading(false);
+    };
+  }, [loading, setIsOutletLoading]);
   const [error, setError] = useState(null);
 
   const [activeFilter, setActiveFilter] = useState("all");

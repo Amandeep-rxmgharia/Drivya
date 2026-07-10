@@ -1,5 +1,6 @@
 import express from "express";
 import multer from "multer";
+import throttle from "../middlewares/throttle.js";
 import {
   getProfile,
   updateProfile,
@@ -70,6 +71,7 @@ router.delete("/avatar", requireTwoFA, deleteAvatar);
 router.put(
   "/password",
   requireTwoFA,
+  throttle(1000),
   validateChangePassword,
   handleValidationErrors,
   changePassword,
@@ -77,6 +79,7 @@ router.put(
 router.post(
   "/password/set",
   requireTwoFA,
+  throttle(1000),
   setPassword,
 );
 
@@ -86,10 +89,10 @@ router.delete("/sessions/others", revokeOtherSessions);
 router.delete("/sessions/:id", revokeSession);
 
 // ─── Deactivate Account ──────────────────────────────────────
-router.patch("/deactivate", deactivateAccount);
+router.patch("/deactivate", throttle(1000), deactivateAccount);
 
 // ─── Delete Account ──────────────────────────────────────────
 // Sensitive: require 2FA
-router.delete("/", requireTwoFA, deleteAccount);
+router.delete("/", requireTwoFA, throttle(1000), deleteAccount);
 
 export default router;

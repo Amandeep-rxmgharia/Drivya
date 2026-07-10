@@ -43,17 +43,7 @@ function formatBytes(bytes) {
   return (bytes / (1024 * 1024 * 1024)).toFixed(1) + " GB";
 }
 
-function HeroSection({ userProfile, onImportGoogle, onImportDropbox }) {
-  const [stats, setStats] = useState(null);
-
-  useEffect(() => {
-    getActivityStats()
-      .then((res) => {
-        if (res?.stats) setStats(res.stats);
-      })
-      .catch(() => {});
-  }, []);
-
+function HeroSection({ userProfile, onImportGoogle, onImportDropbox, stats }) {
   const displayName = userProfile?.displayName || userProfile?.name || "there";
   const uploadCount = stats?.uploadedThisWeek ?? 0;
   console.log(stats);
@@ -160,27 +150,10 @@ const WEEKLY_DATA = {
   },
 };
 
-function AnalyticsCard() {
+function AnalyticsCard({ statsData }) {
   const [metric, setMetric] = useState("uploads");
   const [hoveredIdx, setHoveredIdx] = useState(null);
   const chartRef = useRef(null);
-  const [statsData, setStatsData] = useState(null);
-
-  useEffect(() => {
-    let active = true;
-    getActivityStats()
-      .then((res) => {
-        if (active && res?.stats?.weeklyData) {
-          setStatsData(res.stats.weeklyData);
-        }
-      })
-      .catch((err) => {
-        console.error("Failed to load activity stats:", err);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
 
   useEffect(() => {
     const handleOutsideClick = (e) => {
@@ -518,9 +491,40 @@ function AnalyticsCard() {
 /* ───────────────────────── Home page ───────────────────────── */
 
 export default function Home() {
-  const { userProfile } = useOutletContext?.() || {};
+  const { userProfile, setIsOutletLoading } = useOutletContext?.() || {};
   const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false);
   const [isDropboxModalOpen, setIsDropboxModalOpen] = useState(false);
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Load stats first
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    getActivityStats()
+      .then((res) => {
+        if (active) {
+          if (res?.stats) setStats(res.stats);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load stats:", err);
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (setIsOutletLoading) {
+      setIsOutletLoading(loading);
+    }
+    return () => {
+      if (setIsOutletLoading) setIsOutletLoading(false);
+    };
+  }, [loading, setIsOutletLoading]);
 
   // Check URL params for ?google=connected or ?dropbox=connected
   useEffect(() => {
@@ -540,10 +544,11 @@ export default function Home() {
         userProfile={userProfile}
         onImportGoogle={() => setIsGoogleModalOpen(true)}
         onImportDropbox={() => setIsDropboxModalOpen(true)}
+        stats={stats}
       />
 
       <div className="lg:col-span-2 space-y-6">
-        <AnalyticsCard />
+        <AnalyticsCard statsData={stats?.weeklyData} />
         <RecentFilesView fetchFn={listActivities} titleId="recent-files-heading" limit={10} />
       </div>
 

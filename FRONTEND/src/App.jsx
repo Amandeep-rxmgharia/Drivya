@@ -7,7 +7,8 @@ import {
   Outlet,
 } from "react-router-dom";
 import { ScrollToTop } from "@/components/ScrollToTop";
-import Home from './pages/Home'
+import Home from './pages/Home';
+import { DashboardLoader } from "@/components/dashboard/DashboardLoader";
 const DashboardLayout = lazy(() =>
   import("./components/dashboard/Dashboard").then((m) => ({
     default: m.DashboardLayout,
@@ -56,7 +57,7 @@ export default function App() {
         {
           path: "/dashboard",
           element: (
-            <Suspense fallback={null}>
+            <Suspense fallback={<DashboardLoader />}>
               <DashboardLayout />
             </Suspense>
           ),
@@ -65,7 +66,7 @@ export default function App() {
             {
               path: "home",
               element: (
-                <Suspense fallback={null}>
+                <Suspense fallback={<DashboardLoader />}>
                   <Home />
                 </Suspense>
               ),
@@ -73,7 +74,7 @@ export default function App() {
             {
               path: "drive",
               element: (
-                <Suspense fallback={null}>
+                <Suspense fallback={<DashboardLoader />}>
                   <MyDrive />
                 </Suspense>
               ),
@@ -81,7 +82,7 @@ export default function App() {
             {
               path: "shared",
               element: (
-                <Suspense fallback={null}>
+                <Suspense fallback={<DashboardLoader />}>
                   <SharedFiles />
                 </Suspense>
               ),
@@ -89,7 +90,7 @@ export default function App() {
             {
               path: "recent",
               element: (
-                <Suspense fallback={null}>
+                <Suspense fallback={<DashboardLoader />}>
                   <RecentFiles />
                 </Suspense>
               ),
@@ -97,7 +98,7 @@ export default function App() {
             {
               path: "starred",
               element: (
-                <Suspense fallback={null}>
+                <Suspense fallback={<DashboardLoader />}>
                   <StarredFiles />
                 </Suspense>
               ),
@@ -105,7 +106,7 @@ export default function App() {
             {
               path: "trash",
               element: (
-                <Suspense fallback={null}>
+                <Suspense fallback={<DashboardLoader />}>
                   <TrashFiles />
                 </Suspense>
               ),
@@ -113,7 +114,7 @@ export default function App() {
             {
               path: "settings",
               element: (
-                <Suspense fallback={null}>
+                <Suspense fallback={<DashboardLoader />}>
                   <Settings />
                 </Suspense>
               ),
@@ -121,7 +122,7 @@ export default function App() {
             {
               path: "settings/:section",
               element: (
-                <Suspense fallback={null}>
+                <Suspense fallback={<DashboardLoader />}>
                   <Settings />
                 </Suspense>
               ),
@@ -129,7 +130,7 @@ export default function App() {
             {
               path: "payment",
               element: (
-                <Suspense fallback={null}>
+                <Suspense fallback={<DashboardLoader />}>
                   <Payment />
                 </Suspense>
               ),
@@ -138,7 +139,7 @@ export default function App() {
               path: "admin",
               element: (
                 <RequireRole roles={["admin", "moderator"]}>
-                  <Suspense fallback={null}>
+                  <Suspense fallback={<DashboardLoader />}>
                     <AdminPanel />
                   </Suspense>
                 </RequireRole>

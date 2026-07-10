@@ -29,6 +29,7 @@ import {
   Keyboard,
   X,
   CheckCircle2,
+  Loader2,
 } from "lucide-react";
 import { easeSmooth, tweenEnter } from "@/lib/motion-presets";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
@@ -37,6 +38,7 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { chip, iconBtn, primaryBtn, Kbd } from "./dashboard-tokens.jsx";
 import { FloatingActionButton } from "./FloatingActionButton.jsx";
 import { AiAssistantPanel } from "./AiAssistantPanel.jsx";
+import { DashboardLoader } from "./DashboardLoader.jsx";
 import { getCurrentUser, logoutUser } from "../../../api/auth.js";
 import { AuthProvider } from "@/lib/AuthContext";
 import {
@@ -989,6 +991,7 @@ export function DashboardLayout() {
 
   const [notifications, setNotifications] = useState([]);
   const [toasts, setToasts] = useState([]);
+  const [isOutletLoading, setIsOutletLoading] = useState(false);
 
   const fetchNotifications = async () => {
     try {
@@ -1327,7 +1330,12 @@ export function DashboardLayout() {
               className="dashboard-main min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 lg:p-8 space-y-6"
               style={{ scrollbarGutter: "stable" }}
             >
-              <Outlet context={{ userProfile, setUserProfile }} />
+              {isOutletLoading && location.pathname !== "/dashboard/drive" && (
+                <DashboardLoader />
+              )}
+              <div className={isOutletLoading && location.pathname !== "/dashboard/drive" ? "hidden" : ""}>
+                <Outlet context={{ userProfile, setUserProfile, setIsOutletLoading }} />
+              </div>
             </main>
           </motion.div>
         </div>

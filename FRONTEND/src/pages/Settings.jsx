@@ -136,19 +136,32 @@ export default function Settings() {
   const { section } = useParams();
   const activeSection = section || "account";
   const [searchQuery, setSearchQuery] = useState("");
-  const { userProfile, setUserProfile } = useOutletContext();
+  const { userProfile, setUserProfile, setIsOutletLoading } = useOutletContext();
   const [sessionsCount, setSessionsCount] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (setIsOutletLoading) {
+      setIsOutletLoading(loading);
+    }
+    return () => {
+      if (setIsOutletLoading) setIsOutletLoading(false);
+    };
+  }, [loading, setIsOutletLoading]);
 
   useEffect(() => {
     let active = true;
     async function fetchSessions() {
       try {
+        setLoading(true);
         const data = await getActiveSessions();
         if (active && data?.sessions) {
           setSessionsCount(data.sessions.length);
         }
       } catch (err) {
         console.error("Failed to fetch sessions for settings quick stats:", err);
+      } finally {
+        if (active) setLoading(false);
       }
     }
     fetchSessions();

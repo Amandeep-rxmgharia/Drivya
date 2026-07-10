@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useOutletContext } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -381,12 +382,14 @@ function PaginationBar({ page, limit, total, onPrev, onNext }) {
 /* ────────────────────────── main component ────────────────────────── */
 
 export default function AdminPanel() {
+  const { setIsOutletLoading } = useOutletContext?.() || {};
   const { user, isAdmin, isModerator } = useAuth();
   const isAdminUser = isAdmin();
   const searchDebounceRef = useRef(null);
 
   const [activeTab, setActiveTab] = useState("users");
   const [stats, setStats] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(true);
 
   // Users
   const [users, setUsers] = useState([]);
@@ -403,6 +406,17 @@ export default function AdminPanel() {
   const [logsLimit] = useState(15);
   const [logsLoading, setLogsLoading] = useState(true);
 
+  const isLoading = statsLoading || (activeTab === "users" ? usersLoading : logsLoading);
+
+  useEffect(() => {
+    if (setIsOutletLoading) {
+      setIsOutletLoading(isLoading);
+    }
+    return () => {
+      if (setIsOutletLoading) setIsOutletLoading(false);
+    };
+  }, [isLoading, setIsOutletLoading]);
+
   // Confirmation modal (no 2FA)
   const [confirmModal, setConfirmModal] = useState(null);
   const [actionError, setActionError] = useState("");
@@ -411,7 +425,14 @@ export default function AdminPanel() {
   /* ── data fetching ───────────────────────────── */
 
   const fetchStats = async () => {
-    try { setStats(await getPlatformStats()); } catch (e) { console.error("Stats:", e); }
+    try {
+      setStatsLoading(true);
+      setStats(await getPlatformStats());
+    } catch (e) {
+      console.error("Stats:", e);
+    } finally {
+      setStatsLoading(false);
+    }
   };
 
   const fetchUsers = async () => {
