@@ -94,15 +94,48 @@ const userSchema = new Schema(
     },
     storageLimit: {
       type: Number,
-      default: 1 * 1024 * 1024 * 1024, // 1 GB default
+      default: 5 * 1024 * 1024 * 1024, // 5 GB default (Spark Free)
       min: [0, "Storage limit cannot be negative"],
+    },
+    bandwidthUsed: {
+      type: Number,
+      default: 0,
+      min: [0, "Bandwidth used cannot be negative"],
+    },
+    bandwidthLimit: {
+      type: Number,
+      default: 10 * 1024 * 1024 * 1024, // 10 GB default (Spark Free)
+      min: [0, "Bandwidth limit cannot be negative"],
+    },
+
+    // ─── Subscription ────────────────────────────────────────
+    subscription: {
+      plan: {
+        type: String,
+        enum: ["free", "spark_go", "boost", "pro", "apex"],
+        default: "free",
+      },
+      status: {
+        type: String,
+        enum: ["active", "past_due", "cancelled", "none"],
+        default: "none",
+      },
+      subscriptionId: {
+        type: Schema.Types.ObjectId,
+        ref: "Subscription",
+        default: null,
+      },
+      razorpayCustomerId: {
+        type: String,
+        default: "",
+      },
     },
 
     // ─── Storage Preferences ─────────────────────────────────
     storagePreferences: {
       trashAutoEmptyDays: {
         type: Number,
-        default: 30,
+        default: 5,
         validate: {
           validator: function (v) {
             return v === null || [7, 30, 60, 90].includes(v);

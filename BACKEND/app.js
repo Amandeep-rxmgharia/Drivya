@@ -20,6 +20,8 @@ import { googleLoginCallbackHandler } from "./controllers/googleAuthController.j
 import { githubLoginCallbackHandler } from "./controllers/githubAuthController.js";
 import dropboxRoutes, { dropboxCallbackHandler } from "./routes/dropboxRoutes.js";
 import aiRoutes from "./routes/aiRoutes.js";
+import webhookRoutes from "./routes/webhookRoutes.js";
+import subscriptionRoutes from "./routes/subscriptionRoutes.js";
 import { connectDb } from "./config/db.js";
 import redis from "./config/redisClient.js";
 import { ensureStorageRoot } from "./services/storageService.js";
@@ -86,6 +88,9 @@ app.use(
 // ─── Global Rate Limiter (Redis-backed) ─────────────────────────
 app.use(IPRateLimiter(10000, 15 * 60 * 1000)); // 10000 requests per 15 min per IP
 
+// ─── Webhook Routes (BEFORE json parser — needs raw body) ────
+app.use("/api/webhooks", webhookRoutes);
+
 // ─── Body Parsers ────────────────────────────────────────────
 app.use(express.json({ limit: "10kb" })); // prevent large payload attacks
 app.use(cookieParser());
@@ -105,6 +110,7 @@ app.use("/api/storage", storageRoutes);
 app.use("/api/google", googleDriveRoutes);
 app.use("/api/dropbox", dropboxRoutes);
 app.use("/api/ai", aiRoutes);
+app.use("/api/subscription", subscriptionRoutes);
 app.get("/auth/google/callback", googleCallbackHandler);
 app.get("/auth/google/login/callback", googleLoginCallbackHandler);
 app.get("/auth/github/callback", githubLoginCallbackHandler);

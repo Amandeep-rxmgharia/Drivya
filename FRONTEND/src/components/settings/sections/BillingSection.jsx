@@ -1,89 +1,138 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   CreditCard,
   Receipt,
-  MapPin,
-  Users,
   Sparkles,
   Download,
   ArrowUpRight,
   Check,
   Crown,
+  Loader2,
+  AlertCircle,
+  XCircle,
 } from "lucide-react";
 import {
   SettingSection,
-  SettingRow,
-  SettingBanner,
 } from "../setting-primitives";
-import { SettingInput, SettingSelect } from "../setting-controls";
+import {
+  getSubscription,
+  getInvoices,
+  cancelSubscription,
+} from "../../../../api/subscription.js";
 
-const MOCK_INVOICES = [
-  { id: "INV-2026-06", date: "Jun 1, 2026", amount: "$12.00", status: "Paid" },
-  { id: "INV-2026-05", date: "May 1, 2026", amount: "$12.00", status: "Paid" },
-  { id: "INV-2026-04", date: "Apr 1, 2026", amount: "$12.00", status: "Paid" },
-  { id: "INV-2026-03", date: "Mar 1, 2026", amount: "$12.00", status: "Paid" },
-];
+const PLAN_NAMES = {
+  free: "Spark Free",
+  spark_go: "Spark Go",
+  boost: "Boost",
+  pro: "Pro",
+  apex: "Apex",
+};
 
 export default function BillingSection({ userProfile }) {
-  const [billingCountry, setBillingCountry] = useState("us");
   const navigate = useNavigate();
 
-  const currentTier = userProfile?.tier || "Free";
+  const [subData, setSubData] = useState(null);
+  const [invoices, setInvoices] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelError, setCancelError] = useState("");
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
-  const [invoices] = useState(() => {
-    const saved = localStorage.getItem("drivya-invoices");
-    if (saved) {
+  // Fetch subscription + invoices on mount
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchData() {
       try {
-        return JSON.parse(saved);
-      } catch (e) {
-        // ignore
+        const [sub, inv] = await Promise.all([
+          getSubscription(),
+          getInvoices(),
+        ]);
+        if (!cancelled) {
+          setSubData(sub);
+          setInvoices(inv.invoices || []);
+        }
+      } catch {
+        // Silently fail — show fallback UI
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     }
-    localStorage.setItem("drivya-invoices", JSON.stringify(MOCK_INVOICES));
-    return MOCK_INVOICES;
-  });
 
-  // Details based on plan
-  let priceStr = "$0";
-  let billingCycle = "/month · Free tier";
-  let storageVal = "10 GB";
-  let devicesVal = "2";
-  let maxFileVal = "100 MB";
-  let renewsVal = "Never";
-  let mainButtonLabel = "Upgrade to Pro";
-  let mainButtonPlan = "pro";
-  let secondaryButtonLabel = "Upgrade to Team";
-  let secondaryButtonPlan = "team";
+    fetchData();
+    return () => { cancelled = true; };
+  }, []);
 
-  if (currentTier === "Pro") {
-    priceStr = "$12";
-    billingCycle = "/month · Billed monthly";
-    storageVal = "2 TB";
-    devicesVal = "Unlimited";
-    maxFileVal = "50 GB";
-    renewsVal = "Jul 1, 2026";
-    mainButtonLabel = "Upgrade to Team";
-    mainButtonPlan = "team";
-    secondaryButtonLabel = "Downgrade Plan";
-    secondaryButtonPlan = "free";
-  } else if (currentTier === "Team") {
-    priceStr = "$24";
-    billingCycle = "/month · Billed monthly";
-    storageVal = "5 TB";
-    devicesVal = "Unlimited";
-    maxFileVal = "250 GB";
-    renewsVal = "Jul 1, 2026";
-    mainButtonLabel = "Manage Seats";
-    mainButtonPlan = "";
-    secondaryButtonLabel = "Downgrade Plan";
-    secondaryButtonPlan = "pro";
+  // Derived values
+  const planKey = subData?.plan?.key || userProfile?.subscription?.plan || "free";
+  const planName = PLAN_NAMES[planKey] || "Spark Free";
+  const isFreePlan = planKey === "free";
+  const subscription = subData?.subscription;
+  const isActive = subscription?.status === "active" || subscription?.status === "authenticated";
+  const isCancelled = subscription?.cancelledAt != null;
+
+  // Format price display
+  const price = subData?.plan?.price || { monthly: 0, yearly: 0 };
+  const period = subscription?.period || "monthly";
+  const priceVal = price[period] || 0;
+  const priceStr = isFreePlan ? "₹0" : `₹${priceVal}`;
+  const billingCycle = isFreePlan
+    ? " · Free forever"
+    : period === "yearly"
+      ? ` /year · Billed yearly`
+      : ` /month · Billed monthly`;
+
+  // Format storage display
+  function formatSize(bytes) {
+    if (!bytes) return "—";
+    const tb = 1024 * 1024 * 1024 * 1024;
+    const gb = 1024 * 1024 * 1024;
+    if (bytes >= tb) return `${(bytes / tb).toFixed(0)} TB`;
+    return `${(bytes / gb).toFixed(0)} GB`;
   }
 
-  const handleButtonClick = (plan) => {
-    if (!plan) return;
-    navigate(`/dashboard/payment?plan=${plan}`);
+  const storageVal = formatSize(subData?.plan?.storage);
+  const bandwidthVal = formatSize(subData?.plan?.bandwidth);
+  const trashDaysVal = subData?.plan?.trashDays ? `${subData.plan.trashDays} Days` : "5 Days";
+  const renewsVal = subscription?.currentPeriodEnd
+    ? new Date(subscription.currentPeriodEnd).toLocaleDateString("en-IN", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : isFreePlan
+      ? "Never"
+      : "—";
+
+  // Payment method
+  const paymentMethod = subscription?.paymentMethod;
+  const hasPaymentMethod = paymentMethod?.last4 || paymentMethod?.type;
+
+  // Cancel handler
+  const handleCancel = async () => {
+    setCancelLoading(true);
+    setCancelError("");
+    try {
+      await cancelSubscription();
+      // Refresh data
+      const sub = await getSubscription();
+      setSubData(sub);
+      setShowCancelConfirm(false);
+    } catch (err) {
+      setCancelError(err.response?.data?.message || "Failed to cancel. Please try again.");
+    } finally {
+      setCancelLoading(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -102,7 +151,7 @@ export default function BillingSection({ userProfile }) {
               </div>
               <div>
                 <div className="font-display text-xl font-semibold tracking-tight text-foreground">
-                  {currentTier} Plan
+                  {planName} Plan
                 </div>
                 <div className="text-sm text-muted-foreground mt-0.5">
                   <span className="font-display text-2xl font-bold text-foreground">
@@ -113,27 +162,82 @@ export default function BillingSection({ userProfile }) {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button 
-                onClick={() => handleButtonClick(mainButtonPlan)}
-                className="inline-flex h-9 items-center gap-2 rounded-xl bg-gradient-primary px-4 text-xs font-semibold text-primary-foreground shadow-glow hover:opacity-90 transition-opacity cursor-pointer"
-              >
-                <ArrowUpRight className="h-3.5 w-3.5" />
-                {mainButtonLabel}
-              </button>
-              <button 
-                onClick={() => handleButtonClick(secondaryButtonPlan)}
-                className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-secondary/40 px-4 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors cursor-pointer"
-              >
-                {secondaryButtonLabel}
-              </button>
+              {isFreePlan ? (
+                <button
+                  onClick={() => navigate("/dashboard/payment?plan=pro")}
+                  className="inline-flex h-9 items-center gap-2 rounded-xl bg-gradient-primary px-4 text-xs font-semibold text-primary-foreground shadow-glow hover:opacity-90 transition-opacity cursor-pointer"
+                >
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                  Upgrade Plan
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => navigate("/dashboard/payment")}
+                    className="inline-flex h-9 items-center gap-2 rounded-xl bg-gradient-primary px-4 text-xs font-semibold text-primary-foreground shadow-glow hover:opacity-90 transition-opacity cursor-pointer"
+                  >
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                    Change Plan
+                  </button>
+                  {isActive && !isCancelled && (
+                    <button
+                      onClick={() => setShowCancelConfirm(true)}
+                      className="inline-flex h-9 items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-4 text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                  {isCancelled && (
+                    <span className="inline-flex h-9 items-center gap-1.5 px-3 text-[11px] font-semibold text-amber-500 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                      <AlertCircle className="h-3 w-3" />
+                      Cancels {renewsVal}
+                    </span>
+                  )}
+                </>
+              )}
             </div>
           </div>
+
+          {/* Cancel Confirmation */}
+          {showCancelConfirm && (
+            <div className="mt-4 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+              <p className="text-sm font-medium text-foreground mb-1">
+                Are you sure you want to cancel?
+              </p>
+              <p className="text-xs text-muted-foreground mb-3">
+                Your {planName} features will remain active until {renewsVal}. After that, you'll be downgraded to Spark Free.
+              </p>
+              {cancelError && (
+                <p className="text-xs text-destructive mb-2 flex items-center gap-1">
+                  <XCircle className="h-3 w-3" /> {cancelError}
+                </p>
+              )}
+              <div className="flex gap-2">
+                <button
+                  onClick={handleCancel}
+                  disabled={cancelLoading}
+                  className="inline-flex h-8 items-center gap-2 rounded-lg bg-destructive px-3 text-xs font-semibold text-destructive-foreground hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-50"
+                >
+                  {cancelLoading ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : null}
+                  Yes, Cancel Subscription
+                </button>
+                <button
+                  onClick={() => setShowCancelConfirm(false)}
+                  className="inline-flex h-8 items-center rounded-lg border border-border px-3 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors cursor-pointer"
+                >
+                  Keep Plan
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
               { label: "Storage", value: storageVal },
-              { label: "Devices", value: devicesVal },
-              { label: "Max File", value: maxFileVal },
+              { label: "Bandwidth", value: bandwidthVal },
+              { label: "Trash Recovery", value: trashDaysVal },
               { label: "Renews", value: renewsVal },
             ].map((stat) => (
               <div
@@ -152,45 +256,42 @@ export default function BillingSection({ userProfile }) {
         </div>
       </SettingSection>
 
-      {/* Payment Methods */}
-      <SettingSection
-        id="payment-methods"
-        icon={CreditCard}
-        title="Payment Methods"
-        description="Manage your payment instruments."
-      >
-        <div className="px-6 py-3">
-          <div className="rounded-xl border border-primary/15 bg-primary/[0.02] p-3.5 flex items-center gap-3">
-            <div className="flex h-10 w-14 items-center justify-center rounded-lg border border-border bg-background text-foreground">
-              <CreditCard className="h-5 w-5" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-foreground">
-                  Visa ending in 4242
-                </span>
-                <span className="rounded-md bg-primary/10 border border-primary/20 px-1.5 py-0.5 text-[9px] font-bold text-primary">
-                  Primary
-                </span>
+      {/* Payment Method */}
+      {!isFreePlan && (
+        <SettingSection
+          id="payment-methods"
+          icon={CreditCard}
+          title="Payment Method"
+          description="Your payment instrument on file."
+        >
+          <div className="px-6 py-3">
+            {hasPaymentMethod ? (
+              <div className="rounded-xl border border-primary/15 bg-primary/[0.02] p-3.5 flex items-center gap-3">
+                <div className="flex h-10 w-14 items-center justify-center rounded-lg border border-border bg-background text-foreground">
+                  <CreditCard className="h-5 w-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-foreground capitalize">
+                      {paymentMethod.type || "Card"} ending in{" "}
+                      {paymentMethod.last4 || "****"}
+                    </span>
+                    <span className="rounded-md bg-primary/10 border border-primary/20 px-1.5 py-0.5 text-[9px] font-bold text-primary">
+                      Active
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div className="text-[11px] text-muted-foreground mt-0.5">
-                Expires 12/2028
+            ) : (
+              <div className="rounded-xl border border-border/60 bg-secondary/10 p-4 text-center">
+                <p className="text-sm text-muted-foreground">
+                  Payment method details will appear here after your first payment.
+                </p>
               </div>
-            </div>
-            <button className="text-xs font-medium text-primary hover:text-primary/80 transition-colors">
-              Update
-            </button>
+            )}
           </div>
-
-          <button 
-            onClick={() => navigate("/dashboard/payment")}
-            className="mt-3 inline-flex h-9 items-center gap-2 rounded-xl border border-dashed border-border hover:border-primary/40 bg-secondary/20 hover:bg-primary/5 px-4 text-xs font-medium text-muted-foreground hover:text-primary transition-all w-full justify-center cursor-pointer"
-          >
-            <CreditCard className="h-3.5 w-3.5" />
-            Add Payment Method
-          </button>
-        </div>
-      </SettingSection>
+        </SettingSection>
+      )}
 
       {/* Billing History */}
       <SettingSection
@@ -200,41 +301,67 @@ export default function BillingSection({ userProfile }) {
         description="Past invoices and payment records."
       >
         <div className="px-6 py-3">
-          <div className="rounded-xl border border-border/60 overflow-hidden divide-y divide-border/40">
-            {/* Header */}
-            <div className="grid grid-cols-[1fr_5rem_4rem_3rem] gap-3 bg-secondary/30 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/60">
-              <span>Invoice</span>
-              <span>Amount</span>
-              <span>Status</span>
-              <span></span>
+          {invoices.length === 0 ? (
+            <div className="rounded-xl border border-border/60 bg-secondary/10 p-6 text-center">
+              <Receipt className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">
+                No invoices yet.{" "}
+                {isFreePlan && (
+                  <button
+                    onClick={() => navigate("/dashboard/payment")}
+                    className="text-primary hover:underline cursor-pointer"
+                  >
+                    Upgrade to a paid plan
+                  </button>
+                )}
+              </p>
             </div>
-            {/* Rows */}
-            {invoices.map((inv) => (
-              <div
-                key={inv.id}
-                className="grid grid-cols-[1fr_5rem_4rem_3rem] gap-3 items-center px-4 py-3 hover:bg-secondary/20 transition-colors"
-              >
-                <div>
-                  <div className="text-sm font-medium text-foreground">
-                    {inv.id}
-                  </div>
-                  <div className="text-[11px] text-muted-foreground">
-                    {inv.date}
-                  </div>
-                </div>
-                <span className="text-sm font-semibold text-foreground tabular-nums">
-                  {inv.amount}
-                </span>
-                <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                  <Check className="h-2.5 w-2.5" />
-                  {inv.status}
-                </span>
-                <button className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors">
-                  <Download className="h-3.5 w-3.5" />
-                </button>
+          ) : (
+            <div className="rounded-xl border border-border/60 overflow-hidden divide-y divide-border/40">
+              {/* Header */}
+              <div className="grid grid-cols-[1fr_5rem_4rem_3rem] gap-3 bg-secondary/30 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/60">
+                <span>Invoice</span>
+                <span>Amount</span>
+                <span>Status</span>
+                <span></span>
               </div>
-            ))}
-          </div>
+              {/* Rows */}
+              {invoices.map((inv) => (
+                <div
+                  key={inv.id}
+                  className="grid grid-cols-[1fr_5rem_4rem_3rem] gap-3 items-center px-4 py-3 hover:bg-secondary/20 transition-colors"
+                >
+                  <div>
+                    <div className="text-sm font-medium text-foreground truncate">
+                      {inv.id}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground">
+                      {inv.date}
+                    </div>
+                  </div>
+                  <span className="text-sm font-semibold text-foreground tabular-nums">
+                    ₹{inv.amount}
+                  </span>
+                  <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                    <Check className="h-2.5 w-2.5" />
+                    {inv.status || "Paid"}
+                  </span>
+                  {inv.invoiceUrl ? (
+                    <a
+                      href={inv.invoiceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                    </a>
+                  ) : (
+                    <div className="h-7 w-7" />
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </SettingSection>
     </div>
