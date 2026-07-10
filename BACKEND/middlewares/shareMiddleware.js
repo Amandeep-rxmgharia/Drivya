@@ -1,4 +1,4 @@
-import rateLimit from "express-rate-limit";
+import { IPRateLimiter } from "./rateLimiter.js";
 import {
   generateShareAccessToken,
   verifyShareAccessToken,
@@ -13,25 +13,15 @@ import User from "../models/userModel.js";
 
 /**
  * Stricter rate limit for public share endpoints (brute-force protection).
+ * 200 requests per 15 min per IP (Redis-backed).
  */
-export const publicShareRateLimit = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 200,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { message: "Too many requests. Please try again later." },
-});
+export const publicShareRateLimit = IPRateLimiter(200, 15 * 60 * 1000);
 
 /**
- * Password attempt rate limit — 10 tries per 15 min per IP.
+ * Password attempt rate limit — 10 tries per 15 min per IP (Redis-backed).
  */
-export const sharePasswordRateLimit = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { message: "Too many password attempts. Please try again later." },
-});
+export const sharePasswordRateLimit = IPRateLimiter(10, 15 * 60 * 1000);
+
 
 /**
  * Resolve share from URL token and attach to request.

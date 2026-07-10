@@ -213,7 +213,7 @@ export async function listShares(ownerId, query = {}) {
 
   return cacheAside(cacheKey, CACHE_TTL.SHARE_LIST, async () => {
     const findQuery = Share.find(filter);
-
+console.log('problem done');
     if (hasTextSearch) {
       findQuery.select({ score: { $meta: "textScore" } });
     }
@@ -573,6 +573,7 @@ export async function isUserAuthorizedForShare(share, userId) {
 
 export async function getPublicShareMetadata(token, userId = null) {
   const cacheKey = `${CACHE_KEYS.SHARE_BY_TOKEN}${token}`;
+  console.log('TOKEN',token);
 
   const share = await cacheAside(cacheKey, CACHE_TTL.SHARE_METADATA, async () => {
     return Share.findOne({ token })

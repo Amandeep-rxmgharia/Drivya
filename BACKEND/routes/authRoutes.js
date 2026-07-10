@@ -1,5 +1,5 @@
 import express from "express";
-import rateLimit from "express-rate-limit";
+import { IPRateLimiter } from "../middlewares/rateLimiter.js";
 import {
   login,
   register,
@@ -36,20 +36,13 @@ import {
 
 const router = express.Router();
 
-// ─── Login-specific rate limiter (stricter) ──────────────────
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // max 10 login attempts per window per IP
-  message: {
-    message: "Too many login attempts. Please try again after 15 minutes.",
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+// ─── Login-specific rate limiter (stricter, Redis-backed) ────
+const loginLimiter = IPRateLimiter(10, 15 * 60 * 1000); // 10 attempts per 15 min per IP
 
 // ─── Public Routes ───────────────────────────────────────────
 router.post("/register", validateRegister, handleValidationErrors, register);
 router.post("/login", loginLimiter, validateLogin, handleValidationErrors, login);
+
 router.post("/google", googleLogin);
 router.get("/google/login-url", googleLoginUrl);
 router.get("/github/login-url", githubLoginUrl);

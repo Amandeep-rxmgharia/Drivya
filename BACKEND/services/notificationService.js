@@ -1,6 +1,17 @@
 import Notification from "../models/notificationModel.js";
+import redis, { createSubscriber } from "../config/redisClient.js";
 
+const SSE_CHANNEL = "sse:notifications";
+
+// ─── Local SSE clients (process-local — HTTP response objects cannot be serialized) ───
 const sseClients = new Map();
+
+// ─── Redis Pub/Sub: subscribe for cross-instance SSE delivery ───
+const subscriber = await createSubscriber();
+await subscriber.subscribe(SSE_CHANNEL, (message) => {
+  const { userId, data } = JSON.parse(message);
+  pushToLocalClients(userId, data);
+});
 
 export function addSseClient(userId, res) {
   const userIdStr = userId.toString();
@@ -18,7 +29,10 @@ export function addSseClient(userId, res) {
   });
 }
 
-function pushToUser(userId, data) {
+/**
+ * Push data to SSE clients on THIS server instance only.
+ */
+function pushToLocalClients(userId, data) {
   const userIdStr = userId.toString();
   const clients = sseClients.get(userIdStr);
   if (!clients) return;
@@ -31,6 +45,16 @@ function pushToUser(userId, data) {
     }
   }
 }
+
+/**
+ * Publish to all server instances via Redis Pub/Sub.
+ * Each instance (including this one) will receive the message
+ * and push to its local SSE clients.
+ */
+function pushToUser(userId, data) {
+  redis.publish(SSE_CHANNEL, JSON.stringify({ userId: userId.toString(), data }));
+}
+
 
 export async function createNotification(userId, { type, title, description, actionLabel, actionPath, metadata, expiresAt } = {}) {
   const notification = await Notification.create({

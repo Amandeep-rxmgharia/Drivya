@@ -3,7 +3,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
-import rateLimit from "express-rate-limit";
+import { IPRateLimiter } from "./middlewares/rateLimiter.js";
 import authRoutes from "./routes/authRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import directoryRoutes from "./routes/directoryRoutes.js";
@@ -21,6 +21,7 @@ import { githubLoginCallbackHandler } from "./controllers/githubAuthController.j
 import dropboxRoutes, { dropboxCallbackHandler } from "./routes/dropboxRoutes.js";
 import aiRoutes from "./routes/aiRoutes.js";
 import { connectDb } from "./config/db.js";
+import redis from "./config/redisClient.js";
 import { ensureStorageRoot } from "./services/storageService.js";
 import { migrateActivityDate } from "./scripts/migrateActivityDate.js";
 import { startTrashCronJob } from "./jobs/trashCronJob.js";
@@ -29,6 +30,10 @@ const { PORT = 3000, CORS_ORIGIN = "http://localhost:5173", NODE_ENV } = process
 
 // ─── Connect to Database ─────────────────────────────────────
 await connectDb();
+
+// ─── Verify Redis Connection ─────────────────────────────────────────
+await redis.ping();
+console.log("✅ Redis ready");
 
 // ─── Ensure Storage Directory Exists ─────────────────────────
 await ensureStorageRoot();
@@ -78,15 +83,8 @@ app.use(
   }),
 );
 
-// ─── Global Rate Limiter ─────────────────────────────────────
-app.use(
-  rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 10000, // 100 requests per window per IP
-    standardHeaders: true,
-    legacyHeaders: false,
-  }),
-);
+// ─── Global Rate Limiter (Redis-backed) ─────────────────────────
+app.use(IPRateLimiter(10000, 15 * 60 * 1000)); // 10000 requests per 15 min per IP
 
 // ─── Body Parsers ────────────────────────────────────────────
 app.use(express.json({ limit: "10kb" })); // prevent large payload attacks

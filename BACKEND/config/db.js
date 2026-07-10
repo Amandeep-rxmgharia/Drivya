@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { disconnectRedis } from "./redisClient.js";
 
 const { MONGO_URI, DB_NAME = "Drivya" } = process.env;
 
@@ -29,6 +30,7 @@ export async function connectDb() {
 
 process.on("SIGINT", async () => {
   await mongoose.disconnect();
-  console.log("Database Disconnected!");
+  await disconnectRedis();
+  console.log("Database & Redis Disconnected!");
   process.exit(0);
 });

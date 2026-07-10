@@ -27,32 +27,39 @@ import { recordActivity } from "../services/activityService.js";
 import { ACTIVITY_ACTIONS } from "../constants/activityConstants.js";
 import { RESOURCE_TYPES } from "../constants/shareConstants.js";
 import { createNotification } from "../services/notificationService.js";
+import redis from "../config/redisClient.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const STORAGE_ROOT = path.resolve(__dirname, "..", "storage");
 
-// ─── Simple in-memory state store for CSRF (production: use Redis) ───
-const pendingStates = new Map();
-const STATE_TTL = 10 * 60 * 1000; // 10 minutes
+// ─── OAuth CSRF state stored in Redis with auto-expiry ───
+const STATE_TTL_SECONDS = 600; // 10 minutes
+const STATE_PREFIX = "oauth:dropbox:state:";
 
-// ─── Track active imports to prevent double-imports ───
-const activeImports = new Map(); // userId → AbortController
+// ─── Import concurrency: distributed lock in Redis + local AbortController ───
+const IMPORT_LOCK_PREFIX = "import:lock:dropbox:";
+const IMPORT_LOCK_TTL = 1800; // 30 min safety net
+const localAbortControllers = new Map(); // userId → AbortController (process-local)
+
+async function acquireImportLock(userId) {
+  const result = await redis.set(`${IMPORT_LOCK_PREFIX}${userId}`, "1", { EX: IMPORT_LOCK_TTL, NX: true });
+  return result === "OK";
+}
+
+async function releaseImportLock(userId) {
+  await redis.del(`${IMPORT_LOCK_PREFIX}${userId}`);
+  localAbortControllers.delete(userId);
+}
 
 // ─── Get Dropbox OAuth URL ─────────────────────────────────
 export const getDropboxAuthUrl = async (req, res, next) => {
   try {
     const state = randomBytes(32).toString("hex");
-    pendingStates.set(state, {
-      userId: req.user.id,
-      createdAt: Date.now(),
-    });
-
-    // Clean up expired states
-    for (const [key, val] of pendingStates) {
-      if (Date.now() - val.createdAt > STATE_TTL) {
-        pendingStates.delete(key);
-      }
-    }
+    await redis.set(
+      `${STATE_PREFIX}${state}`,
+      JSON.stringify({ userId: req.user.id }),
+      { EX: STATE_TTL_SECONDS },
+    );
 
     const url = buildDropboxAuthUrl(state);
     return res.json({ url });
@@ -78,20 +85,15 @@ export const dropboxCallback = async (req, res, next) => {
       );
     }
 
-    // Validate CSRF state
-    const stateData = pendingStates.get(state);
-    if (!stateData) {
+    // Validate CSRF state (Redis TTL handles expiry automatically)
+    const stateRaw = await redis.get(`${STATE_PREFIX}${state}`);
+    if (!stateRaw) {
       return res.redirect(
         `${process.env.CORS_ORIGIN}/dashboard/home?dropbox=error&reason=invalid_state`,
       );
     }
-    pendingStates.delete(state);
-
-    if (Date.now() - stateData.createdAt > STATE_TTL) {
-      return res.redirect(
-        `${process.env.CORS_ORIGIN}/dashboard/home?dropbox=error&reason=expired_state`,
-      );
-    }
+    await redis.del(`${STATE_PREFIX}${state}`);
+    const stateData = JSON.parse(stateRaw);
 
     // Exchange code for tokens
     const tokens = await getTokensFromCode(code);
@@ -262,7 +264,7 @@ export const listDropboxFiles = async (req, res, next) => {
 export const cancelDropboxImport = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const controller = activeImports.get(userId);
+    const controller = localAbortControllers.get(userId);
     if (!controller) {
       return res.status(404).json({ message: "No active import to cancel." });
     }
@@ -278,14 +280,15 @@ export const importDropboxFiles = async (req, res, next) => {
   const userId = req.user.id;
 
   // Prevent concurrent imports for same user
-  if (activeImports.has(userId)) {
+  const lockAcquired = await acquireImportLock(userId);
+  if (!lockAcquired) {
     return res.status(429).json({
       message: "An import is already in progress. Please wait.",
     });
   }
 
   const abortController = new AbortController();
-  activeImports.set(userId, abortController);
+  localAbortControllers.set(userId, abortController);
 
   // Detect client disconnect → abort
   req.on("close", () => {
@@ -297,19 +300,19 @@ export const importDropboxFiles = async (req, res, next) => {
   try {
     const tokens = await getUserTokens(userId);
     if (!tokens) {
-      activeImports.delete(userId);
+      await releaseImportLock(userId);
       return res.status(400).json({ message: "Dropbox not connected." });
     }
 
     const { filePaths, directoryId } = req.body;
 
     if (!filePaths || !Array.isArray(filePaths) || filePaths.length === 0) {
-      activeImports.delete(userId);
+      await releaseImportLock(userId);
       return res.status(400).json({ message: "No files selected." });
     }
 
     if (filePaths.length > 20) {
-      activeImports.delete(userId);
+      await releaseImportLock(userId);
       return res
         .status(400)
         .json({ message: "Maximum 20 files per import." });
@@ -320,7 +323,7 @@ export const importDropboxFiles = async (req, res, next) => {
     if (!targetDirId) {
       const user = await User.findById(userId).select("rootDirId").lean();
       if (!user?.rootDirId) {
-        activeImports.delete(userId);
+        await releaseImportLock(userId);
         return res.status(404).json({ message: "Root directory not found." });
       }
       targetDirId = user.rootDirId.toString();
@@ -329,7 +332,7 @@ export const importDropboxFiles = async (req, res, next) => {
     // Verify directory exists and belongs to user
     const dir = await Directory.findOne({ _id: targetDirId, userId }).lean();
     if (!dir) {
-      activeImports.delete(userId);
+      await releaseImportLock(userId);
       return res
         .status(404)
         .json({ message: "Target directory not found." });
@@ -354,7 +357,7 @@ export const importDropboxFiles = async (req, res, next) => {
     }
 
     if (metadataList.length === 0) {
-      activeImports.delete(userId);
+      await releaseImportLock(userId);
       return res
         .status(400)
         .json({ message: "No importable files found in selection." });
@@ -366,7 +369,7 @@ export const importDropboxFiles = async (req, res, next) => {
       .lean();
 
     if (user.storageUsed + totalSize > user.storageLimit) {
-      activeImports.delete(userId);
+      await releaseImportLock(userId);
       return res.status(413).json({
         message:
           "Storage quota exceeded. Please free up space or upgrade.",
@@ -599,7 +602,7 @@ export const importDropboxFiles = async (req, res, next) => {
       next(err);
     }
   } finally {
-    activeImports.delete(userId);
+    await releaseImportLock(userId);
   }
 };
 

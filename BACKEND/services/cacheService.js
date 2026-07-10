@@ -1,77 +1,45 @@
 /**
- * Cache abstraction — in-memory LRU for development.
- * Swap the driver to Redis at 10k+ concurrent users without changing callers.
+ * Cache abstraction — Redis-backed for production.
  *
- * Scaling path:
- *   10k users  → in-memory (single instance)
- *   50k users  → Redis single node
- *   500k+ users → Redis Cluster + CDN edge cache for public metadata
+ * All values are stored as JSON strings in Redis.
+ * Callers use the same async API as before — zero changes needed in consumers.
  */
 
-const DEFAULT_MAX_ENTRIES = 5000;
+import redis from "../config/redisClient.js";
 
-class MemoryCacheDriver {
-  constructor(maxEntries = DEFAULT_MAX_ENTRIES) {
-    this.store = new Map();
-    this.maxEntries = maxEntries;
-  }
-
-  get(key) {
-    const entry = this.store.get(key);
-    if (!entry) return null;
-
-    if (entry.expiresAt && entry.expiresAt <= Date.now()) {
-      this.store.delete(key);
-      return null;
-    }
-
-    // LRU: refresh insertion order
-    this.store.delete(key);
-    this.store.set(key, entry);
-    return entry.value;
-  }
-
-  set(key, value, ttlSeconds = 60) {
-    if (this.store.size >= this.maxEntries) {
-      const oldestKey = this.store.keys().next().value;
-      this.store.delete(oldestKey);
-    }
-
-    this.store.set(key, {
-      value,
-      expiresAt: ttlSeconds > 0 ? Date.now() + ttlSeconds * 1000 : null,
-    });
-  }
-
-  del(key) {
-    this.store.delete(key);
-  }
-
-  delByPrefix(prefix) {
-    for (const key of this.store.keys()) {
-      if (key.startsWith(prefix)) {
-        this.store.delete(key);
-      }
-    }
-  }
-}
-
-const driver = new MemoryCacheDriver();
+// ─── Core cache operations (Redis-backed) ─────────────────────
 
 export async function cacheGet(key) {
-  return driver.get(key);
+  const raw = await redis.get(key);
+  return raw !== null ? JSON.parse(raw) : null;
 }
 
 export async function cacheSet(key, value, ttlSeconds = 60) {
-  driver.set(key, value, ttlSeconds);
+  const serialized = JSON.stringify(value);
+  if (ttlSeconds > 0) {
+    await redis.set(key, serialized, { EX: ttlSeconds });
+  } else {
+    await redis.set(key, serialized);
+  }
 }
 
 export async function cacheDel(key) {
-  driver.del(key);
+  await redis.del(key);
 }
 
 export async function cacheDelByPrefix(prefix) {
-  driver.delByPrefix(prefix);
+  // Use SCAN iterator to safely find and delete keys (non-blocking unlike KEYS)
+  const keysToDelete = [];
+  for await (const key of redis.scanIterator({
+    MATCH: `${prefix}*`,
+    COUNT: 100,
+  })) {
+    keysToDelete.push(key);
+  }
+
+  if (keysToDelete.length > 0) {
+    await redis.del(keysToDelete);
+  }
 }
 
 /**
