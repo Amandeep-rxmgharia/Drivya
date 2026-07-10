@@ -34,7 +34,7 @@ export async function cacheDelByPrefix(prefix) {
     MATCH: `${prefix}*`,
     COUNT: 100,
   })) {
-    keysToDelete.push(key);
+    if(key[0]) keysToDelete.push(key[0]);
   }
 
   if (keysToDelete.length > 0) {
