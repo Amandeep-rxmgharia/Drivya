@@ -22,11 +22,11 @@ import {
 } from "../../../../api/subscription.js";
 
 const PLAN_NAMES = {
-  free: "Spark Free",
-  spark_go: "Spark Go",
-  boost: "Boost",
-  pro: "Pro",
-  apex: "Apex",
+  free: "Drivya Starter",
+  spark_go: "Drivya Lite",
+  boost: "Drivya Plus",
+  pro: "Drivya Pro",
+  apex: "Drivya Max",
 };
 
 export default function BillingSection({ userProfile }) {

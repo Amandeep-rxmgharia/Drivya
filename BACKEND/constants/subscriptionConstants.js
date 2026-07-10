@@ -42,7 +42,7 @@ export const PERIODS = Object.freeze({
  */
 export const PLANS = Object.freeze({
   [PLAN_KEYS.FREE]: {
-    name: "Spark Free",
+    name: "Drivya Starter",
     storage: 5 * GB,
     bandwidth: 10 * GB,
     maxUpload: 150 * MB,
@@ -51,7 +51,7 @@ export const PLANS = Object.freeze({
     razorpayPlanId: { monthly: null, yearly: null },
   },
   [PLAN_KEYS.SPARK_GO]: {
-    name: "Spark Go",
+    name: "Drivya Lite",
     storage: 50 * GB,
     bandwidth: 25 * GB,
     maxUpload: null, // unlimited
@@ -63,7 +63,7 @@ export const PLANS = Object.freeze({
     },
   },
   [PLAN_KEYS.BOOST]: {
-    name: "Boost",
+    name: "Drivya Plus",
     storage: 100 * GB,
     bandwidth: 70 * GB,
     maxUpload: null,
@@ -75,7 +75,7 @@ export const PLANS = Object.freeze({
     },
   },
   [PLAN_KEYS.PRO]: {
-    name: "Pro",
+    name: "Drivya Pro",
     storage: 500 * GB,
     bandwidth: 300 * GB,
     maxUpload: null,
@@ -88,7 +88,7 @@ export const PLANS = Object.freeze({
     },
   },
   [PLAN_KEYS.APEX]: {
-    name: "Apex",
+    name: "Drivya Max",
     storage: 1 * TB,
     bandwidth: 700 * GB,
     maxUpload: null,
