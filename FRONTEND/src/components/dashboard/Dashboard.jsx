@@ -453,11 +453,11 @@ function Topbar({
       transition={tweenEnter(0.72, 0.1)}
       className="shrink-0 z-20 bg-background/60 backdrop-blur-xl border-b border-border/70"
     >
-      <div className="h-16 flex items-center gap-3 px-4 md:px-6">
+      <div className="h-16 flex items-center justify-end  gap-3 px-4 md:px-6">
         <button onClick={onMobileMenu} className={`${iconBtn} lg:hidden`}>
           <Menu className="h-4 w-4" />
         </button>
-        <button
+        {useLocation().pathname !== "/dashboard/payment" && <button
           onClick={onToggleSidebar}
           className={`${iconBtn} hidden lg:inline-flex`}
         >
@@ -466,10 +466,10 @@ function Topbar({
           ) : (
             <PanelLeftClose className="h-4 w-4 hidden lg:block" />
           )}
-        </button>
+        </button>}
 
         {/* search */}
-        <div className="flex-1 max-w-2xl">
+        <div className="flex-1">
           <div className="group relative">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input
@@ -981,14 +981,21 @@ const mapUserProfile = (user) => {
 };
 
 export function DashboardLayout() {
-  const [collapsed, setCollapsed] = useState(false);
+    const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const [aiAssistantOpen, setAiAssistantOpen] = useState(false);
   const [aiRequest, setAiRequest] = useState(null);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
-  const location = useLocation();
   const navigate = useNavigate();
-
+  useEffect(() => {
+    if (location.pathname === "/dashboard/payment") {
+      setCollapsed(true);
+      console.log('running');
+    } else {
+      setCollapsed(false);
+    }
+  }, [location]);
   const [notifications, setNotifications] = useState([]);
   const [toasts, setToasts] = useState([]);
   const [isOutletLoading, setIsOutletLoading] = useState(false);
@@ -1199,7 +1206,10 @@ export function DashboardLayout() {
   }, [navigate]);
 
   const [userProfile, setUserProfile] = useState(() => {
-    if (location.state && (location.state.email || location.state.id || location.state._id)) {
+    if (
+      location.state &&
+      (location.state.email || location.state.id || location.state._id)
+    ) {
       const mapped = mapUserProfile(location.state);
       if (mapped) return mapped;
     }
@@ -1254,7 +1264,8 @@ export function DashboardLayout() {
             role: data.user.role || "user",
             isActive: data.user.isActive !== false,
             hasPassword: !!data.user.hasPassword,
-            trashAutoEmptyDays: data.user?.storagePreferences?.trashAutoEmptyDays,
+            trashAutoEmptyDays:
+              data.user?.storagePreferences?.trashAutoEmptyDays,
           }));
         }
       } catch (err) {
@@ -1262,8 +1273,10 @@ export function DashboardLayout() {
         navigate("/auth");
       }
     };
-    
-    const hasPassedState = location.state && (location.state.email || location.state.id || location.state._id);
+
+    const hasPassedState =
+      location.state &&
+      (location.state.email || location.state.id || location.state._id);
     if (!hasPassedState) {
       fetchUser();
     }
@@ -1300,7 +1313,8 @@ export function DashboardLayout() {
           <Sidebar
             collapsed={collapsed}
             mobileOpen={mobileOpen}
-            onClose={() => setMobileOpen(false)}
+            onClose={() => {
+              setMobileOpen(false)}}
             userProfile={userProfile}
           />
           <motion.div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -1333,8 +1347,16 @@ export function DashboardLayout() {
               {isOutletLoading && location.pathname !== "/dashboard/drive" && (
                 <DashboardLoader />
               )}
-              <div className={isOutletLoading && location.pathname !== "/dashboard/drive" ? "hidden" : ""}>
-                <Outlet context={{ userProfile, setUserProfile, setIsOutletLoading }} />
+              <div
+                className={
+                  isOutletLoading && location.pathname !== "/dashboard/drive"
+                    ? "hidden"
+                    : ""
+                }
+              >
+                <Outlet
+                  context={{ userProfile, setUserProfile, setIsOutletLoading }}
+                />
               </div>
             </main>
           </motion.div>

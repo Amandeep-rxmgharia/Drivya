@@ -24,7 +24,10 @@ import {
   verifyDownloadToken,
 } from "../config/tokenUtils.js";
 import { createNotification } from "../services/notificationService.js";
-import { cacheDelByPrefix, invalidateShareTokenCache } from "../services/cacheService.js";
+import {
+  cacheDelByPrefix,
+  invalidateShareTokenCache,
+} from "../services/cacheService.js";
 
 // ─── Upload Files ────────────────────────────────────────────────
 export const uploadFiles = async (req, res, next) => {
@@ -434,12 +437,14 @@ export const renameFile = async (req, res, next) => {
     const oldName = file.originalName;
     file.mimeType = mimeType;
     file.originalName = trimmedName;
-    sharedFile.resourceSnapshot.name = trimmedName;
-    sharedFile.resourceSnapshot.mimeType = mimeType;
+    if (sharedFile) {
+      sharedFile.resourceSnapshot.name = trimmedName;
+      sharedFile.resourceSnapshot.mimeType = mimeType;
+      await sharedFile.save();
+      await invalidateShareTokenCache(sharedFile.token);
+      await cacheDelByPrefix(`share:list:${sharedFile.ownerId.toString()}`);
+    }
     await file.save();
-    await sharedFile.save();
-    await invalidateShareTokenCache(sharedFile.token)
-    await cacheDelByPrefix(`share:list:${sharedFile.ownerId.toString()}`);
 
     await // Record rename activity (fire-and-forget)
     recordActivity({

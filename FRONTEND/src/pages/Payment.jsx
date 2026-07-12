@@ -12,17 +12,14 @@ import {
   Shield,
   Crown,
   Rocket,
-  HardDrive,
   Wifi,
   Trash2,
   Lock,
   ShieldCheck,
   Infinity,
   ChevronRight,
-  ArrowRight,
-  ArrowUpRight,
+  TrendingUp,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   card,
@@ -68,6 +65,7 @@ const PLANS = [
     trashDays: 15,
     color: "#3b82f6",
     glowColor: "rgba(59, 130, 246, 0.15)",
+    perks: ["Unlimited file uploads", "Email support", "15-day trash recovery"],
   },
   {
     key: "boost",
@@ -84,6 +82,12 @@ const PLANS = [
     trashDays: 30,
     color: "#8b5cf6",
     glowColor: "rgba(139, 92, 246, 0.15)",
+    perks: [
+      "Unlimited file uploads",
+      "Priority email support",
+      "30-day trash recovery",
+      "Advanced sharing controls",
+    ],
   },
   {
     key: "pro",
@@ -101,6 +105,12 @@ const PLANS = [
     trashDays: 45,
     color: "#f59e0b",
     glowColor: "rgba(245, 158, 11, 0.2)",
+    perks: [
+      "Unlimited file uploads",
+      "24/7 priority support",
+      "45-day trash recovery",
+      "Version history",
+    ],
   },
   {
     key: "apex",
@@ -117,10 +127,29 @@ const PLANS = [
     trashDays: 60,
     color: "#f43f5e",
     glowColor: "rgba(244, 63, 94, 0.15)",
+    perks: [
+      "Unlimited file uploads",
+      "Dedicated support line",
+      "60-day trash recovery",
+      "Early access to features",
+    ],
   },
 ];
 
 const PAID_PLANS = PLANS.filter((p) => p.key !== "free");
+
+// Log-scaled fill so 5 GB → 1 TB reads as a meaningful gradient instead of
+// every paid tier's bar looking almost full next to the free tier.
+const MAX_STORAGE_LOG = Math.log2(PLANS[PLANS.length - 1].storage);
+const MIN_STORAGE_LOG = Math.log2(PLANS[0].storage);
+function capacityPercent(storageBytes) {
+  const pct =
+    ((Math.log2(storageBytes) - MIN_STORAGE_LOG) /
+      (MAX_STORAGE_LOG - MIN_STORAGE_LOG)) *
+      88 +
+    12; // floor at 12% so even the smallest tier shows a visible sliver
+  return Math.min(100, Math.max(12, pct));
+}
 
 export default function Payment() {
   const navigate = useNavigate();
@@ -141,9 +170,7 @@ export default function Payment() {
   const [status, setStatus] = useState("idle"); // idle | creating | verifying | success | error
   const [errorMsg, setErrorMsg] = useState("");
   const [successPlan, setSuccessPlan] = useState(null);
-
   const handleBack = () => navigate("/dashboard/settings/billing");
-
   const activePlan = useMemo(
     () => PLANS.find((p) => p.key === selectedPlan) || PLANS[3],
     [selectedPlan],
@@ -156,6 +183,9 @@ export default function Payment() {
 
   const period = yearly ? "yearly" : "monthly";
   const priceDisplay = activePlan.price[period];
+  const monthlyEquivalent = yearly
+    ? Math.round(activePlan.price.yearly / 12)
+    : activePlan.price.monthly;
 
   const monthlySavings = yearly
     ? activePlan.price.monthly * 12 - activePlan.price.yearly
@@ -376,31 +406,31 @@ export default function Payment() {
             exit={{ opacity: 0 }}
             className="space-y-6"
           >
-            {/* ─── Hero Banner (matches Settings/Home hero pattern) ─── */}
+            {/* ─── Hero Banner ─── */}
             <section
               className={`${card} ${subtleHover} relative overflow-hidden p-6 md:p-8 animate-fade-in`}
             >
-              {/* Ambient glows — same as Home/Settings */}
               <div className="absolute -top-32 -right-24 h-72 w-72 rounded-full bg-ambient-primary blur-3xl opacity-80 pointer-events-none" />
               <div className="absolute -bottom-20 -left-16 h-56 w-56 rounded-full bg-ambient-primary blur-3xl opacity-50 pointer-events-none" />
 
-              <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
+              <div className="relative flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6">
                 <div>
+
                   <div className={chip}>
                     <span className="h-1.5 w-1.5 rounded-full bg-primary shadow-glow" />
                     {currentPlan === "free" ? "Free Plan" : `${currentPlanObj.name} · Active`}
                   </div>
                   <h1 className="mt-4 font-display text-3xl md:text-4xl font-semibold tracking-tight leading-[1.1] text-foreground">
-                    <span className="text-gradient">Upgrade</span> your plan
+                    <span className="text-gradient">Upgrade</span> your storage
                   </h1>
                   <p className="mt-2 text-muted-foreground leading-relaxed max-w-lg text-sm">
-                    Select the storage tier that fits your workflow. All paid plans include
-                    unlimited file uploads, priority support, and extended trash recovery.
+                    Pick the tier that fits your workflow. Every paid plan includes
+                    unlimited uploads, priority support, and extended trash recovery.
                   </p>
                 </div>
 
                 {/* Billing toggle */}
-                <div className="flex items-center gap-1 p-1 rounded-xl bg-secondary/40 border border-border/60 shrink-0 self-start sm:self-center">
+                <div className="flex items-center gap-1 p-1 rounded-xl bg-secondary/40 border border-border/60 shrink-0 self-start sm:self-auto">
                   <button
                     onClick={() => setYearly(false)}
                     className={cn(
@@ -428,285 +458,300 @@ export default function Payment() {
                   </button>
                 </div>
               </div>
-
-              {/* Quick stats row — same pattern as Settings/Home */}
-              <div className="relative flex items-center gap-3 mt-6 flex-wrap">
-                <button
-                  onClick={handleBack}
-                  className="inline-flex h-9 items-center gap-2 rounded-xl border border-border/60 bg-secondary/30 px-3.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors cursor-pointer"
-                >
-                  <ArrowLeft className="h-3.5 w-3.5" />
-                  Back to Billing
-                </button>
-              </div>
             </section>
 
-            {/* ─── Main Content Grid ─── */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* ─── Pricing Cards (2×2, left) + Order Summary (right) ─── */}
+            <div className="relative">
+              <div className="absolute -top-16 left-1/2 -translate-x-1/2 h-40 w-[70%] rounded-full bg-primary/10 blur-3xl pointer-events-none" />
 
-              {/* Left Column: Plan Selector + Specs (col-span-8) */}
-              <div className="lg:col-span-8 space-y-6">
+              <div className="relative grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
-                {/* Plan Selector — uses glass card pattern from SettingSection */}
-                <section className="rounded-2xl glass shadow-elegant animate-fade-in">
-                  {/* Section Header — matches SettingSection header */}
-                  <div className="border-b border-border/60 px-6 py-5">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
-                        <Sparkles className="h-4 w-4" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="font-display text-base font-semibold tracking-tight text-foreground">
-                          Select Plan
-                        </h3>
-                        <p className="mt-0.5 text-[12px] text-muted-foreground leading-relaxed">
-                          Choose the tier that matches your storage needs.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                {/* Left: 4 cards, 2 per row */}
+                <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {PAID_PLANS.map((plan) => {
+                  const Icon = plan.icon;
+                  const isSelected = selectedPlan === plan.key;
+                  const isCurrent = currentPlan === plan.key;
+                  const gaugePct = capacityPercent(plan.storage);
+                  const planPrice = plan.price[period];
 
-                  {/* Segmented Tab Bar */}
-                  <div className="px-6 py-5">
-                    <div className="p-1.5 rounded-xl border border-border/40 bg-secondary/20 flex w-full">
-                      {PAID_PLANS.map((plan) => {
-                        const isSelected = selectedPlan === plan.key;
-                        const isCurrent = currentPlan === plan.key;
-                        return (
-                          <button
-                            key={plan.key}
-                            onClick={() => setSelectedPlan(plan.key)}
+                  return (
+                    <motion.button
+                      key={plan.key}
+                      onClick={() => setSelectedPlan(plan.key)}
+                      whileHover={{ y: -3 }}
+                      whileTap={{ y: 0 }}
+                      transition={{ duration: 0.2, ease: "easeOut" }}
+                      className={cn(
+                        "relative text-left rounded-2xl p-5 cursor-pointer flex flex-col overflow-hidden",
+                        "border backdrop-blur-sm transition-colors duration-200",
+                        isSelected
+                          ? "border-primary/50 bg-gradient-to-b from-primary/[0.08] via-secondary/40 to-secondary/20 shadow-glow"
+                          : "border-border/50 bg-gradient-to-b from-secondary/20 to-secondary/[0.03] hover:border-border",
+                      )}
+                    >
+                      {/* Top accent line for the featured tier */}
+                      {plan.featured && (
+                        <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-primary" />
+                      )}
+
+                      {/* Ambient glow behind the icon, only when selected */}
+                      {isSelected && (
+                        <div className="absolute -top-10 -right-10 h-32 w-32 rounded-full bg-primary/20 blur-3xl pointer-events-none" />
+                      )}
+
+                      <div className="relative flex items-center justify-between mb-5">
+                        <div className="flex items-center gap-2.5">
+                          <div
                             className={cn(
-                              "relative flex-1 py-3 text-center rounded-lg cursor-pointer transition-all focus:outline-none",
-                              isSelected ? "" : "hover:text-foreground",
+                              "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors",
+                              isSelected
+                                ? "bg-primary/15 text-primary"
+                                : "bg-secondary/60 text-muted-foreground",
                             )}
                           >
-                            {/* Active indicator */}
-                            {isSelected && (
-                              <motion.div
-                                layoutId="activeTabSelector"
-                                className="absolute inset-0 bg-background border border-border/40 rounded-lg shadow-sm"
-                                transition={{ type: "spring", stiffness: 220, damping: 22 }}
-                              />
-                            )}
-
-                            <div className="relative flex flex-col items-center justify-center z-10">
-                              <span className={cn(
-                                "text-xs font-bold transition-colors",
-                                isSelected ? "text-foreground" : "text-muted-foreground",
-                              )}>
-                                {plan.shortName}
-                              </span>
-                              <span className={cn(
-                                "text-[10px] font-medium mt-0.5 transition-colors",
-                                isSelected ? "text-muted-foreground" : "text-muted-foreground/60",
-                              )}>
-                                {plan.storageLabel}
-                              </span>
-
-                              {isCurrent && (
-                                <span className="absolute -top-1.5 -right-1 text-[8px] bg-primary/20 text-primary border border-primary/20 px-1 rounded scale-[0.8] font-bold uppercase tracking-widest leading-none">
-                                  Active
-                                </span>
-                              )}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </section>
-
-
-
-
-                {/* Plan Specs Dashboard */}
-                <section className="rounded-2xl glass shadow-elegant animate-fade-in">
-                  <div className="border-b border-border/60 px-6 py-5">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
-                        <Shield className="h-4 w-4" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="font-display text-base font-semibold tracking-tight text-foreground">
-                          Plan Resources
-                        </h3>
-                        <p className="mt-0.5 text-[12px] text-muted-foreground leading-relaxed">
-                          What's included with {activePlan.name}.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="px-6 py-5">
-                    {/* Stat grid — matches Settings/Home stat pattern */}
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                      <div className="rounded-xl border border-border/60 bg-secondary/20 p-3.5">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
-                            Bandwidth
+                            <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
+                          </div>
+                          <span className="text-[13px] font-medium text-foreground">
+                            {plan.shortName}
                           </span>
-                          <Wifi className="h-3.5 w-3.5 text-primary/80" />
                         </div>
-                        <div className="font-display text-lg font-semibold text-foreground">
-                          {activePlan.bandwidthLabel}
-                        </div>
-                        <div className="text-[10px] font-medium text-muted-foreground mt-0.5">
-                          per month
-                        </div>
-                      </div>
-
-                      <div className="rounded-xl border border-border/60 bg-secondary/20 p-3.5">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
-                            Max File Size
+                        {plan.featured ? (
+                          <span className="text-[9px] font-semibold uppercase tracking-wider text-primary bg-primary/10 border border-primary/20 rounded-full px-2 py-0.5">
+                            Popular
                           </span>
-                          <Infinity className="h-3.5 w-3.5 text-emerald-400" />
-                        </div>
-                        <div className="font-display text-lg font-semibold text-foreground">
-                          {activePlan.maxUploadLabel}
-                        </div>
-                        <div className="text-[10px] font-medium text-muted-foreground mt-0.5">
-                          per upload
-                        </div>
-                      </div>
-
-                      <div className="rounded-xl border border-border/60 bg-secondary/20 p-3.5">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
-                            Trash Recovery
+                        ) : isCurrent ? (
+                          <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground border border-border/70 rounded-full px-2 py-0.5">
+                            Active
                           </span>
-                          <Trash2 className="h-3.5 w-3.5 text-rose-400/80" />
-                        </div>
-                        <div className="font-display text-lg font-semibold text-foreground">
-                          {activePlan.trashDays} Days
-                        </div>
-                        <div className="text-[10px] font-medium text-muted-foreground mt-0.5">
-                          file retention
-                        </div>
+                        ) : null}
                       </div>
-                    </div>
-                  </div>
-                </section>
-              </div>
 
-              {/* Right Column: Checkout Summary (col-span-4) */}
-              <div className="lg:col-span-4">
-                <div className="sticky top-6 rounded-2xl glass shadow-elegant animate-fade-in">
-                  {/* Section Header */}
-                  <div className="border-b border-border/60 px-6 py-5">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
-                        <Lock className="h-4 w-4" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="font-display text-base font-semibold tracking-tight text-foreground">
-                          Checkout
-                        </h3>
-                        <p className="mt-0.5 text-[12px] text-muted-foreground leading-relaxed">
-                          Review your order details.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Order Details */}
-                  <div className="px-6 py-5 space-y-4 border-b border-border/40">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-muted-foreground">Plan</span>
-                      <span className="font-semibold text-foreground flex items-center gap-1.5">
-                        <span
-                          className="h-2 w-2 rounded-full inline-block"
-                          style={{ backgroundColor: activePlan.color }}
-                        />
-                        {activePlan.name}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Billing</span>
-                      <span className="font-medium text-foreground capitalize">
-                        {yearly ? "Yearly" : "Monthly"}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Storage</span>
-                      <span className="font-medium text-foreground">
-                        {activePlan.storageLabel}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Price */}
-                  <div className="px-6 py-5 border-b border-border/40">
-                    <div className="flex justify-between items-baseline">
-                      <span className="font-medium text-xs text-muted-foreground">Total</span>
-                      <div className="text-right">
-                        <span className="text-2xl font-display font-extrabold text-foreground">
-                          ₹{priceDisplay}
+                      {/* Price */}
+                      <div className="relative flex items-baseline gap-1 mb-0.5">
+                        <span className="font-display text-[28px] leading-none font-semibold tracking-tight text-foreground tabular-nums">
+                          ₹{planPrice}
                         </span>
-                        <span className="text-xs text-muted-foreground ml-0.5">
+                        <span className="text-[11px] text-muted-foreground">
                           /{yearly ? "yr" : "mo"}
                         </span>
                       </div>
-                    </div>
+                      <div className="h-4 mb-5">
+                        {yearly && (
+                          <span className="text-[10px] text-muted-foreground/70">
+                            ≈ ₹{Math.round(planPrice / 12)}/mo billed annually
+                          </span>
+                        )}
+                      </div>
 
-                    {yearly && activePlan.price.monthly > 0 && (
-                      <div className="flex items-center gap-2 mt-3 px-3 py-2 rounded-xl bg-emerald-500/8 border border-emerald-500/15">
-                        <ShieldCheck className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                        <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                          Save ₹{monthlySavings}/yr with annual billing
+                      {/* Capacity gauge — signature element */}
+                      <div className="relative mb-4">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[10px] text-muted-foreground">
+                            Storage
+                          </span>
+                          <span className="text-[11px] font-medium text-foreground">
+                            {plan.storageLabel}
+                          </span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-secondary/60 overflow-hidden">
+                          <motion.div
+                            className={cn(
+                              "h-full rounded-full",
+                              isSelected ? "bg-gradient-primary" : "bg-muted-foreground/40",
+                            )}
+                            initial={{ width: 0 }}
+                            animate={{ width: `${gaugePct}%` }}
+                            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Mini stats */}
+                      <div className="relative flex items-center gap-3 mb-4 text-[10px] text-muted-foreground">
+                        <span className="inline-flex items-center gap-1">
+                          <Wifi className="h-3 w-3 shrink-0" strokeWidth={1.75} />
+                          {plan.bandwidthLabel}/mo
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          <Trash2 className="h-3 w-3 shrink-0" strokeWidth={1.75} />
+                          {plan.trashDays}d trash
                         </span>
                       </div>
-                    )}
-                  </div>
 
-                  {/* CTA */}
-                  <div className="px-6 py-5 space-y-3">
-                    {selectedPlan === "free" ? (
-                      <div className="w-full py-2.5 text-center text-xs font-medium text-muted-foreground/80 rounded-xl border border-border/40 bg-secondary/20">
-                        {currentPlan === "free"
-                          ? "Default Starter active"
-                          : "Cancel subscription in billing to downgrade"}
-                      </div>
-                    ) : selectedPlan === currentPlan ? (
-                      <div className="w-full py-2.5 text-center text-xs font-medium text-muted-foreground/80 rounded-xl border border-border/40 bg-secondary/20">
-                        This plan is currently active
-                      </div>
-                    ) : (
-                      <button
-                        onClick={handleSubscribe}
-                        disabled={status === "creating" || status === "verifying"}
-                        className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-primary h-10 text-sm font-semibold text-primary-foreground shadow-glow hover:opacity-90 transition-all cursor-pointer disabled:opacity-50"
+                      <div className="relative h-px bg-border/50 mb-4" />
+
+                      {/* Perks */}
+                      <ul className="relative space-y-1.5 mb-5 flex-1">
+                        {(plan.perks || []).slice(0, 4).map((perk) => (
+                          <li
+                            key={perk}
+                            className="flex items-start gap-1.5 text-[11px] text-muted-foreground leading-snug"
+                          >
+                            <Check
+                              className={cn(
+                                "h-3 w-3 mt-0.5 shrink-0",
+                                isSelected ? "text-primary" : "text-foreground/50",
+                              )}
+                              strokeWidth={2}
+                            />
+                            {perk}
+                          </li>
+                        ))}
+                      </ul>
+
+                      {/* Select indicator */}
+                      <div
+                        className={cn(
+                          "relative flex items-center justify-center gap-1.5 rounded-xl h-9 text-[11px] font-semibold transition-colors",
+                          isSelected
+                            ? "bg-gradient-primary text-primary-foreground shadow-glow"
+                            : "border border-border/60 text-muted-foreground",
+                        )}
                       >
-                        {status === "creating" ? (
+                        {isSelected ? (
                           <>
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            Creating order…
-                          </>
-                        ) : status === "verifying" ? (
-                          <>
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            Verifying payment…
+                            <Check className="h-3.5 w-3.5" /> Selected
                           </>
                         ) : (
-                          <>
-                            Confirm & Pay
-                            <ChevronRight className="h-3.5 w-3.5" />
-                          </>
+                          "Select plan"
                         )}
-                      </button>
-                    )}
+                      </div>
+                    </motion.button>
+                  );
+                })}
+                </div>
 
-                    <p className="text-[9px] text-muted-foreground/60 text-center flex items-center justify-center gap-1.5">
-                      <Shield className="h-3 w-3" />
-                      Razorpay Secured · Cancel anytime
-                    </p>
+                {/* Right: Order summary, docked beside the cards */}
+                <div className="lg:col-span-5">
+                  <div className="sticky top-6 rounded-2xl glass shadow-elegant animate-fade-in overflow-hidden">
+                    <div className="border-b border-border/60 px-6 py-5">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
+                          <Lock className="h-4 w-4" />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="font-display text-base font-semibold tracking-tight text-foreground">
+                            Order Summary
+                          </h3>
+                          <p className="mt-0.5 text-[12px] text-muted-foreground leading-relaxed">
+                            Review before you confirm.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Line items */}
+                    <div className="px-6 py-5 space-y-3.5 border-b border-dashed border-border/60">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-muted-foreground">Plan</span>
+                        <span className="font-semibold text-foreground">
+                          {activePlan.name}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Billing cycle</span>
+                        <span className="font-medium text-foreground capitalize">
+                          {yearly ? "Yearly" : "Monthly"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Storage</span>
+                        <span className="font-medium text-foreground">
+                          {activePlan.storageLabel}
+                        </span>
+                      </div>
+                      {yearly && (
+                        <div className="flex justify-between text-xs">
+                          <span className="text-muted-foreground">Monthly equivalent</span>
+                          <span className="font-medium text-foreground">
+                            ₹{monthlyEquivalent}/mo
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Total */}
+                    <div className="px-6 py-5 border-b border-border/40">
+                      <div className="flex justify-between items-baseline">
+                        <span className="font-medium text-xs text-muted-foreground">
+                          Total due today
+                        </span>
+                        <AnimatePresence mode="wait">
+                          <motion.div
+                            key={`${activePlan.key}-${period}`}
+                            initial={{ opacity: 0, y: -4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 4 }}
+                            transition={{ duration: 0.18 }}
+                            className="text-right"
+                          >
+                            <span className="text-2xl font-display font-extrabold text-foreground">
+                              ₹{priceDisplay}
+                            </span>
+                            <span className="text-xs text-muted-foreground ml-0.5">
+                              /{yearly ? "yr" : "mo"}
+                            </span>
+                          </motion.div>
+                        </AnimatePresence>
+                      </div>
+
+                      {yearly && activePlan.price.monthly > 0 && (
+                        <div className="flex items-center gap-2 mt-3 px-3 py-2 rounded-xl bg-emerald-500/8 border border-emerald-500/15">
+                          <ShieldCheck className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                          <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                            Save ₹{monthlySavings}/yr with annual billing
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* CTA */}
+                    <div className="px-6 py-5 space-y-3">
+                      {selectedPlan === "free" ? (
+                        <div className="w-full py-2.5 text-center text-xs font-medium text-muted-foreground/80 rounded-xl border border-border/40 bg-secondary/20">
+                          {currentPlan === "free"
+                            ? "Default Starter active"
+                            : "Cancel subscription in billing to downgrade"}
+                        </div>
+                      ) : selectedPlan === currentPlan ? (
+                        <div className="w-full py-2.5 text-center text-xs font-medium text-muted-foreground/80 rounded-xl border border-border/40 bg-secondary/20">
+                          This plan is currently active
+                        </div>
+                      ) : (
+                        <button
+                          onClick={handleSubscribe}
+                          disabled={status === "creating" || status === "verifying"}
+                          className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-primary h-11 text-sm font-semibold text-primary-foreground shadow-glow hover:opacity-90 transition-all cursor-pointer disabled:opacity-50"
+                        >
+                          {status === "creating" ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              Creating order…
+                            </>
+                          ) : status === "verifying" ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              Verifying payment…
+                            </>
+                          ) : (
+                            <>
+                              Confirm & Pay ₹{priceDisplay}
+                              <ChevronRight className="h-3.5 w-3.5" />
+                            </>
+                          )}
+                        </button>
+                      )}
+
+                      <p className="text-[9px] text-muted-foreground/60 text-center flex items-center justify-center gap-1.5">
+                        <Shield className="h-3 w-3" />
+                        Razorpay Secured · Cancel anytime
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
 
+              </div>
             </div>
           </motion.div>
         )}
