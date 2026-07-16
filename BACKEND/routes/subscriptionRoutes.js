@@ -7,6 +7,9 @@ import {
   cancelSubscription,
   getInvoices,
   getPlans,
+  changePlan,
+  verifyPlanChange,
+  cancelDowngrade,
 } from "../controllers/subscriptionController.js";
 
 const router = Router();
@@ -20,5 +23,10 @@ router.post("/verify", authenticate, verifyPayment);
 router.get("/", authenticate, getSubscription);
 router.post("/cancel", authenticate, cancelSubscription);
 router.get("/invoices", authenticate, getInvoices);
+
+// Protected: plan changes (upgrade / downgrade)
+router.post("/change-plan", authenticate, changePlan);
+router.post("/verify-change", authenticate, verifyPlanChange);
+router.post("/cancel-downgrade", authenticate, cancelDowngrade);
 
 export default router;

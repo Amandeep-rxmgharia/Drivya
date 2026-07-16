@@ -6,6 +6,7 @@ import {
   Sparkles,
   Download,
   ArrowUpRight,
+  ArrowDownRight,
   Check,
   Crown,
   Loader2,
@@ -19,6 +20,7 @@ import {
   getSubscription,
   getInvoices,
   cancelSubscription,
+  cancelScheduledDowngrade,
 } from "../../../../api/subscription.js";
 
 const PLAN_NAMES = {
@@ -38,6 +40,7 @@ export default function BillingSection({ userProfile }) {
   const [cancelLoading, setCancelLoading] = useState(false);
   const [cancelError, setCancelError] = useState("");
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [cancelDowngradeLoading, setCancelDowngradeLoading] = useState(false);
 
   // Fetch subscription + invoices on mount
   useEffect(() => {
@@ -71,6 +74,7 @@ export default function BillingSection({ userProfile }) {
   const subscription = subData?.subscription;
   const isActive = subscription?.status === "active" || subscription?.status === "authenticated";
   const isCancelled = subscription?.cancelledAt != null;
+  const isDowngradeScheduled = userProfile?.subscription?.status === "downgrade_scheduled";
 
   // Format price display
   const price = subData?.plan?.price || { monthly: 0, yearly: 0 };
@@ -123,6 +127,22 @@ export default function BillingSection({ userProfile }) {
       setCancelError(err.response?.data?.message || "Failed to cancel. Please try again.");
     } finally {
       setCancelLoading(false);
+    }
+  };
+
+  // Cancel scheduled downgrade handler
+  const handleCancelDowngrade = async () => {
+    setCancelDowngradeLoading(true);
+    setCancelError("");
+    try {
+      await cancelScheduledDowngrade();
+      // Refresh data
+      const sub = await getSubscription();
+      setSubData(sub);
+    } catch (err) {
+      setCancelError(err.response?.data?.message || "Failed to cancel downgrade. Please try again.");
+    } finally {
+      setCancelDowngradeLoading(false);
     }
   };
 
@@ -179,7 +199,7 @@ export default function BillingSection({ userProfile }) {
                     <ArrowUpRight className="h-3.5 w-3.5" />
                     Change Plan
                   </button>
-                  {isActive && !isCancelled && (
+                  {isActive && !isCancelled && !isDowngradeScheduled && (
                     <button
                       onClick={() => setShowCancelConfirm(true)}
                       className="inline-flex h-9 items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-4 text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
@@ -187,7 +207,25 @@ export default function BillingSection({ userProfile }) {
                       Cancel
                     </button>
                   )}
-                  {isCancelled && (
+                  {isDowngradeScheduled && (
+                    <>
+                      <span className="inline-flex h-9 items-center gap-1.5 px-3 text-[11px] font-semibold text-blue-500 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                        <ArrowDownRight className="h-3 w-3" />
+                        Downgrade scheduled
+                      </span>
+                      <button
+                        onClick={handleCancelDowngrade}
+                        disabled={cancelDowngradeLoading}
+                        className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-secondary/40 px-4 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        {cancelDowngradeLoading ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : null}
+                        Undo Downgrade
+                      </button>
+                    </>
+                  )}
+                  {isCancelled && !isDowngradeScheduled && (
                     <span className="inline-flex h-9 items-center gap-1.5 px-3 text-[11px] font-semibold text-amber-500 bg-amber-500/10 border border-amber-500/20 rounded-xl">
                       <AlertCircle className="h-3 w-3" />
                       Cancels {renewsVal}

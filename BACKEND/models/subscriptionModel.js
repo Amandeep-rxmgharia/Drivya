@@ -57,6 +57,16 @@ const subscriptionSchema = new Schema(
       type: String,
       default: "",
     },
+
+    // ─── Pending Plan Change (for scheduled downgrades) ──────────
+    pendingPlanChange: {
+      newPlanKey: { type: String, default: null },
+      newPeriod: { type: String, default: null },
+      newRazorpaySubscriptionId: { type: String, default: null },
+      newSubscriptionId: { type: Schema.Types.ObjectId, ref: "Subscription", default: null },
+      scheduledAt: { type: Date, default: null },
+      effectiveAfter: { type: Date, default: null },
+    },
   },
   {
     strict: "throw",

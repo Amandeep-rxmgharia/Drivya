@@ -4,6 +4,10 @@ import {
   getSubscriptionDetails,
   cancelSubscription as cancelSub,
   getInvoices as fetchInvoices,
+  changePlan as changePlanSvc,
+  verifyUpgradePayment as verifyUpgradeSvc,
+  verifyDowngradeAuth as verifyDowngradeSvc,
+  cancelScheduledDowngrade as cancelDowngradeSvc,
 } from "../services/subscriptionService.js";
 import { PLANS, PLAN_KEYS, PERIODS } from "../constants/subscriptionConstants.js";
 
@@ -95,4 +99,72 @@ export const getPlans = async (req, res) => {
   }));
 
   return res.json({ plans });
+};
+
+// ─── Change Plan (Upgrade / Downgrade) ───────────────────────────
+export const changePlan = async (req, res, next) => {
+  try {
+    const { planKey, period } = req.body;
+
+    if (!planKey || !Object.values(PLAN_KEYS).includes(planKey)) {
+      return res.status(400).json({ message: "Invalid plan key." });
+    }
+    if (planKey === PLAN_KEYS.FREE) {
+      return res.status(400).json({ message: "To downgrade to free, cancel your subscription." });
+    }
+    if (!period || !Object.values(PERIODS).includes(period)) {
+      return res.status(400).json({ message: "Invalid period. Use 'monthly' or 'yearly'." });
+    }
+
+    const result = await changePlanSvc(req.user.id, planKey, period);
+    return res.status(201).json(result);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── Verify Plan Change Payment ─────────────────────────────────
+export const verifyPlanChange = async (req, res, next) => {
+  try {
+    const {
+      razorpay_payment_id,
+      razorpay_subscription_id,
+      razorpay_signature,
+      changeType,
+    } = req.body;
+
+    if (!razorpay_payment_id || !razorpay_subscription_id || !razorpay_signature) {
+      return res.status(400).json({ message: "Missing verification fields." });
+    }
+
+    let result;
+    if (changeType === "downgrade") {
+      result = await verifyDowngradeSvc(
+        razorpay_payment_id,
+        razorpay_subscription_id,
+        razorpay_signature,
+      );
+    } else {
+      // Default to upgrade verification
+      result = await verifyUpgradeSvc(
+        razorpay_payment_id,
+        razorpay_subscription_id,
+        razorpay_signature,
+      );
+    }
+
+    return res.json(result);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── Cancel Scheduled Downgrade ─────────────────────────────────
+export const cancelDowngrade = async (req, res, next) => {
+  try {
+    const result = await cancelDowngradeSvc(req.user.id);
+    return res.json(result);
+  } catch (err) {
+    next(err);
+  }
 };

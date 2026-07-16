@@ -1004,6 +1004,12 @@ const mapUserProfile = (user) => {
     isActive: user.isActive !== false,
     hasPassword: !!user.hasPassword,
     trashAutoEmptyDays: user?.storagePreferences?.trashAutoEmptyDays,
+    subscription: {
+      plan: user.subscription?.plan || "free",
+      status: user.subscription?.status || "none",
+      subscriptionId: user.subscription?.subscriptionId || null,
+      razorpayCustomerId: user.subscription?.razorpayCustomerId || "",
+    },
   };
 };
 
@@ -1260,6 +1266,12 @@ export function DashboardLayout() {
       role: "",
       isActive: true,
       hasPassword: false,
+      subscription: {
+        plan: "free",
+        status: "none",
+        subscriptionId: null,
+        razorpayCustomerId: "",
+      },
     };
   });
 
@@ -1294,6 +1306,12 @@ export function DashboardLayout() {
             hasPassword: !!data.user.hasPassword,
             trashAutoEmptyDays:
               data.user?.storagePreferences?.trashAutoEmptyDays,
+            subscription: {
+              plan: data.user.subscription?.plan || "free",
+              status: data.user.subscription?.status || "none",
+              subscriptionId: data.user.subscription?.subscriptionId || null,
+              razorpayCustomerId: data.user.subscription?.razorpayCustomerId || "",
+            },
           }));
         }
       } catch (err) {

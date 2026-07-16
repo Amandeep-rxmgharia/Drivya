@@ -102,6 +102,28 @@ export const PLANS = Object.freeze({
 });
 
 /**
+ * Numeric ordering of plans for upgrade/downgrade comparison.
+ * Higher number = higher tier.
+ */
+export const PLAN_ORDER = Object.freeze({
+  [PLAN_KEYS.FREE]: 0,
+  [PLAN_KEYS.SPARK_GO]: 1,
+  [PLAN_KEYS.BOOST]: 2,
+  [PLAN_KEYS.PRO]: 3,
+  [PLAN_KEYS.APEX]: 4,
+});
+
+/**
+ * Determine whether switching from one plan to another is an upgrade.
+ * @param {string} fromPlan – Current plan key.
+ * @param {string} toPlan   – Target plan key.
+ * @returns {boolean}
+ */
+export function isUpgrade(fromPlan, toPlan) {
+  return (PLAN_ORDER[toPlan] ?? 0) > (PLAN_ORDER[fromPlan] ?? 0);
+}
+
+/**
  * Resolve the Razorpay plan ID for a given planKey + period.
  * @param {string} planKey  – One of PLAN_KEYS values.
  * @param {string} period   – "monthly" or "yearly".

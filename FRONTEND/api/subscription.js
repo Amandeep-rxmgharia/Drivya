@@ -31,3 +31,20 @@ export const getPlans = async () => {
   const response = await api.get("/api/subscription/plans");
   return response.data;
 };
+
+// ─── Plan Change (Upgrade / Downgrade) ───────────────────────────
+
+export const changePlan = async (planKey, period) => {
+  const response = await api.post("/api/subscription/change-plan", { planKey, period });
+  return response.data;
+};
+
+export const verifyPlanChange = async (data) => {
+  const response = await api.post("/api/subscription/verify-change", data);
+  return response.data;
+};
+
+export const cancelScheduledDowngrade = async () => {
+  const response = await api.post("/api/subscription/cancel-downgrade");
+  return response.data;
+};

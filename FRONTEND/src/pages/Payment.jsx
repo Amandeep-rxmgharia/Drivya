@@ -26,7 +26,7 @@ import {
   subtleHover,
   chip,
 } from "@/components/dashboard/dashboard-tokens";
-import { createSubscription, verifyPayment } from "../../api/subscription.js";
+import { createSubscription, verifyPayment, changePlan, verifyPlanChange } from "../../api/subscription.js";
 
 // ─── Plan Definitions ────────────────────────────────────────────
 const GB = 1024 * 1024 * 1024;
@@ -138,6 +138,9 @@ const PLANS = [
 
 const PAID_PLANS = PLANS.filter((p) => p.key !== "free");
 
+// Plan ordering for upgrade/downgrade detection
+const PLAN_ORDER = { free: 0, spark_go: 1, boost: 2, pro: 3, apex: 4 };
+
 // Log-scaled fill so 5 GB → 1 TB reads as a meaningful gradient instead of
 // every paid tier's bar looking almost full next to the free tier.
 const MAX_STORAGE_LOG = Math.log2(PLANS[PLANS.length - 1].storage);
@@ -205,6 +208,16 @@ export default function Payment() {
     return Math.round(activePlan.storage / currentPlanObj.storage);
   }, [currentPlanObj, activePlan]);
 
+  // ─── Change type detection ──────────────────────────────────────
+  const changeType = useMemo(() => {
+    if (selectedPlan === currentPlan) return "same";
+    if (currentPlan === "free") return "new";
+    if (selectedPlan === "free") return "free";
+    return (PLAN_ORDER[selectedPlan] ?? 0) > (PLAN_ORDER[currentPlan] ?? 0) ? "upgrade" : "downgrade";
+  }, [selectedPlan, currentPlan]);
+
+  const hasActiveSub = currentPlan !== "free";
+
   // ─── Razorpay Checkout Flow ────────────────────────────────────
   const handleSubscribe = async () => {
     if (selectedPlan === "free" || selectedPlan === currentPlan) return;
@@ -213,31 +226,47 @@ export default function Payment() {
     setErrorMsg("");
 
     try {
-      // 1. Create subscription on backend
-      const data = await createSubscription(selectedPlan, period);
+      // 1. Create subscription on backend (new sub or plan change)
+      const data = hasActiveSub
+        ? await changePlan(selectedPlan, period)
+        : await createSubscription(selectedPlan, period);
+
+      const isDowngrade = data.changeType === "downgrade";
 
       // 2. Open Razorpay Checkout
       const options = {
         key: import.meta.env.VITE_RAZORPAY_KEY_ID,
         subscription_id: data.razorpaySubscriptionId,
         name: "Drivya",
-        description: `${data.planName} Plan — ${yearly ? "Yearly" : "Monthly"}`,
+        description: isDowngrade
+          ? `Authorize ${data.planName} Plan — ${yearly ? "Yearly" : "Monthly"}`
+          : `${data.planName} Plan — ${yearly ? "Yearly" : "Monthly"}`,
         handler: async (response) => {
-          // 3. Verify payment
+          // 3. Verify payment / auth
           setStatus("verifying");
           try {
-            const result = await verifyPayment({
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_subscription_id: response.razorpay_subscription_id,
-              razorpay_signature: response.razorpay_signature,
-            });
+            let result;
+            if (hasActiveSub) {
+              result = await verifyPlanChange({
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_subscription_id: response.razorpay_subscription_id,
+                razorpay_signature: response.razorpay_signature,
+                changeType: data.changeType,
+              });
+            } else {
+              result = await verifyPayment({
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_subscription_id: response.razorpay_subscription_id,
+                razorpay_signature: response.razorpay_signature,
+              });
+            }
 
             // 4. Success
-            setSuccessPlan(result.subscription);
+            setSuccessPlan({ ...result.subscription, changeType: result.changeType });
             setStatus("success");
-            handleSuccessSideEffects(result.subscription);
+            handleSuccessSideEffects(result.subscription, result.changeType);
           } catch (err) {
-            setErrorMsg(err.response?.data?.message || "Payment verification failed.");
+            setErrorMsg(err.response?.data?.message || "Verification failed.");
             setStatus("error");
           }
         },
@@ -267,19 +296,20 @@ export default function Payment() {
       setStatus("idle"); // modal is now open, reset button state
     } catch (err) {
       setErrorMsg(
-        err.response?.data?.message || "Failed to create subscription. Please try again.",
+        err.response?.data?.message || "Failed to process. Please try again.",
       );
       setStatus("error");
     }
   };
 
-  const handleSuccessSideEffects = (subscription) => {
+  const handleSuccessSideEffects = (subscription, resultChangeType) => {
+    const isDowngradeResult = resultChangeType === "downgrade";
     setUserProfile((prev) => ({
       ...prev,
       subscription: {
         ...prev?.subscription,
-        plan: subscription.planKey,
-        status: "active",
+        plan: isDowngradeResult ? prev?.subscription?.plan : subscription.planKey,
+        status: isDowngradeResult ? "downgrade_scheduled" : "active",
       },
     }));
 
@@ -288,8 +318,10 @@ export default function Payment() {
       window.dispatchEvent(
         new CustomEvent("add-drivya-notification", {
           detail: {
-            title: "Subscription Activated",
-            description: `You are now on the ${subscription.planName} Plan. Thank you for your support!`,
+            title: isDowngradeResult ? "Downgrade Scheduled" : "Subscription Activated",
+            description: isDowngradeResult
+              ? `Your plan will change to ${subscription.planName} after the current billing cycle ends.`
+              : `You are now on the ${subscription.planName} Plan. Thank you for your support!`,
             type: "success",
             actionPath: "/dashboard/settings/billing",
             actionLabel: "View Billing",
@@ -319,20 +351,20 @@ export default function Payment() {
             className="flex flex-col items-center justify-center min-h-[60vh] text-center max-w-md mx-auto"
           >
             <div className="relative mb-6">
-              <div className="h-20 w-20 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center">
-                <CheckCircle2 className="h-10 w-10 text-emerald-400" />
+              <div className={`h-20 w-20 rounded-2xl flex items-center justify-center ${successPlan?.changeType === "downgrade" ? "bg-blue-500/10 border border-blue-500/25" : "bg-emerald-500/10 border border-emerald-500/25"}`}>
+                <CheckCircle2 className={`h-10 w-10 ${successPlan?.changeType === "downgrade" ? "text-blue-400" : "text-emerald-400"}`} />
               </div>
             </div>
 
             <h1 className="text-3xl font-display font-bold tracking-tight mb-2">
-              Subscription Active
+              {successPlan?.changeType === "downgrade" ? "Downgrade Scheduled" : successPlan?.changeType === "upgrade" ? "Plan Upgraded" : "Subscription Active"}
             </h1>
             <p className="text-muted-foreground text-sm mb-8 leading-relaxed">
-              Your drive storage space has been upgraded to{" "}
-              <span className="text-gradient font-bold">
-                {successPlan?.planName || "new tier"}
-              </span>{" "}
-              limits immediately.
+              {successPlan?.changeType === "downgrade" ? (
+                <>Your plan will change to{" "}<span className="text-gradient font-bold">{successPlan?.planName || "new tier"}</span>{" "}after the current billing cycle ends{successPlan?.effectiveAfter ? ` on ${new Date(successPlan.effectiveAfter).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}` : ""}.  You'll keep your current features until then.</>
+              ) : (
+                <>Your drive storage space has been {successPlan?.changeType === "upgrade" ? "upgraded" : "set"} to{" "}<span className="text-gradient font-bold">{successPlan?.planName || "new tier"}</span>{" "}limits immediately.</>
+              )}
             </p>
 
             <div className="flex gap-3">
@@ -719,28 +751,50 @@ export default function Payment() {
                           This plan is currently active
                         </div>
                       ) : (
-                        <button
-                          onClick={handleSubscribe}
-                          disabled={status === "creating" || status === "verifying"}
-                          className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-primary h-11 text-sm font-semibold text-primary-foreground shadow-glow hover:opacity-90 transition-all cursor-pointer disabled:opacity-50"
-                        >
-                          {status === "creating" ? (
-                            <>
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              Creating order…
-                            </>
-                          ) : status === "verifying" ? (
-                            <>
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              Verifying payment…
-                            </>
-                          ) : (
-                            <>
-                              Confirm & Pay ₹{priceDisplay}
-                              <ChevronRight className="h-3.5 w-3.5" />
-                            </>
+                        <>
+                          <button
+                            onClick={handleSubscribe}
+                            disabled={status === "creating" || status === "verifying"}
+                            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-primary h-11 text-sm font-semibold text-primary-foreground shadow-glow hover:opacity-90 transition-all cursor-pointer disabled:opacity-50"
+                          >
+                            {status === "creating" ? (
+                              <>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                {changeType === "downgrade" ? "Scheduling…" : "Creating order…"}
+                              </>
+                            ) : status === "verifying" ? (
+                              <>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                Verifying…
+                              </>
+                            ) : changeType === "upgrade" ? (
+                              <>
+                                Upgrade & Pay ₹{priceDisplay}
+                                <ChevronRight className="h-3.5 w-3.5" />
+                              </>
+                            ) : changeType === "downgrade" ? (
+                              <>
+                                Schedule Downgrade
+                                <ChevronRight className="h-3.5 w-3.5" />
+                              </>
+                            ) : (
+                              <>
+                                Confirm & Pay ₹{priceDisplay}
+                                <ChevronRight className="h-3.5 w-3.5" />
+                              </>
+                            )}
+                          </button>
+                          {changeType === "upgrade" && (
+                            <p className="text-[10px] text-muted-foreground/70 text-center">
+                              Your current plan will be cancelled immediately.
+                            </p>
                           )}
-                        </button>
+                          {changeType === "downgrade" && (
+                            <p className="text-[10px] text-muted-foreground/70 text-center">
+                              Current plan stays active until the billing cycle ends. New plan starts after.
+                            </p>
+                          )}
+                        </>
                       )}
 
                       <p className="text-[9px] text-muted-foreground/60 text-center flex items-center justify-center gap-1.5">
