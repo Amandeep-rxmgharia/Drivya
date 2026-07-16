@@ -64,22 +64,31 @@ export async function createSubscription(userId, planKey, period) {
   let customerId = user.subscription?.razorpayCustomerId;
 
   if (!customerId) {
-    const customer = await razorpay.customers.create({
-      name: user.name,
-      email: user.email,
-      notes: { userId: userId.toString() },
-    });
-    customerId = customer.id;
+    try {
+      const customer = await razorpay.customers.create({
+        name: user.name,
+        email: user.email,
+        notes: { userId: userId.toString() },
+      });
+      customerId = customer.id;
 
-    await User.findByIdAndUpdate(userId, {
-      "subscription.razorpayCustomerId": customerId,
-    });
+      await User.findByIdAndUpdate(userId, {
+        "subscription.razorpayCustomerId": customerId,
+      });
+    } catch (err) {
+      // Customer with this email may already exist in Razorpay
+      // (e.g. user deleted their account and re-registered with the same email).
+      // Proceed without customer_id — Razorpay subscriptions work without it.
+      console.warn(
+        `[Subscription] Could not create Razorpay customer for ${user.email}: ${err.message}. Proceeding without customer_id.`,
+      );
+      customerId = null;
+    }
   }
 
   // 4. Create Razorpay subscription
-  const rzpSubscription = await razorpay.subscriptions.create({
+  const subscriptionPayload = {
     plan_id: razorpayPlanId,
-    customer_id: customerId,
     total_count: period === "yearly" ? 5 : 60, // max billing cycles
     customer_notify: 1,
     notes: {
@@ -87,7 +96,11 @@ export async function createSubscription(userId, planKey, period) {
       planKey,
       period,
     },
-  });
+  };
+  if (customerId) {
+    subscriptionPayload.customer_id = customerId;
+  }
+  const rzpSubscription = await razorpay.subscriptions.create(subscriptionPayload);
 
   // 5. Store in DB
   const subscription = await Subscription.create({
@@ -225,16 +238,16 @@ export async function cancelSubscription(userId) {
 
   // Cancel on Razorpay (at end of current billing cycle)
   await razorpay.subscriptions.cancel(subscription.razorpaySubscriptionId, {
-    cancel_at_cycle_end: 1,
+    cancel_at_cycle_end: true,
   });
 
   subscription.cancelledAt = new Date();
   subscription.cancelReason = "user_requested";
   await subscription.save();
 
-  // Update user status (plan stays until period ends)
+  // Update user status — plan stays active until period ends, mark as cancel_scheduled
   await User.findByIdAndUpdate(userId, {
-    "subscription.status": "cancelled",
+    "subscription.status": "cancel_scheduled",
   });
 
   const planName = PLANS[subscription.planKey]?.name || subscription.planKey;

@@ -166,7 +166,7 @@ export default function Payment() {
     return "pro";
   });
 
-  const [yearly, setYearly] = useState(true);
+  const [yearly, setYearly] = useState(false);
   const [status, setStatus] = useState("idle"); // idle | creating | verifying | success | error
   const [errorMsg, setErrorMsg] = useState("");
   const [successPlan, setSuccessPlan] = useState(null);

@@ -5,14 +5,17 @@ import {
   ChevronDown,
   Clock,
   Cloud,
+  Crown,
   Folder,
   Home,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
+  Rocket,
   Search,
   Settings,
   Share2,
+  Shield,
   Sparkles,
   Star,
   Trash2,
@@ -28,6 +31,7 @@ import {
   Sun,
   Keyboard,
   X,
+  Zap,
   CheckCircle2,
   Loader2,
 } from "lucide-react";
@@ -64,6 +68,22 @@ const navMain = [
   { icon: Trash2, label: "Trash", to: "trash" },
   { icon: ShieldCheck, label: "Admin Panel", to: "admin" },
 ];
+
+const PLAN_DISPLAY_NAMES = {
+  free: "Starter",
+  spark_go: "Lite",
+  boost: "Plus",
+  pro: "Pro",
+  apex: "Max",
+};
+
+const PLAN_ICONS = {
+  free: Zap,
+  spark_go: Rocket,
+  boost: Shield,
+  pro: Crown,
+  apex: Sparkles,
+};
 
 function formatBytes(bytes) {
   if (bytes == null) return "0 B";
@@ -132,7 +152,7 @@ function Sidebar({ collapsed, onClose, mobileOpen, userProfile }) {
                   Drivya
                 </span>
                 <span className="text-[10.5px] font-medium text-muted-foreground mt-1">
-                  Personal · Pro
+                  Personal · {userProfile?.tier || "Starter"}
                 </span>
               </div>
             )}
@@ -162,10 +182,16 @@ function Sidebar({ collapsed, onClose, mobileOpen, userProfile }) {
               <span className="text-xs font-semibold text-foreground/90">
                 Storage
               </span>
-              <span className={chip}>
-                <Sparkles className="h-3 w-3 text-primary" />
-                {userProfile?.tier || "Free"}
-              </span>
+              {(() => {
+                const planKey = userProfile?.planKey || "free";
+                const PlanIcon = PLAN_ICONS[planKey] || Zap;
+                return (
+                  <span className={chip}>
+                    <PlanIcon className="h-3 w-3 text-primary" />
+                    {userProfile?.tier || "Starter"}
+                  </span>
+                );
+              })()}
             </div>
             <div className="mt-3 h-1.5 w-full rounded-full bg-secondary/60 overflow-hidden">
               <motion.div
@@ -970,7 +996,8 @@ const mapUserProfile = (user) => {
     avatarUrl: user.avatarUrl || "",
     storageUsed: user.storageUsed || 0,
     storageLimit: user.storageLimit || 1024 * 1024 * 1024,
-    tier: user.storageLimit > 2 * 1024 * 1024 * 1024 ? "Pro" : "Free",
+    planKey: user.subscription?.plan || "free",
+    tier: PLAN_DISPLAY_NAMES[user.subscription?.plan] || "Starter",
     loginAlerts: user.loginAlerts !== false,
     twoFAEnabled: user.twoFAEnabled,
     role: user.role || "user",
@@ -1257,8 +1284,9 @@ export function DashboardLayout() {
             avatarUrl: data.user.avatarUrl || "",
             storageUsed: data.user.storageUsed || 0,
             storageLimit: data.user.storageLimit || 1024 * 1024 * 1024,
+            planKey: data.user.subscription?.plan || "free",
             tier:
-              data.user.storageLimit > 2 * 1024 * 1024 * 1024 ? "Pro" : "Free",
+              PLAN_DISPLAY_NAMES[data.user.subscription?.plan] || "Starter",
             loginAlerts: data.user.loginAlerts !== false,
             twoFAEnabled: data.user.twoFAEnabled,
             role: data.user.role || "user",

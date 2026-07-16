@@ -117,7 +117,7 @@ const userSchema = new Schema(
       },
       status: {
         type: String,
-        enum: ["active", "past_due", "cancelled", "none"],
+        enum: ["active", "past_due", "cancelled", "cancel_scheduled", "none"],
         default: "none",
       },
       subscriptionId: {
