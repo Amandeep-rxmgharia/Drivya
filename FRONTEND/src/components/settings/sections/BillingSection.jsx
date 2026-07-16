@@ -12,6 +12,9 @@ import {
   Loader2,
   AlertCircle,
   XCircle,
+  Zap,
+  Rocket,
+  Shield,
 } from "lucide-react";
 import {
   SettingSection,
@@ -24,11 +27,52 @@ import {
 } from "../../../../api/subscription.js";
 
 const PLAN_NAMES = {
-  free: "Drivya Starter",
-  spark_go: "Drivya Lite",
-  boost: "Drivya Plus",
-  pro: "Drivya Pro",
-  apex: "Drivya Max",
+  free: "Starter",
+  spark_go: "Lite",
+  boost: "Plus",
+  pro: "Pro",
+  apex: "Max",
+};
+
+const PLAN_ICONS = {
+  free: Zap,
+  spark_go: Rocket,
+  boost: Shield,
+  pro: Crown,
+  apex: Sparkles,
+};
+
+const PLAN_STYLES = {
+  free: {
+    bg: "bg-slate-500/10 dark:bg-slate-500/20",
+    text: "text-slate-500 dark:text-slate-400",
+    border: "border-slate-500/20 dark:border-slate-500/30",
+    glow: "rgba(148, 163, 184, 0.12)",
+  },
+  spark_go: {
+    bg: "bg-blue-500/10 dark:bg-blue-500/20",
+    text: "text-blue-500 dark:text-blue-400",
+    border: "border-blue-500/20 dark:border-blue-500/30",
+    glow: "rgba(59, 130, 246, 0.2)",
+  },
+  boost: {
+    bg: "bg-violet-500/10 dark:bg-violet-500/20",
+    text: "text-violet-500 dark:text-violet-400",
+    border: "border-violet-500/20 dark:border-violet-500/30",
+    glow: "rgba(139, 92, 246, 0.2)",
+  },
+  pro: {
+    bg: "bg-amber-500/10 dark:bg-amber-500/20",
+    text: "text-amber-500 dark:text-amber-400",
+    border: "border-amber-500/20 dark:border-amber-500/30",
+    glow: "rgba(245, 158, 11, 0.25)",
+  },
+  apex: {
+    bg: "bg-rose-500/10 dark:bg-rose-500/20",
+    text: "text-rose-500 dark:text-rose-400",
+    border: "border-rose-500/20 dark:border-rose-500/30",
+    glow: "rgba(244, 63, 94, 0.2)",
+  },
 };
 
 export default function BillingSection({ userProfile }) {
@@ -71,10 +115,15 @@ export default function BillingSection({ userProfile }) {
   const planKey = subData?.plan?.key || userProfile?.subscription?.plan || "free";
   const planName = PLAN_NAMES[planKey] || "Spark Free";
   const isFreePlan = planKey === "free";
+  const style = PLAN_STYLES[planKey] || PLAN_STYLES.free;
+  const IconComponent = PLAN_ICONS[planKey] || Zap;
   const subscription = subData?.subscription;
+  const pendingPlanChange = subscription?.pendingPlanChange;
   const isActive = subscription?.status === "active" || subscription?.status === "authenticated";
   const isCancelled = subscription?.cancelledAt != null;
-  const isDowngradeScheduled = userProfile?.subscription?.status === "downgrade_scheduled";
+  const isDowngradeScheduled =
+    (userProfile?.subscription?.status === "downgrade_scheduled" || !!pendingPlanChange) &&
+    (!pendingPlanChange || pendingPlanChange.newPlanKey !== planKey);
 
   // Format price display
   const price = subData?.plan?.price || { monthly: 0, yearly: 0 };
@@ -165,19 +214,27 @@ export default function BillingSection({ userProfile }) {
       >
         <div className="px-6 py-5">
           <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
-            <div className="flex items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-primary shadow-glow text-primary-foreground">
-                <Sparkles className="h-6 w-6" />
+            <div className="flex items-center gap-3.5">
+              <div
+                className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border ${style.bg} ${style.text} ${style.border} transition-all duration-300`}
+                style={{ boxShadow: `0 0 14px ${style.glow}` }}
+              >
+                <IconComponent className="h-5 w-5" />
               </div>
               <div>
-                <div className="font-display text-xl font-semibold tracking-tight text-foreground">
-                  {planName} Plan
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-foreground">
+                    {planName}
+                  </span>
+                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border ${style.bg} ${style.text} ${style.border}`}>
+                    Active
+                  </span>
                 </div>
-                <div className="text-sm text-muted-foreground mt-0.5">
-                  <span className="font-display text-2xl font-bold text-foreground">
+                <div className="text-xs text-muted-foreground mt-1 flex items-baseline gap-1">
+                  <span className="font-semibold text-foreground">
                     {priceStr}
                   </span>
-                  <span className="text-xs">{billingCycle}</span>
+                  <span>{billingCycle}</span>
                 </div>
               </div>
             </div>
@@ -206,24 +263,6 @@ export default function BillingSection({ userProfile }) {
                     >
                       Cancel
                     </button>
-                  )}
-                  {isDowngradeScheduled && (
-                    <>
-                      <span className="inline-flex h-9 items-center gap-1.5 px-3 text-[11px] font-semibold text-blue-500 bg-blue-500/10 border border-blue-500/20 rounded-xl">
-                        <ArrowDownRight className="h-3 w-3" />
-                        Downgrade scheduled
-                      </span>
-                      <button
-                        onClick={handleCancelDowngrade}
-                        disabled={cancelDowngradeLoading}
-                        className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-secondary/40 px-4 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors cursor-pointer disabled:opacity-50"
-                      >
-                        {cancelDowngradeLoading ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : null}
-                        Undo Downgrade
-                      </button>
-                    </>
                   )}
                   {isCancelled && !isDowngradeScheduled && (
                     <span className="inline-flex h-9 items-center gap-1.5 px-3 text-[11px] font-semibold text-amber-500 bg-amber-500/10 border border-amber-500/20 rounded-xl">
@@ -280,12 +319,12 @@ export default function BillingSection({ userProfile }) {
             ].map((stat) => (
               <div
                 key={stat.label}
-                className="rounded-xl border border-border/60 bg-secondary/20 p-3 text-center"
+                className="rounded-xl border border-border/40 bg-secondary/10 p-3 text-center transition-all duration-200 hover:border-border/60 hover:bg-secondary/20"
               >
-                <div className="font-display text-sm font-semibold text-foreground">
+                <div className="text-sm font-medium text-foreground">
                   {stat.value}
                 </div>
-                <div className="text-[10px] font-medium text-muted-foreground mt-0.5">
+                <div className="text-[10px] text-muted-foreground/80 mt-0.5">
                   {stat.label}
                 </div>
               </div>
@@ -293,6 +332,83 @@ export default function BillingSection({ userProfile }) {
           </div>
         </div>
       </SettingSection>
+
+      {/* Scheduled Downgrade */}
+      {isDowngradeScheduled && pendingPlanChange && (
+        <SettingSection
+          id="scheduled-downgrade"
+          icon={ArrowDownRight}
+          title="Scheduled Downgrade"
+          description="Details of your upcoming plan change."
+        >
+          <div className="px-6 py-5">
+            <div className="flex flex-col md:flex-row md:items-center gap-6 justify-between rounded-xl border border-blue-500/20 bg-blue-500/[0.02] p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
+                
+                {/* Visual Transition */}
+                <div className="flex items-center gap-2 bg-secondary/20 p-2.5 rounded-xl border border-border/40">
+                  <div className="flex flex-col items-center">
+                    <div
+                      className={`flex h-9 w-9 items-center justify-center rounded-lg border ${style.bg} ${style.text} ${style.border}`}
+                      style={{ boxShadow: `0 0 10px ${style.glow}` }}
+                    >
+                      <IconComponent className="h-4 w-4" />
+                    </div>
+                  </div>
+
+                  <div className="text-blue-500/60 flex items-center justify-center">
+                    <ArrowDownRight className="h-4 w-4" />
+                  </div>
+
+                  {(() => {
+                    const nextPlanKey = pendingPlanChange?.newPlanKey || "free";
+                    const nextStyle = PLAN_STYLES[nextPlanKey] || PLAN_STYLES.free;
+                    const NextIconComponent = PLAN_ICONS[nextPlanKey] || Zap;
+                    return (
+                      <div className="flex flex-col items-center">
+                        <div
+                          className={`flex h-9 w-9 items-center justify-center rounded-lg border ${nextStyle.bg} ${nextStyle.text} ${nextStyle.border}`}
+                          style={{ boxShadow: `0 0 10px ${nextStyle.glow}` }}
+                        >
+                          <NextIconComponent className="h-4 w-4" />
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* Plan change explanation text */}
+                <div className="space-y-0.5">
+                  <div className="text-sm font-semibold text-foreground flex items-center gap-2 flex-wrap">
+                    Downgrade Scheduled
+                  </div>
+                  <div className="text-xs text-muted-foreground leading-relaxed">
+                    Changing from <span className="font-semibold text-foreground">{planName}</span> to{" "}
+                    <span className="font-semibold text-foreground">
+                      {PLAN_NAMES[pendingPlanChange?.newPlanKey] || pendingPlanChange?.newPlanName || "Starter Plan"}
+                    </span>{" "}
+                    on <span className="font-medium text-foreground">{renewsVal}</span>.
+                  </div>
+                </div>
+              </div>
+
+              {/* Undo downgrade button */}
+              <div className="shrink-0">
+                <button
+                  onClick={handleCancelDowngrade}
+                  disabled={cancelDowngradeLoading}
+                  className="inline-flex h-9 items-center gap-2 rounded-xl border border-blue-500/20 bg-blue-500/5 px-4 text-xs font-semibold text-blue-500 hover:bg-blue-500/10 hover:text-blue-600 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {cancelDowngradeLoading ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : null}
+                  Undo Downgrade
+                </button>
+              </div>
+            </div>
+          </div>
+        </SettingSection>
+      )}
 
       {/* Payment Method */}
       {!isFreePlan && (

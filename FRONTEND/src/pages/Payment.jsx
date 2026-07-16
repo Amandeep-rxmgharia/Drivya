@@ -36,7 +36,7 @@ const MB = 1024 * 1024;
 const PLANS = [
   {
     key: "free",
-    name: "Drivya Starter",
+    name: "Starter",
     shortName: "Starter",
     icon: Zap,
     price: { monthly: 0, yearly: 0 },
@@ -52,7 +52,7 @@ const PLANS = [
   },
   {
     key: "spark_go",
-    name: "Drivya Lite",
+    name: "Lite",
     shortName: "Lite",
     icon: Rocket,
     price: { monthly: 39, yearly: 399 },
@@ -69,7 +69,7 @@ const PLANS = [
   },
   {
     key: "boost",
-    name: "Drivya Plus",
+    name: "Plus",
     shortName: "Plus",
     icon: Shield,
     price: { monthly: 149, yearly: 1499 },
@@ -91,7 +91,7 @@ const PLANS = [
   },
   {
     key: "pro",
-    name: "Drivya Pro",
+    name: "Pro",
     shortName: "Pro",
     icon: Crown,
     featured: true,
@@ -114,7 +114,7 @@ const PLANS = [
   },
   {
     key: "apex",
-    name: "Drivya Max",
+    name: "Max",
     shortName: "Max",
     icon: Sparkles,
     price: { monthly: 699, yearly: 6999 },
