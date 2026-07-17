@@ -179,6 +179,7 @@ export default function BillingSection({ userProfile }) {
       const sub = await getSubscription();
       setSubData(sub);
       setShowCancelConfirm(false);
+      window.dispatchEvent(new CustomEvent("refresh-drive"));
     } catch (err) {
       setCancelError(err.response?.data?.message || "Failed to cancel. Please try again.");
     } finally {
@@ -195,6 +196,7 @@ export default function BillingSection({ userProfile }) {
       // Refresh data
       const sub = await getSubscription();
       setSubData(sub);
+      window.dispatchEvent(new CustomEvent("refresh-drive"));
     } catch (err) {
       setCancelError(err.response?.data?.message || "Failed to cancel downgrade. Please try again.");
     } finally {

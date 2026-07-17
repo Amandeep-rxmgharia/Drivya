@@ -339,6 +339,9 @@ export default function Payment() {
       },
     }));
 
+    // Trigger dashboard profile update
+    window.dispatchEvent(new CustomEvent("refresh-drive"));
+
     // Toast event
     const toastMap = {
       downgrade: {
@@ -768,11 +771,9 @@ export default function Payment() {
                             {changeType === "billing_cycle_change" ? (
                               <>
                                 <span className="text-2xl font-display font-extrabold text-foreground">
-                                  ₹0
+                                  ₹5 
                                 </span>
-                                <span className="text-xs text-muted-foreground ml-0.5">
-                                  today
-                                </span>
+                              
                               </>
                             ) : (
                               <>
