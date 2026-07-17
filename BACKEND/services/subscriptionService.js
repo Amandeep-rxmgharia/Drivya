@@ -327,53 +327,127 @@ export async function getSubscriptionDetails(userId) {
 
 // ─── Get Invoices from Razorpay ──────────────────────────────────
 export async function getInvoices(userId) {
-  // Find ALL subscriptions for this user (not just the latest)
-  const subscriptions = await Subscription.find({
-    userId,
-    razorpaySubscriptionId: { $exists: true, $ne: "" },
-  })
-    .sort({ createdAt: -1 })
-    .lean();
-
-  if (!subscriptions.length) {
-    return [];
-  }
-
   try {
-    // Fetch invoices from all subscriptions in parallel
-    const invoicePromises = subscriptions.map(async (sub) => {
+    // 1. Fetch user to check for razorpayCustomerId
+    const user = await User.findById(userId).lean();
+
+    // 2. Find ALL subscriptions for this user
+    const subscriptions = await Subscription.find({
+      userId,
+      razorpaySubscriptionId: { $exists: true, $ne: "" },
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    if (!subscriptions.length) {
+      return [];
+    }
+
+    // Set of valid subscription IDs in our database for this user
+    const validSubscriptionIds = new Set(
+      subscriptions.map((sub) => sub.razorpaySubscriptionId)
+    );
+
+    // 3. Gather all unique non-empty customer IDs
+    const customerIds = new Set();
+    if (user?.subscription?.razorpayCustomerId) {
+      customerIds.add(user.subscription.razorpayCustomerId);
+    }
+    for (const sub of subscriptions) {
+      if (sub.razorpayCustomerId) {
+        customerIds.add(sub.razorpayCustomerId);
+      }
+    }
+
+    const allInvoices = [];
+    const fetchedSubscriptionIds = new Set();
+
+    // 4. Fetch invoices by customer ID in parallel (usually just 1 request)
+    const customerPromises = Array.from(customerIds).map(async (custId) => {
       try {
         const invoices = await razorpay.invoices.all({
-          subscription_id: sub.razorpaySubscriptionId,
+          customer_id: custId,
+          count: 100, // Fetch up to 100 to get a complete history
         });
-        return (invoices.items || []).map((inv) => ({
-          id: inv.id,
-          date: inv.date ? new Date(inv.date * 1000).toLocaleDateString("en-IN") : null,
-          dateRaw: inv.date || 0,
-          amount: inv.amount ? (inv.amount / 100).toFixed(2) : "0.00",
-          currency: inv.currency || "INR",
-          status: inv.status,
-          invoiceUrl: inv.short_url || null,
-        }));
-      } catch {
+
+        return (invoices.items || []).map((inv) => {
+          if (inv.subscription_id) {
+            fetchedSubscriptionIds.add(inv.subscription_id);
+          }
+          return {
+            id: inv.id,
+            subscription_id: inv.subscription_id,
+            date: inv.date ? new Date(inv.date * 1000).toLocaleDateString("en-IN") : null,
+            dateRaw: inv.date || 0,
+            amount: inv.amount ? (inv.amount / 100).toFixed(2) : "0.00",
+            currency: inv.currency || "INR",
+            status: inv.status,
+            invoiceUrl: inv.short_url || null,
+          };
+        });
+      } catch (err) {
+        const errorMsg = err?.error?.description || err?.message || JSON.stringify(err);
+        console.error(`[Invoices] Failed to fetch invoices for customer ${custId}:`, errorMsg);
         return [];
       }
     });
 
-    const allInvoices = (await Promise.all(invoicePromises)).flat();
+    const customerInvoices = (await Promise.all(customerPromises)).flat();
+    allInvoices.push(...customerInvoices);
 
-    // Sort by date descending and deduplicate by invoice ID
+    // 5. Fallback: Fetch invoices for subscriptions that were NOT covered by the customer-based fetch
+    // Only fetch for subscriptions that were actually active, authenticated, or had a period start
+    const remainingSubscriptions = subscriptions.filter(
+      (sub) =>
+        !fetchedSubscriptionIds.has(sub.razorpaySubscriptionId) &&
+        (sub.status === "active" ||
+          sub.status === "authenticated" ||
+          sub.currentPeriodStart != null)
+    );
+
+    if (remainingSubscriptions.length > 0) {
+      const subPromises = remainingSubscriptions.map(async (sub) => {
+        try {
+          const invoices = await razorpay.invoices.all({
+            subscription_id: sub.razorpaySubscriptionId,
+            count: 100,
+          });
+          return (invoices.items || []).map((inv) => ({
+            id: inv.id,
+            subscription_id: inv.subscription_id,
+            date: inv.date ? new Date(inv.date * 1000).toLocaleDateString("en-IN") : null,
+            dateRaw: inv.date || 0,
+            amount: inv.amount ? (inv.amount / 100).toFixed(2) : "0.00",
+            currency: inv.currency || "INR",
+            status: inv.status,
+            invoiceUrl: inv.short_url || null,
+          }));
+        } catch (err) {
+          const errorMsg = err?.error?.description || err?.message || JSON.stringify(err);
+          console.error(`[Invoices] Failed to fetch invoices for subscription ${sub.razorpaySubscriptionId}:`, errorMsg);
+          return [];
+        }
+      });
+
+      const subInvoices = (await Promise.all(subPromises)).flat();
+      allInvoices.push(...subInvoices);
+    }
+
+    // 6. Sort, filter by valid subscriptions, and deduplicate
     const seen = new Set();
     return allInvoices
       .sort((a, b) => b.dateRaw - a.dateRaw)
       .filter((inv) => {
+        if (!inv.subscription_id || !validSubscriptionIds.has(inv.subscription_id)) {
+          return false;
+        }
         if (seen.has(inv.id)) return false;
         seen.add(inv.id);
         return true;
       })
-      .map(({ dateRaw, ...inv }) => inv);
-  } catch {
-    // If Razorpay API fails, return empty (don't break the page)
+      .map(({ dateRaw, subscription_id, ...inv }) => inv);
+  } catch (err) {
+    console.error("[Invoices] Unexpected error in getInvoices:", err.message);
     return [];
   }
 }
@@ -1087,7 +1161,7 @@ async function handleSubscriptionCancelled(payload) {
   await notify(
     subscription.userId,
     "Subscription Ended",
-    `Your ${planName} plan has ended. You're now on the Spark Free plan.`,
+    `Your ${planName} plan has ended.`,
   );
 }
 
