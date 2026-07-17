@@ -241,6 +241,38 @@ export async function cancelSubscription(userId) {
   // Cancel on Razorpay (at end of current billing cycle)
   await razorpay.subscriptions.cancel(subscription.razorpaySubscriptionId, true);
 
+  // If there is ANY pending plan change / continuation, cancel it immediately in Razorpay and DB
+  if (subscription.pendingPlanChange?.newPlanKey) {
+    const pendingRzpId = subscription.pendingPlanChange.newRazorpaySubscriptionId;
+    const pendingDbId = subscription.pendingPlanChange.newSubscriptionId;
+
+    if (pendingDbId) {
+      await Subscription.findByIdAndUpdate(pendingDbId, {
+        status: SUBSCRIPTION_STATUS.CANCELLED,
+        cancelledAt: new Date(),
+        cancelReason: "cancelled_with_parent",
+      });
+    }
+
+    if (pendingRzpId) {
+      try {
+        await razorpay.subscriptions.cancel(pendingRzpId, false); // Cancel immediately
+      } catch (err) {
+        console.warn(`[Cancel] Failed to cancel pending future subscription ${pendingRzpId}: ${err.message}`);
+      }
+    }
+
+    // Clear pending plan change structure on the active subscription
+    subscription.pendingPlanChange = {
+      newPlanKey: null,
+      newPeriod: null,
+      newRazorpaySubscriptionId: null,
+      newSubscriptionId: null,
+      scheduledAt: null,
+      effectiveAfter: null,
+    };
+  }
+
   subscription.cancelledAt = new Date();
   subscription.cancelReason = "user_requested";
   await subscription.save();
@@ -1047,10 +1079,10 @@ export async function cancelScheduledDowngrade(userId) {
   }
 
   // 3. Handle the old subscription.
-  // Razorpay does NOT support un-cancelling a scheduled cancellation.
-  // The old sub will still cancel at cycle end. To keep the user on their
-  // current plan, we create a NEW subscription for the SAME plan with
-  // start_at = old sub's cycle end. This ensures seamless continuation.
+  // Check if the user had previously cancelled the current subscription.
+  // If so, we do NOT want to create a continuation subscription to keep them on the plan.
+  const previouslyCancelled = oldSub.cancelledAt != null;
+
   const oldPlanRzpId = getRazorpayPlanId(oldSub.planKey, oldSub.period);
   const startAt = oldSub.currentPeriodEnd
     ? Math.floor(new Date(oldSub.currentPeriodEnd).getTime() / 1000)
@@ -1058,7 +1090,11 @@ export async function cancelScheduledDowngrade(userId) {
 
   let continuationSubId = null;
 
-  if (oldPlanRzpId && startAt) {
+  // Razorpay does NOT support un-cancelling a scheduled cancellation.
+  // The old sub will still cancel at cycle end. To keep the user on their
+  // current plan, we create a NEW subscription for the SAME plan with
+  // start_at = old sub's cycle end. This ensures seamless continuation.
+  if (!previouslyCancelled && oldPlanRzpId && startAt) {
     try {
       const continuationPayload = {
         plan_id: oldPlanRzpId,
@@ -1107,8 +1143,8 @@ export async function cancelScheduledDowngrade(userId) {
     }
   }
 
-  // If continuation failed, just clear the downgrade intent
-  if (!continuationSubId) {
+  // If continuation failed or user previously cancelled, just clear the downgrade intent
+  if (previouslyCancelled || !continuationSubId) {
     oldSub.pendingPlanChange = {
       newPlanKey: null,
       newPeriod: null,
@@ -1117,13 +1153,13 @@ export async function cancelScheduledDowngrade(userId) {
       scheduledAt: null,
       effectiveAfter: null,
     };
-    oldSub.cancelReason = "downgrade_undone";
+    oldSub.cancelReason = previouslyCancelled ? "user_requested" : "downgrade_undone";
     await oldSub.save();
   }
 
-  // 4. Restore user subscription status to active
+  // 4. Restore user subscription status to active or cancel_scheduled
   await User.findByIdAndUpdate(userId, {
-    "subscription.status": "active",
+    "subscription.status": previouslyCancelled ? "cancel_scheduled" : "active",
   });
 
   const planName = PLANS[oldSub.planKey]?.name || oldSub.planKey;
@@ -1308,7 +1344,12 @@ async function handleSubscriptionCancelled(payload) {
   // When a user undoes a scheduled downgrade, or schedules a downgrade over
   // a continuation subscription, or supersedes a cycle change, the future subscription is cancelled.
   // Don't revert — the user is still on their plan.
-  if (subscription.cancelReason === "downgrade_cancelled_by_user" || subscription.cancelReason === "superseded_by_downgrade" || subscription.cancelReason === "superseded_by_cycle_change") {
+  if (
+    subscription.cancelReason === "downgrade_cancelled_by_user" ||
+    subscription.cancelReason === "superseded_by_downgrade" ||
+    subscription.cancelReason === "superseded_by_cycle_change" ||
+    subscription.cancelReason === "cancelled_with_parent"
+  ) {
     console.log(`[Webhook] Skipping reversion for cancelled future subscription ${sub.id} (${subscription.cancelReason}).`);
     return;
   }
