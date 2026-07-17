@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
   X,
@@ -28,7 +28,7 @@ import { iconBtn } from "@/components/dashboard/dashboard-tokens";
 // Import mock files from RecentFiles
 // import { RECENT_FILES } from "@/pages/RecentFiles";
 import { listActivities } from "../../../api/activities.js";
-import { chatWithAi } from "../../../api/ai.js";
+import { chatWithAi, applySmartOrganization } from "../../../api/ai.js";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
 /* ───────────────────────── Helpers ───────────────────────── */
@@ -51,6 +51,58 @@ function formatRelativeTime(date) {
   });
 }
 
+function extractTagContent(text, tagName) {
+  const startTag = `<${tagName}>`;
+  const endTag = `</${tagName}>`;
+  const startIndex = text.toLowerCase().indexOf(startTag.toLowerCase());
+  if (startIndex === -1) return { text, content: null };
+
+  const contentStartIndex = startIndex + startTag.length;
+  const endIndex = text.toLowerCase().indexOf(endTag.toLowerCase(), contentStartIndex);
+
+  if (endIndex !== -1) {
+    const content = text.substring(contentStartIndex, endIndex).trim();
+    const newText = (text.substring(0, startIndex) + text.substring(endIndex + endTag.length)).trim();
+    return { text: newText, content };
+  } else {
+    // Unclosed tag: match to the end of the text
+    const content = text.substring(contentStartIndex).trim();
+    const newText = text.substring(0, startIndex).trim();
+    return { text: newText, content };
+  }
+}
+
+function repairTruncatedJson(raw) {
+  let text = raw.trim();
+  if (!text) return null;
+
+  // Count open vs close brackets
+  const openBraces = (text.match(/\{/g) || []).length;
+  const closeBraces = (text.match(/\}/g) || []).length;
+  const openBrackets = (text.match(/\[/g) || []).length;
+  const closeBrackets = (text.match(/\]/g) || []).length;
+
+  // Close unclosed string if it's cut off inside a string
+  const doubleQuotes = (text.match(/"/g) || []).length;
+  if (doubleQuotes % 2 !== 0) {
+    text += '"';
+  }
+
+  // Close unclosed object braces
+  const braceDiff = openBraces - closeBraces;
+  if (braceDiff > 0) {
+    text += "}".repeat(braceDiff);
+  }
+
+  // Close unclosed array brackets
+  const bracketDiff = openBrackets - closeBrackets;
+  if (bracketDiff > 0) {
+    text += "]".repeat(bracketDiff);
+  }
+
+  return text;
+}
+
 function parseAiResponseContent(text, recentFiles = []) {
   let cleanedText = text || "";
   let summary = null;
@@ -58,27 +110,25 @@ function parseAiResponseContent(text, recentFiles = []) {
   let searchResults = null;
   let suggestions = null;
 
-  // Extract <summary>...</summary>
-  const summaryMatch = cleanedText.match(/<summary>([\s\S]*?)<\/summary>/i);
-  if (summaryMatch) {
-    summary = summaryMatch[1].trim();
-    cleanedText = cleanedText.replace(/<summary>[\s\S]*?<\/summary>/i, "");
+  // Extract <summary>
+  const summaryRes = extractTagContent(cleanedText, "summary");
+  cleanedText = summaryRes.text;
+  if (summaryRes.content !== null) {
+    summary = summaryRes.content;
   }
 
-  // Extract <draft>...</draft>
-  const draftMatch = cleanedText.match(/<draft>([\s\S]*?)<\/draft>/i);
-  if (draftMatch) {
-    draft = draftMatch[1].trim();
-    cleanedText = cleanedText.replace(/<draft>[\s\S]*?<\/draft>/i, "");
+  // Extract <draft>
+  const draftRes = extractTagContent(cleanedText, "draft");
+  cleanedText = draftRes.text;
+  if (draftRes.content !== null) {
+    draft = draftRes.content;
   }
 
-  // Extract <search_results>...</search_results>
-  const searchMatch = cleanedText.match(/<search_results>([\s\S]*?)<\/search_results>/i);
-  if (searchMatch) {
-    const rawResults = searchMatch[1].trim();
-    cleanedText = cleanedText.replace(/<search_results>[\s\S]*?<\/search_results>/i, "");
-    
-    // Split searchResults by comma or newline and match against recentFiles
+  // Extract <search_results>
+  const searchRes = extractTagContent(cleanedText, "search_results");
+  cleanedText = searchRes.text;
+  if (searchRes.content !== null) {
+    const rawResults = searchRes.content;
     const names = rawResults.split(/,|\n/).map(n => n.trim().toLowerCase()).filter(Boolean);
     if (names.length > 0 && Array.isArray(recentFiles)) {
       searchResults = recentFiles.filter(f => 
@@ -87,16 +137,24 @@ function parseAiResponseContent(text, recentFiles = []) {
     }
   }
 
-  // Extract <suggestions>...</suggestions>
-  const suggestionsMatch = cleanedText.match(/<suggestions>([\s\S]*?)<\/suggestions>/i);
-  if (suggestionsMatch) {
-    const rawSug = suggestionsMatch[1].trim();
+  // Extract <suggestions>
+  const suggestionsRes = extractTagContent(cleanedText, "suggestions");
+  cleanedText = suggestionsRes.text;
+  if (suggestionsRes.content !== null) {
+    const rawSug = suggestionsRes.content;
     try {
       suggestions = JSON.parse(rawSug);
     } catch (e) {
-      console.warn("Failed to parse AI suggestions JSON", e);
+      console.warn("Failed to parse AI suggestions JSON, attempting repair", e);
+      const repairedSug = repairTruncatedJson(rawSug);
+      if (repairedSug) {
+        try {
+          suggestions = JSON.parse(repairedSug);
+        } catch (e2) {
+          console.warn("Failed to parse repaired AI suggestions JSON", e2);
+        }
+      }
     }
-    cleanedText = cleanedText.replace(/<suggestions>[\s\S]*?<\/suggestions>/i, "");
   }
 
   return {
@@ -110,11 +168,34 @@ function parseAiResponseContent(text, recentFiles = []) {
 
 // Custom simple hook to get Labs settings
 function useLabsSettings() {
-  const [settings, setSettings] = useState({
+  const DEFAULTS = {
     "ai-search": true,
-    "ai-summary": false,
+    "ai-summary": true,
     "ai-organize": false,
     "ai-writing": false,
+  };
+
+  const [settings, setSettings] = useState(() => {
+    const stored = localStorage.getItem("drivya-ai-features");
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        const merged = { ...DEFAULTS, ...parsed };
+
+        // One-time migration: enable ai-summary for existing users
+        if (!localStorage.getItem("drivya-labs-migrated-v2")) {
+          merged["ai-summary"] = true;
+          localStorage.setItem("drivya-ai-features", JSON.stringify(merged));
+          localStorage.setItem("drivya-labs-migrated-v2", "1");
+          window.dispatchEvent(new Event("drivya-labs-updated"));
+        }
+
+        return merged;
+      } catch (e) {
+        // ignore
+      }
+    }
+    return DEFAULTS;
   });
 
   useEffect(() => {
@@ -122,10 +203,12 @@ function useLabsSettings() {
       const stored = localStorage.getItem("drivya-ai-features");
       if (stored) {
         try {
-          setSettings(JSON.parse(stored));
+          setSettings({ ...DEFAULTS, ...JSON.parse(stored) });
         } catch (e) {
           // ignore
         }
+      } else {
+        setSettings(DEFAULTS);
       }
     };
     checkSettings();
@@ -150,6 +233,8 @@ export function AiAssistantPanel({
 }) {
   const labsSettings = useLabsSettings();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const currentDirId = searchParams.get("dir") || null;
   const [messages, setMessages] = useState([
     {
       id: "welcome",
@@ -397,9 +482,9 @@ export function AiAssistantPanel({
     let fileContext = null;
     if (customFileContext) {
       fileContext = {
-        id: customFileContext.id || customFileContext.resourceId,
-        name: customFileContext.name,
-        kind: customFileContext.kind,
+        id: customFileContext.resourceId || customFileContext._id || customFileContext.id,
+        name: customFileContext.name || customFileContext.originalName,
+        kind: customFileContext.kind || customFileContext.mimeType,
         owner: customFileContext.owner,
         size: customFileContext.size,
       };
@@ -409,9 +494,9 @@ export function AiAssistantPanel({
       );
       if (foundFile) {
         fileContext = {
-          id: foundFile.id || foundFile.resourceId,
-          name: foundFile.name,
-          kind: foundFile.kind,
+          id: foundFile.resourceId || foundFile._id || foundFile.id,
+          name: foundFile.name || foundFile.originalName,
+          kind: foundFile.kind || foundFile.mimeType,
           owner: foundFile.owner,
           size: foundFile.size,
         };
@@ -539,21 +624,57 @@ export function AiAssistantPanel({
 - **Analysis**: Standard file asset located in workspace. Encrypted at rest. Analysis indicates this contains application metadata and logs associated with the user profile.`;
   };
 
-  const handleApplyOrganization = () => {
+  const handleApplyOrganization = async (suggestions) => {
+    if (!suggestions || suggestions.length === 0) return;
     setOrganizing(true);
-    setTimeout(() => {
-      setOrganizing(false);
+    try {
+      const result = await applySmartOrganization({
+        suggestions,
+        parentDirId: currentDirId,
+      });
+
       setOrganizeSuccess(true);
+
+      let text = "✅ Smart organization completed!\n\n";
+      if (result.moved && result.moved.length > 0) {
+        text += "**Moved files:**\n";
+        result.moved.forEach((m) => {
+          text += `- \`${m.filename}\` → folder **${m.folder}**\n`;
+        });
+      }
+      if (result.skipped && result.skipped.length > 0) {
+        text += "\n**Skipped files:**\n";
+        result.skipped.forEach((s) => {
+          text += `- \`${s.filename}\`: ${s.reason}\n`;
+        });
+      }
+
       setMessages((prev) => [
         ...prev,
         {
           id: crypto.randomUUID(),
           sender: "ai",
-          text: "✅ Files have been successfully categorized! `Hero-shot-005.png` and `investor-deck.key` were moved to **launch-assets**; `api-routes.ts` was organized in a new folder **developer-core**.",
+          text,
           timestamp: new Date(),
         },
       ]);
-    }, 1500);
+
+      // Refresh My Drive view in real-time
+      window.dispatchEvent(new CustomEvent("refresh-drive"));
+    } catch (err) {
+      console.error("Failed to apply smart organization:", err);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          sender: "ai",
+          text: `❌ Failed to apply smart organization: ${err.response?.data?.message || err.message}`,
+          timestamp: new Date(),
+        },
+      ]);
+    } finally {
+      setOrganizing(false);
+    }
   };
 
   return createPortal(
@@ -767,7 +888,7 @@ export function AiAssistantPanel({
 
                             {!organizeSuccess && (
                               <button
-                                onClick={handleApplyOrganization}
+                                onClick={() => handleApplyOrganization(msg.suggestions)}
                                 disabled={organizing}
                                 className="w-full inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-gradient-primary text-xs font-semibold text-primary-foreground shadow-glow hover:opacity-95 transition-all disabled:opacity-50 font-display cursor-pointer"
                               >

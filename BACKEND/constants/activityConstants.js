@@ -8,11 +8,12 @@ export const ACTIVITY_ACTIONS = Object.freeze({
   RESTORED: "restored",
   SHARED: "shared",
   EDITED: "edited",
+  MOVED: "moved",
 });
 
 /** Allowed filter values for the listing API (subset exposed to clients). */
 export const ACTIVITY_FILTERS = Object.freeze(
-  new Set(["opened", "uploaded", "downloaded", "renamed", "trashed", "restored"]),
+  new Set(["opened", "uploaded", "downloaded", "renamed", "trashed", "restored", "moved"]),
 );
 
 /** Activity retention — documents older than this are auto-purged by TTL index. */

@@ -26,3 +26,11 @@ export const chatWithAi = async ({
     });
     return response.data;
 };
+
+export const applySmartOrganization = async ({ suggestions, parentDirId }) => {
+    const response = await api.post("/api/ai/organize", {
+        suggestions,
+        parentDirId,
+    });
+    return response.data;
+};

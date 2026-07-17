@@ -54,11 +54,17 @@ const SECTION_COMPONENTS = {
 function SettingsHero({ activeSection, userProfile, sessionsCount }) {
   const sectionMeta = SETTINGS_SECTIONS.find((s) => s.id === activeSection);
   const currentTier = userProfile?.tier || "Free";
-  const planInfo = currentTier === "Team" 
-    ? "Team Plan · All enterprise settings available" 
-    : currentTier === "Pro" 
-    ? "Pro Plan · All features available" 
-    : "Free Plan · Upgrade to unlock Pro features";
+  const planInfoMap = {
+    Team: "Team Plan · All enterprise settings available",
+    Max: "Max Plan · All features and maximum storage available",
+    Pro: "Pro Plan · All features available",
+    Plus: "Plus Plan · Enhanced features and tools available",
+    Lite: "Lite Plan · Essential features and benefits available",
+    Starter: "Starter Plan · Upgrade to unlock more features",
+    Free: "Starter Plan · Upgrade to unlock more features",
+  };
+  const planInfo = planInfoMap[currentTier] || `${currentTier} Plan`;
+
 
   const storageStat = userProfile
     ? `${formatBytes(userProfile.storageUsed || 0)} / ${formatBytes(userProfile.storageLimit || 1024 * 1024 * 1024)}`

@@ -28,13 +28,27 @@ function buildPrompt({ query, featureFlags, fileContext, recentFiles }) {
             .join("\n")
         : "No recent file metadata provided.";
 
-    const fileContextText = fileContext
-        ? `Selected file context:
-- name: ${fileContext.name}
-- kind: ${fileContext.kind || "unknown"}
-- owner: ${fileContext.owner || "unknown"}
-- size: ${fileContext.size ?? "unknown"}`
-        : "No selected file context provided.";
+    let fileContextText;
+    if (fileContext) {
+        const metaParts = [
+            `- name: ${fileContext.name}`,
+            `- kind: ${fileContext.kind || "unknown"}`,
+            `- owner: ${fileContext.owner || "unknown"}`,
+            `- size: ${fileContext.size ?? "unknown"}`,
+        ];
+
+        if (fileContext.unsupported) {
+            // File type can't be summarized — tell the AI to relay this
+            fileContextText = `Selected file context:\n${metaParts.join("\n")}\n\nIMPORTANT: This file cannot be summarized. Reason: ${fileContext.unsupported}\nTell the user this reason clearly.`;
+        } else if (fileContext.content) {
+            // Actual file content available
+            fileContextText = `Selected file context:\n${metaParts.join("\n")}\n\nDocument content (extracted text):\n---\n${fileContext.content}\n---`;
+        } else {
+            fileContextText = `Selected file context:\n${metaParts.join("\n")}`;
+        }
+    } else {
+        fileContextText = "No selected file context provided.";
+    }
 
     const system = `You are Drivya AI, a helpful assistant for a secure cloud file vault.
 Rules:
@@ -93,7 +107,7 @@ export async function chat({ query, featureFlags, fileContext, recentFiles }) {
             ],
             generationConfig: {
                 temperature: 0.2,
-                maxOutputTokens: 800,
+                maxOutputTokens: 4096,
             },
         };
 

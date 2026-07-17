@@ -35,7 +35,7 @@ const AI_FEATURES = [
     description:
       "Generate quick summaries of documents, presentations, and long files.",
     icon: FileText,
-    enabled: false,
+    enabled: true,
   },
   {
     id: "ai-organize",
@@ -86,19 +86,31 @@ const EARLY_ACCESS = [
 
 export default function LabsSection() {
   const [aiFeatures, setAiFeatures] = useState(() => {
+    // Build defaults from AI_FEATURES
+    const defaults = {};
+    AI_FEATURES.forEach((f) => {
+      defaults[f.id] = f.enabled;
+    });
     const stored = localStorage.getItem("drivya-ai-features");
     if (stored) {
       try {
-        return JSON.parse(stored);
+        const parsed = JSON.parse(stored);
+        const merged = { ...defaults, ...parsed };
+
+        // One-time migration: enable ai-summary for existing users
+        if (!localStorage.getItem("drivya-labs-migrated-v2")) {
+          merged["ai-summary"] = true;
+          localStorage.setItem("drivya-ai-features", JSON.stringify(merged));
+          localStorage.setItem("drivya-labs-migrated-v2", "1");
+          window.dispatchEvent(new Event("drivya-labs-updated"));
+        }
+
+        return merged;
       } catch (e) {
         // ignore fallback
       }
     }
-    const state = {};
-    AI_FEATURES.forEach((f) => {
-      state[f.id] = f.enabled;
-    });
-    return state;
+    return defaults;
   });
 
   const [earlyAccess, setEarlyAccess] = useState(() => {
