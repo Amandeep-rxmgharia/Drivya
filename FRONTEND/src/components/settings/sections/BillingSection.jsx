@@ -208,7 +208,6 @@ export default function BillingSection({ userProfile }) {
       {/* Current Plan */}
       <SettingSection
         id="current-plan"
-        icon={Crown}
         title="Current Plan"
         description="Your subscription and plan details."
       >

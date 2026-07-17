@@ -174,15 +174,6 @@ function ProfileHeroCard({ profile, onEditClick, onAvatarChange }) {
 
         {/* Quick stat chips */}
         <div className="flex items-center gap-2 mt-4 flex-wrap">
-          <span className="inline-flex items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/5 px-2.5 py-1.5 text-[11px] font-semibold text-primary">
-            <Shield className="h-3 w-3" />
-            Personal ·{" "}
-            {profile.storageLimit > 5 * 1024 * 1024 * 1024
-              ? "Team"
-              : profile.storageLimit > 2 * 1024 * 1024 * 1024
-                ? "Pro"
-                : "Free"}
-          </span>
           <span className="inline-flex items-center gap-1.5 rounded-lg border border-border/60 bg-secondary/30 px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground">
             <Calendar className="h-3 w-3" />
             Joined {formatDate(profile.memberSince)}

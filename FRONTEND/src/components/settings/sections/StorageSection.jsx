@@ -328,6 +328,21 @@ export default function StorageSection({ userProfile, setUserProfile }) {
               )}
             </div>
           </SettingRow>
+          <SettingRow
+            label="Max File Size"
+            description="Your plan's maximum single file upload size."
+          >
+            <span className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-foreground">
+                {formatBytes(storageLimit > 5 * 1024 * 1024 * 1024 ? 50 * 1024 * 1024 * 1024 : 2 * 1024 * 1024 * 1024)}
+              </span>
+              {storageLimit > 5 * 1024 * 1024 * 1024 && (
+                <span className="rounded-md bg-primary/10 border border-primary/20 px-1.5 py-0.5 text-[9px] font-bold text-primary">
+                  Pro
+                </span>
+              )}
+            </span>
+          </SettingRow>
         </SettingSection>
 
         {/* ═══ Trash Settings ═══ */}
@@ -383,45 +398,6 @@ export default function StorageSection({ userProfile, setUserProfile }) {
               </SettingRow>
             </>
           )}
-        </SettingSection>
-
-        {/* ═══ Large File Handling ═══ */}
-        <SettingSection
-          id="large-files"
-          icon={FileUp}
-          title="Large File Handling"
-          description="Configure behavior for large uploads."
-        >
-          <SettingRow
-            label="Max File Size"
-            description="Your plan's maximum single file upload size."
-          >
-            <span className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-foreground">
-                {formatBytes(storageLimit > 5 * 1024 * 1024 * 1024 ? 50 * 1024 * 1024 * 1024 : 2 * 1024 * 1024 * 1024)}
-              </span>
-              {storageLimit > 5 * 1024 * 1024 * 1024 && (
-                <span className="rounded-md bg-primary/10 border border-primary/20 px-1.5 py-0.5 text-[9px] font-bold text-primary">
-                  Pro
-                </span>
-              )}
-            </span>
-          </SettingRow>
-
-          <SettingRow
-            label="Auto-Compression"
-            description="Compress files during upload to save storage."
-          >
-            <SettingSelect
-              value={compressionPref}
-              onChange={setCompressionPref}
-              options={[
-                { value: "none", label: "No compression" },
-                { value: "images", label: "Auto-compress images" },
-                { value: "all", label: "Compress all compressible" },
-              ]}
-            />
-          </SettingRow>
         </SettingSection>
 
         {/* ═══ Storage Alerts ═══ */}

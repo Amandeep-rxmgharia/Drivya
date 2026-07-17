@@ -26,48 +26,39 @@ export const SETTINGS_SECTIONS = [
     id: "account",
     label: "Account & Profile",
     icon: User,
-    group: "General",
   },
   {
     id: "security",
     label: "Security",
     icon: ShieldCheck,
-    group: "General",
   },
   {
     id: "storage",
     label: "Storage",
     icon: HardDrive,
-    group: "Data",
   },
   {
     id: "sharing",
     label: "Sharing Defaults",
     icon: Share2,
-    group: "Data",
   },
   {
     id: "appearance",
     label: "Appearance",
     icon: Palette,
-    group: "Preferences",
   },
   {
     id: "billing",
     label: "Billing",
     icon: CreditCard,
-    group: "Platform",
   },
   {
     id: "labs",
     label: "Labs",
     icon: Beaker,
-    group: "Enterprise",
     badge: "Beta",
   },
 ];
-
-const GROUPS = ["General", "Data", "Preferences", "Platform", "Enterprise"];
 
 const SettingsNav = memo(function SettingsNav({ className }) {
   const { section } = useParams();
@@ -76,69 +67,58 @@ const SettingsNav = memo(function SettingsNav({ className }) {
   return (
     <nav
       className={cn(
-        "hidden lg:flex flex-col w-56 shrink-0 sticky top-0 h-fit max-h-[calc(100vh-10rem)] overflow-y-auto pr-2 space-y-5 py-1",
+        "hidden lg:flex flex-col w-56 shrink-0 sticky top-0 h-fit max-h-[calc(100vh-10rem)] overflow-y-auto pr-2 py-1",
         className,
       )}
       aria-label="Settings navigation"
     >
-      {GROUPS.map((group) => {
-        const items = SETTINGS_SECTIONS.filter((s) => s.group === group);
-        if (items.length === 0) return null;
-        return (
-          <div key={group}>
-            <div className="px-3 mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/60">
-              {group}
-            </div>
-            <ul className="space-y-0.5">
-              {items.map((item) => {
-                const isActive = active === item.id;
-                return (
-                  <li key={item.id}>
-                    <Link
-                      to={`/dashboard/settings/${item.id}`}
-                      className={cn(
-                        "group relative flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] font-medium transition-all duration-200",
-                        isActive
-                          ? "bg-secondary/80 text-foreground border border-border/60 shadow-sm"
-                          : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground",
-                      )}
-                    >
-                      {isActive && (
-                        <motion.span
-                          layoutId="settings-nav-indicator"
-                          className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r-full bg-gradient-primary shadow-glow"
-                          transition={{
-                            type: "spring",
-                            stiffness: 350,
-                            damping: 30,
-                          }}
-                        />
-                      )}
-                      <item.icon
-                        className={cn(
-                          "h-3.5 w-3.5 shrink-0 transition-colors",
-                          isActive ? "text-primary" : "",
-                        )}
-                      />
-                      <span className="flex-1 truncate">{item.label}</span>
-                      {item.badge && (
-                        <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-primary">
-                          {item.badge}
-                        </span>
-                      )}
-                      {item.tier && (
-                        <span className="rounded-md bg-accent/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-accent">
-                          {item.tier}
-                        </span>
-                      )}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        );
-      })}
+      <ul className="space-y-0.5">
+        {SETTINGS_SECTIONS.map((item) => {
+          const isActive = active === item.id;
+          return (
+            <li key={item.id}>
+              <Link
+                to={`/dashboard/settings/${item.id}`}
+                className={cn(
+                  "group relative flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] font-medium transition-all duration-200",
+                  isActive
+                    ? "bg-secondary/80 text-foreground border border-border/60 shadow-sm"
+                    : "text-muted-foreground hover:bg-secondary/40 hover:text-foreground",
+                )}
+              >
+                {isActive && (
+                  <motion.span
+                    layoutId="settings-nav-indicator"
+                    className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r-full bg-gradient-primary shadow-glow"
+                    transition={{
+                      type: "spring",
+                      stiffness: 350,
+                      damping: 30,
+                    }}
+                  />
+                )}
+                <item.icon
+                  className={cn(
+                    "h-3.5 w-3.5 shrink-0 transition-colors",
+                    isActive ? "text-primary" : "",
+                  )}
+                />
+                <span className="flex-1 truncate">{item.label}</span>
+                {item.badge && (
+                  <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-primary">
+                    {item.badge}
+                  </span>
+                )}
+                {item.tier && (
+                  <span className="rounded-md bg-accent/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-accent">
+                    {item.tier}
+                  </span>
+                )}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
     </nav>
   );
 });
