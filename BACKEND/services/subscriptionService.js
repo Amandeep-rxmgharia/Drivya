@@ -9,6 +9,7 @@ import {
   getRazorpayPlanId,
   getPlanLimits,
   isUpgrade,
+  isBillingCycleChange,
 } from "../constants/subscriptionConstants.js";
 import { createNotification } from "./notificationService.js";
 
@@ -478,12 +479,16 @@ export async function changePlan(userId, newPlanKey, period) {
     throw Object.assign(new Error("No active subscription found. Use the subscribe flow for new subscriptions."), { status: 404 });
   }
 
-  // 3. Same plan check
-  if (currentSub.planKey === newPlanKey) {
-    throw Object.assign(new Error("You are already on this plan."), { status: 400 });
+  // 3. Same plan AND same period check
+  if (currentSub.planKey === newPlanKey && currentSub.period === period) {
+    throw Object.assign(new Error("You are already on this plan with this billing cycle."), { status: 400 });
   }
 
-  // 4. Determine upgrade vs downgrade
+  // 4. Determine change type: billing cycle change vs upgrade vs downgrade
+  if (isBillingCycleChange(currentSub.planKey, newPlanKey, currentSub.period, period)) {
+    return handleBillingCycleChange(userId, currentSub, newPlanKey, period, razorpayPlanId);
+  }
+
   const upgrading = isUpgrade(currentSub.planKey, newPlanKey);
 
   if (upgrading) {
@@ -742,6 +747,188 @@ async function handleDowngrade(userId, currentSub, newPlanKey, period, razorpayP
   };
 }
 
+// ─── Handle Billing Cycle Change ─────────────────────────────────
+async function handleBillingCycleChange(userId, currentSub, newPlanKey, period, razorpayPlanId) {
+  const user = await User.findById(userId).select("name email subscription").lean();
+  if (!user) throw Object.assign(new Error("User not found."), { status: 404 });
+
+  // If there is ANY pending plan change, cancel it first (same logic as downgrade)
+  if (currentSub.pendingPlanChange?.newPlanKey) {
+    // If the user wants to schedule the exact same change that is already pending, throw error
+    if (
+      currentSub.pendingPlanChange.newPlanKey === newPlanKey &&
+      currentSub.pendingPlanChange.newPeriod === period
+    ) {
+      throw Object.assign(
+        new Error(`A billing cycle change to ${period} is already scheduled.`),
+        { status: 400 },
+      );
+    }
+
+    const pendingRzpId = currentSub.pendingPlanChange.newRazorpaySubscriptionId;
+    const pendingDbId = currentSub.pendingPlanChange.newSubscriptionId;
+
+    if (pendingDbId) {
+      await Subscription.findByIdAndUpdate(pendingDbId, {
+        status: SUBSCRIPTION_STATUS.CANCELLED,
+        cancelledAt: new Date(),
+        cancelReason: "superseded_by_cycle_change",
+      });
+    }
+
+    if (pendingRzpId) {
+      try {
+        await razorpay.subscriptions.cancel(pendingRzpId, false);
+      } catch (err) {
+        console.warn(`[BillingCycleChange] Failed to cancel existing pending subscription ${pendingRzpId}: ${err.message}`);
+      }
+    }
+
+    currentSub.pendingPlanChange = {
+      newPlanKey: null,
+      newPeriod: null,
+      newRazorpaySubscriptionId: null,
+      newSubscriptionId: null,
+      scheduledAt: null,
+      effectiveAfter: null,
+    };
+    currentSub.cancelReason = "";
+    await currentSub.save();
+  }
+
+  let customerId = user.subscription?.razorpayCustomerId || currentSub.razorpayCustomerId;
+
+  // Create new Razorpay subscription (auth only — delayed start)
+  const startAt = currentSub.currentPeriodEnd
+    ? Math.floor(new Date(currentSub.currentPeriodEnd).getTime() / 1000)
+    : null;
+
+  const subscriptionPayload = {
+    plan_id: razorpayPlanId,
+    total_count: period === "yearly" ? 5 : 60,
+    customer_notify: 0,
+    notes: {
+      userId: userId.toString(),
+      planKey: newPlanKey,
+      period,
+      changeType: "billing_cycle_change",
+      oldSubscriptionId: currentSub.razorpaySubscriptionId,
+    },
+  };
+  if (startAt) {
+    subscriptionPayload.start_at = startAt;
+  }
+  if (customerId) {
+    subscriptionPayload.customer_id = customerId;
+  }
+
+  const rzpSubscription = await razorpay.subscriptions.create(subscriptionPayload);
+
+  // Store new subscription in DB (status: created, waiting for auth)
+  const newSubscription = await Subscription.create({
+    userId,
+    razorpaySubscriptionId: rzpSubscription.id,
+    razorpayPlanId,
+    razorpayCustomerId: customerId || "",
+    planKey: newPlanKey,
+    period,
+    status: SUBSCRIPTION_STATUS.CREATED,
+  });
+
+  const newPlan = PLANS[newPlanKey];
+  return {
+    subscriptionId: newSubscription._id,
+    razorpaySubscriptionId: rzpSubscription.id,
+    razorpayKeyId: process.env.RAZORPAY_KEY_ID,
+    planName: newPlan.name,
+    amount: newPlan.price[period],
+    changeType: "billing_cycle_change",
+    newPeriod: period,
+    effectiveAfter: currentSub.currentPeriodEnd,
+  };
+}
+
+// ─── Verify Billing Cycle Change Auth ────────────────────────────
+export async function verifyBillingCycleChangeAuth(razorpayPaymentId, razorpaySubscriptionId, razorpaySignature) {
+  // 1. HMAC verification
+  const body = razorpayPaymentId + "|" + razorpaySubscriptionId;
+  const expectedSignature = crypto
+    .createHmac("sha256", RAZORPAY_KEY_SECRET)
+    .update(body)
+    .digest("hex");
+
+  if (expectedSignature !== razorpaySignature) {
+    throw Object.assign(new Error("Authentication verification failed — invalid signature."), { status: 400 });
+  }
+
+  // 2. Find the new (billing cycle change) subscription
+  const newSub = await Subscription.findOneAndUpdate(
+    { razorpaySubscriptionId },
+    { status: SUBSCRIPTION_STATUS.AUTHENTICATED },
+    { new: true },
+  );
+  if (!newSub) {
+    throw Object.assign(new Error("Subscription not found."), { status: 404 });
+  }
+
+  // 3. Find the OLD active subscription and schedule end-of-cycle cancellation
+  const oldSub = await Subscription.findOne({
+    userId: newSub.userId,
+    status: { $in: [SUBSCRIPTION_STATUS.ACTIVE, SUBSCRIPTION_STATUS.AUTHENTICATED] },
+    _id: { $ne: newSub._id },
+  });
+
+  if (!oldSub) {
+    throw Object.assign(new Error("Current active subscription not found."), { status: 404 });
+  }
+
+  // Cancel old subscription at end of billing cycle
+  await razorpay.subscriptions.cancel(oldSub.razorpaySubscriptionId, true);
+
+  // Store pending plan change info on old subscription
+  oldSub.pendingPlanChange = {
+    newPlanKey: newSub.planKey,
+    newPeriod: newSub.period,
+    newRazorpaySubscriptionId: newSub.razorpaySubscriptionId,
+    newSubscriptionId: newSub._id,
+    scheduledAt: new Date(),
+    effectiveAfter: oldSub.currentPeriodEnd,
+  };
+  oldSub.cancelReason = "billing_cycle_change_scheduled";
+  await oldSub.save();
+
+  // 4. Update user status
+  await User.findByIdAndUpdate(newSub.userId, {
+    "subscription.status": "billing_cycle_change_scheduled",
+  });
+
+  const planName = PLANS[newSub.planKey]?.name || newSub.planKey;
+  const oldPeriodLabel = oldSub.period === "yearly" ? "yearly" : "monthly";
+  const newPeriodLabel = newSub.period === "yearly" ? "yearly" : "monthly";
+  const endsAt = oldSub.currentPeriodEnd?.toLocaleDateString("en-IN", {
+    month: "short", day: "numeric", year: "numeric",
+  }) || "end of billing period";
+
+  await notify(
+    newSub.userId,
+    "Billing Cycle Change Scheduled",
+    `Your ${planName} plan will switch from ${oldPeriodLabel} to ${newPeriodLabel} billing after ${endsAt}.`,
+  );
+
+  return {
+    success: true,
+    changeType: "billing_cycle_change",
+    subscription: {
+      id: newSub._id,
+      planKey: newSub.planKey,
+      period: newSub.period,
+      status: "billing_cycle_change_scheduled",
+      planName,
+      effectiveAfter: oldSub.currentPeriodEnd,
+    },
+  };
+}
+
 // ─── Verify Downgrade Auth ───────────────────────────────────────
 export async function verifyDowngradeAuth(razorpayPaymentId, razorpaySubscriptionId, razorpaySignature) {
   // 1. HMAC verification
@@ -822,18 +1009,20 @@ export async function verifyDowngradeAuth(razorpayPaymentId, razorpaySubscriptio
   };
 }
 
-// ─── Cancel Scheduled Downgrade ──────────────────────────────────
+// ─── Cancel Scheduled Downgrade / Cycle Change ───────────────────
 export async function cancelScheduledDowngrade(userId) {
-  // 1. Find the old (current active) subscription with a pending downgrade
+  // 1. Find the old (current active) subscription with a pending downgrade or cycle change
   const oldSub = await Subscription.findOne({
     userId,
-    cancelReason: "downgrade_scheduled",
+    cancelReason: { $in: ["downgrade_scheduled", "billing_cycle_change_scheduled"] },
     "pendingPlanChange.newPlanKey": { $ne: null },
   });
 
   if (!oldSub) {
-    throw Object.assign(new Error("No pending downgrade found."), { status: 404 });
+    throw Object.assign(new Error("No pending plan change found."), { status: 404 });
   }
+
+  const wasCycleChange = oldSub.cancelReason === "billing_cycle_change_scheduled";
 
   // 2. Cancel the pre-authenticated new subscription
   const newRzpSubId = oldSub.pendingPlanChange.newRazorpaySubscriptionId;
@@ -940,12 +1129,16 @@ export async function cancelScheduledDowngrade(userId) {
   const planName = PLANS[oldSub.planKey]?.name || oldSub.planKey;
   await notify(
     userId,
-    "Downgrade Cancelled",
-    `Your scheduled downgrade has been cancelled. You'll continue on the ${planName} plan.`,
+    wasCycleChange ? "Cycle Change Cancelled" : "Downgrade Cancelled",
+    wasCycleChange
+      ? `Your scheduled billing cycle change has been cancelled. You'll continue on ${planName} (${oldSub.period}).`
+      : `Your scheduled downgrade has been cancelled. You'll continue on the ${planName} plan.`,
   );
 
   return {
-    message: `Downgrade cancelled. You remain on the ${planName} plan.`,
+    message: wasCycleChange
+      ? `Cycle change cancelled. You remain on ${planName} (${oldSub.period}).`
+      : `Downgrade cancelled. You remain on the ${planName} plan.`,
   };
 }
 
@@ -1111,11 +1304,11 @@ async function handleSubscriptionCancelled(payload) {
     return;
   }
 
-  // ─── Skip reversion for cancelled downgrade/continuation subs 
+  // ─── Skip reversion for cancelled downgrade/continuation/cycle-change subs 
   // When a user undoes a scheduled downgrade, or schedules a downgrade over
-  // a continuation subscription, the future subscription is cancelled.
+  // a continuation subscription, or supersedes a cycle change, the future subscription is cancelled.
   // Don't revert — the user is still on their plan.
-  if (subscription.cancelReason === "downgrade_cancelled_by_user" || subscription.cancelReason === "superseded_by_downgrade") {
+  if (subscription.cancelReason === "downgrade_cancelled_by_user" || subscription.cancelReason === "superseded_by_downgrade" || subscription.cancelReason === "superseded_by_cycle_change") {
     console.log(`[Webhook] Skipping reversion for cancelled future subscription ${sub.id} (${subscription.cancelReason}).`);
     return;
   }
@@ -1124,8 +1317,8 @@ async function handleSubscriptionCancelled(payload) {
   // The old subscription ends at cycle end. A new subscription (either
   // a downgrade or same-plan continuation) has start_at set — Razorpay
   // will activate it automatically. Don't revert to free.
-  if (subscription.cancelReason === "downgrade_scheduled" || subscription.cancelReason === "continuation") {
-    console.log(`[Webhook] Old subscription ${sub.id} cancelled (${subscription.cancelReason}). Razorpay will start continuation/downgrade sub automatically.`);
+  if (subscription.cancelReason === "downgrade_scheduled" || subscription.cancelReason === "continuation" || subscription.cancelReason === "billing_cycle_change_scheduled") {
+    console.log(`[Webhook] Old subscription ${sub.id} cancelled (${subscription.cancelReason}). Razorpay will start continuation/downgrade/cycle-change sub automatically.`);
     return;
   }
 

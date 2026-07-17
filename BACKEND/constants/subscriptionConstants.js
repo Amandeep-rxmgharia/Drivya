@@ -124,6 +124,19 @@ export function isUpgrade(fromPlan, toPlan) {
 }
 
 /**
+ * Determine whether a plan change is actually a billing-cycle shift
+ * (same plan tier, different period — e.g. monthly → yearly).
+ * @param {string} fromPlan   – Current plan key.
+ * @param {string} toPlan     – Target plan key.
+ * @param {string} fromPeriod – Current period ("monthly" | "yearly").
+ * @param {string} toPeriod   – Target period ("monthly" | "yearly").
+ * @returns {boolean}
+ */
+export function isBillingCycleChange(fromPlan, toPlan, fromPeriod, toPeriod) {
+  return fromPlan === toPlan && fromPeriod !== toPeriod;
+}
+
+/**
  * Resolve the Razorpay plan ID for a given planKey + period.
  * @param {string} planKey  – One of PLAN_KEYS values.
  * @param {string} period   – "monthly" or "yearly".

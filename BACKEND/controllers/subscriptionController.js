@@ -7,6 +7,7 @@ import {
   changePlan as changePlanSvc,
   verifyUpgradePayment as verifyUpgradeSvc,
   verifyDowngradeAuth as verifyDowngradeSvc,
+  verifyBillingCycleChangeAuth as verifyBillingCycleChangeSvc,
   cancelScheduledDowngrade as cancelDowngradeSvc,
 } from "../services/subscriptionService.js";
 import { PLANS, PLAN_KEYS, PERIODS } from "../constants/subscriptionConstants.js";
@@ -140,6 +141,12 @@ export const verifyPlanChange = async (req, res, next) => {
     let result;
     if (changeType === "downgrade") {
       result = await verifyDowngradeSvc(
+        razorpay_payment_id,
+        razorpay_subscription_id,
+        razorpay_signature,
+      );
+    } else if (changeType === "billing_cycle_change") {
+      result = await verifyBillingCycleChangeSvc(
         razorpay_payment_id,
         razorpay_subscription_id,
         razorpay_signature,

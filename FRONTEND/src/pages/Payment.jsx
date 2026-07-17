@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useSearchParams, useOutletContext } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -19,6 +19,7 @@ import {
   Infinity,
   ChevronRight,
   TrendingUp,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -26,7 +27,7 @@ import {
   subtleHover,
   chip,
 } from "@/components/dashboard/dashboard-tokens";
-import { createSubscription, verifyPayment, changePlan, verifyPlanChange } from "../../api/subscription.js";
+import { createSubscription, verifyPayment, changePlan, verifyPlanChange, getSubscription } from "../../api/subscription.js";
 
 // ─── Plan Definitions ────────────────────────────────────────────
 const GB = 1024 * 1024 * 1024;
@@ -173,7 +174,25 @@ export default function Payment() {
   const [status, setStatus] = useState("idle"); // idle | creating | verifying | success | error
   const [errorMsg, setErrorMsg] = useState("");
   const [successPlan, setSuccessPlan] = useState(null);
+  const [currentPeriod, setCurrentPeriod] = useState(null); // "monthly" | "yearly" | null
   const handleBack = () => navigate("/dashboard/settings/billing");
+
+  // Fetch current subscription period on mount
+  useEffect(() => {
+    if (currentPlan === "free") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const sub = await getSubscription();
+        if (!cancelled && sub?.subscription?.period) {
+          setCurrentPeriod(sub.subscription.period);
+        }
+      } catch {
+        // Silently fail — period detection is non-critical
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [currentPlan]);
   const activePlan = useMemo(
     () => PLANS.find((p) => p.key === selectedPlan) || PLANS[3],
     [selectedPlan],
@@ -209,18 +228,23 @@ export default function Payment() {
   }, [currentPlanObj, activePlan]);
 
   // ─── Change type detection ──────────────────────────────────────
+  const selectedPeriod = yearly ? "yearly" : "monthly";
   const changeType = useMemo(() => {
-    if (selectedPlan === currentPlan) return "same";
+    if (selectedPlan === currentPlan) {
+      // Same plan — check if billing cycle is changing
+      if (currentPeriod && selectedPeriod !== currentPeriod) return "billing_cycle_change";
+      return "same";
+    }
     if (currentPlan === "free") return "new";
     if (selectedPlan === "free") return "free";
     return (PLAN_ORDER[selectedPlan] ?? 0) > (PLAN_ORDER[currentPlan] ?? 0) ? "upgrade" : "downgrade";
-  }, [selectedPlan, currentPlan]);
+  }, [selectedPlan, currentPlan, currentPeriod, selectedPeriod]);
 
   const hasActiveSub = currentPlan !== "free";
 
   // ─── Razorpay Checkout Flow ────────────────────────────────────
   const handleSubscribe = async () => {
-    if (selectedPlan === "free" || selectedPlan === currentPlan) return;
+    if (selectedPlan === "free" || changeType === "same") return;
 
     setStatus("creating");
     setErrorMsg("");
@@ -231,14 +255,14 @@ export default function Payment() {
         ? await changePlan(selectedPlan, period)
         : await createSubscription(selectedPlan, period);
 
-      const isDowngrade = data.changeType === "downgrade";
+      const isAuthOnly = data.changeType === "downgrade" || data.changeType === "billing_cycle_change";
 
       // 2. Open Razorpay Checkout
       const options = {
         key: import.meta.env.VITE_RAZORPAY_KEY_ID,
         subscription_id: data.razorpaySubscriptionId,
         name: "Drivya",
-        description: isDowngrade
+        description: isAuthOnly
           ? `Authorize ${data.planName} Plan — ${yearly ? "Yearly" : "Monthly"}`
           : `${data.planName} Plan — ${yearly ? "Yearly" : "Monthly"}`,
         handler: async (response) => {
@@ -303,25 +327,40 @@ export default function Payment() {
   };
 
   const handleSuccessSideEffects = (subscription, resultChangeType) => {
-    const isDowngradeResult = resultChangeType === "downgrade";
+    const isScheduledChange = resultChangeType === "downgrade" || resultChangeType === "billing_cycle_change";
     setUserProfile((prev) => ({
       ...prev,
       subscription: {
         ...prev?.subscription,
-        plan: isDowngradeResult ? prev?.subscription?.plan : subscription.planKey,
-        status: isDowngradeResult ? "downgrade_scheduled" : "active",
+        plan: isScheduledChange ? prev?.subscription?.plan : subscription.planKey,
+        status: isScheduledChange
+          ? (resultChangeType === "billing_cycle_change" ? "billing_cycle_change_scheduled" : "downgrade_scheduled")
+          : "active",
       },
     }));
 
     // Toast event
+    const toastMap = {
+      downgrade: {
+        title: "Downgrade Scheduled",
+        description: `Your plan will change to ${subscription.planName} after the current billing cycle ends.`,
+      },
+      billing_cycle_change: {
+        title: "Billing Cycle Change Scheduled",
+        description: `Your billing will switch to ${subscription.period} after the current cycle ends.`,
+      },
+    };
+    const toast = toastMap[resultChangeType] || {
+      title: "Subscription Activated",
+      description: `You are now on the ${subscription.planName} Plan. Thank you for your support!`,
+    };
+
     setTimeout(() => {
       window.dispatchEvent(
         new CustomEvent("add-drivya-notification", {
           detail: {
-            title: isDowngradeResult ? "Downgrade Scheduled" : "Subscription Activated",
-            description: isDowngradeResult
-              ? `Your plan will change to ${subscription.planName} after the current billing cycle ends.`
-              : `You are now on the ${subscription.planName} Plan. Thank you for your support!`,
+            title: toast.title,
+            description: toast.description,
             type: "success",
             actionPath: "/dashboard/settings/billing",
             actionLabel: "View Billing",
@@ -351,16 +390,24 @@ export default function Payment() {
             className="flex flex-col items-center justify-center min-h-[60vh] text-center max-w-md mx-auto"
           >
             <div className="relative mb-6">
-              <div className={`h-20 w-20 rounded-2xl flex items-center justify-center ${successPlan?.changeType === "downgrade" ? "bg-blue-500/10 border border-blue-500/25" : "bg-emerald-500/10 border border-emerald-500/25"}`}>
-                <CheckCircle2 className={`h-10 w-10 ${successPlan?.changeType === "downgrade" ? "text-blue-400" : "text-emerald-400"}`} />
+              <div className={`h-20 w-20 rounded-2xl flex items-center justify-center ${(successPlan?.changeType === "downgrade" || successPlan?.changeType === "billing_cycle_change") ? "bg-blue-500/10 border border-blue-500/25" : "bg-emerald-500/10 border border-emerald-500/25"}`}>
+                <CheckCircle2 className={`h-10 w-10 ${(successPlan?.changeType === "downgrade" || successPlan?.changeType === "billing_cycle_change") ? "text-blue-400" : "text-emerald-400"}`} />
               </div>
             </div>
 
             <h1 className="text-3xl font-display font-bold tracking-tight mb-2">
-              {successPlan?.changeType === "downgrade" ? "Downgrade Scheduled" : successPlan?.changeType === "upgrade" ? "Plan Upgraded" : "Subscription Active"}
+              {successPlan?.changeType === "billing_cycle_change"
+                ? "Billing Cycle Change Scheduled"
+                : successPlan?.changeType === "downgrade"
+                  ? "Downgrade Scheduled"
+                  : successPlan?.changeType === "upgrade"
+                    ? "Plan Upgraded"
+                    : "Subscription Active"}
             </h1>
             <p className="text-muted-foreground text-sm mb-8 leading-relaxed">
-              {successPlan?.changeType === "downgrade" ? (
+              {successPlan?.changeType === "billing_cycle_change" ? (
+                <>Your <span className="text-gradient font-bold">{successPlan?.planName || "plan"}</span> billing will switch to{" "}<span className="font-semibold text-foreground">{successPlan?.period}</span>{" "}after the current cycle ends{successPlan?.effectiveAfter ? ` on ${new Date(successPlan.effectiveAfter).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}` : ""}. No changes until then.</>
+              ) : successPlan?.changeType === "downgrade" ? (
                 <>Your plan will change to{" "}<span className="text-gradient font-bold">{successPlan?.planName || "new tier"}</span>{" "}after the current billing cycle ends{successPlan?.effectiveAfter ? ` on ${new Date(successPlan.effectiveAfter).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}` : ""}.  You'll keep your current features until then.</>
               ) : (
                 <>Your drive storage space has been {successPlan?.changeType === "upgrade" ? "upgraded" : "set"} to{" "}<span className="text-gradient font-bold">{successPlan?.planName || "new tier"}</span>{" "}limits immediately.</>
@@ -707,35 +754,55 @@ export default function Payment() {
                     <div className="px-6 py-5 border-b border-border/40">
                       <div className="flex justify-between items-baseline">
                         <span className="font-medium text-xs text-muted-foreground">
-                          Total due today
+                          {changeType === "billing_cycle_change" ? "Due today" : "Total due today"}
                         </span>
                         <AnimatePresence mode="wait">
                           <motion.div
-                            key={`${activePlan.key}-${period}`}
+                            key={`${activePlan.key}-${period}-${changeType}`}
                             initial={{ opacity: 0, y: -4 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: 4 }}
                             transition={{ duration: 0.18 }}
                             className="text-right"
                           >
-                            <span className="text-2xl font-display font-extrabold text-foreground">
-                              ₹{priceDisplay}
-                            </span>
-                            <span className="text-xs text-muted-foreground ml-0.5">
-                              /{yearly ? "yr" : "mo"}
-                            </span>
+                            {changeType === "billing_cycle_change" ? (
+                              <>
+                                <span className="text-2xl font-display font-extrabold text-foreground">
+                                  ₹0
+                                </span>
+                                <span className="text-xs text-muted-foreground ml-0.5">
+                                  today
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="text-2xl font-display font-extrabold text-foreground">
+                                  ₹{priceDisplay}
+                                </span>
+                                <span className="text-xs text-muted-foreground ml-0.5">
+                                  /{yearly ? "yr" : "mo"}
+                                </span>
+                              </>
+                            )}
                           </motion.div>
                         </AnimatePresence>
                       </div>
 
-                      {yearly && activePlan.price.monthly > 0 && (
+                      {changeType === "billing_cycle_change" ? (
+                        <div className="flex items-center gap-2 mt-3 px-3 py-2 rounded-xl bg-blue-500/8 border border-blue-500/15">
+                          <RefreshCw className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                          <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">
+                            ₹{priceDisplay}/{yearly ? "yr" : "mo"} starts after current cycle ends
+                          </span>
+                        </div>
+                      ) : yearly && activePlan.price.monthly > 0 ? (
                         <div className="flex items-center gap-2 mt-3 px-3 py-2 rounded-xl bg-emerald-500/8 border border-emerald-500/15">
                           <ShieldCheck className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                           <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
                             Save ₹{monthlySavings}/yr with annual billing
                           </span>
                         </div>
-                      )}
+                      ) : null}
                     </div>
 
                     {/* CTA */}
@@ -746,7 +813,7 @@ export default function Payment() {
                             ? "Default Starter active"
                             : "Cancel subscription in billing to downgrade"}
                         </div>
-                      ) : selectedPlan === currentPlan ? (
+                      ) : changeType === "same" ? (
                         <div className="w-full py-2.5 text-center text-xs font-medium text-muted-foreground/80 rounded-xl border border-border/40 bg-secondary/20">
                           This plan is currently active
                         </div>
@@ -760,12 +827,18 @@ export default function Payment() {
                             {status === "creating" ? (
                               <>
                                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                {changeType === "downgrade" ? "Scheduling…" : "Creating order…"}
+                                {changeType === "downgrade" || changeType === "billing_cycle_change" ? "Scheduling…" : "Creating order…"}
                               </>
                             ) : status === "verifying" ? (
                               <>
                                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                 Verifying…
+                              </>
+                            ) : changeType === "billing_cycle_change" ? (
+                              <>
+                                <RefreshCw className="h-3.5 w-3.5" />
+                                Switch to {yearly ? "Yearly" : "Monthly"}
+                                <ChevronRight className="h-3.5 w-3.5" />
                               </>
                             ) : changeType === "upgrade" ? (
                               <>
@@ -784,6 +857,11 @@ export default function Payment() {
                               </>
                             )}
                           </button>
+                          {changeType === "billing_cycle_change" && (
+                            <p className="text-[10px] text-muted-foreground/70 text-center">
+                              Takes effect at end of current billing cycle. No charge today.
+                            </p>
+                          )}
                           {changeType === "upgrade" && (
                             <p className="text-[10px] text-muted-foreground/70 text-center">
                               Your current plan will be cancelled immediately.

@@ -15,6 +15,7 @@ import {
   Zap,
   Rocket,
   Shield,
+  RefreshCw,
 } from "lucide-react";
 import {
   SettingSection,
@@ -118,16 +119,22 @@ export default function BillingSection({ userProfile }) {
   const style = PLAN_STYLES[planKey] || PLAN_STYLES.free;
   const IconComponent = PLAN_ICONS[planKey] || Zap;
   const subscription = subData?.subscription;
+    const period = subscription?.period || "monthly";
+
   const pendingPlanChange = subscription?.pendingPlanChange;
   const isActive = subscription?.status === "active" || subscription?.status === "authenticated";
   const isCancelled = subscription?.cancelledAt != null;
   const isDowngradeScheduled =
     (userProfile?.subscription?.status === "downgrade_scheduled" || !!pendingPlanChange) &&
     (!pendingPlanChange || pendingPlanChange.newPlanKey !== planKey);
+  const isBillingCycleChangeScheduled =
+    !!pendingPlanChange &&
+    pendingPlanChange.newPlanKey === planKey &&
+    pendingPlanChange.newPeriod &&
+    pendingPlanChange.newPeriod !== period;
 
   // Format price display
   const price = subData?.plan?.price || { monthly: 0, yearly: 0 };
-  const period = subscription?.period || "monthly";
   const priceVal = price[period] || 0;
   const priceStr = isFreePlan ? "₹0" : `₹${priceVal}`;
   const billingCycle = isFreePlan
@@ -255,7 +262,7 @@ export default function BillingSection({ userProfile }) {
                     <ArrowUpRight className="h-3.5 w-3.5" />
                     Change Plan
                   </button>
-                  {isActive && !isCancelled && !isDowngradeScheduled && (
+                  {isActive && !isCancelled && !isDowngradeScheduled && !isBillingCycleChangeScheduled && (
                     <button
                       onClick={() => setShowCancelConfirm(true)}
                       className="inline-flex h-9 items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-4 text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
@@ -402,6 +409,79 @@ export default function BillingSection({ userProfile }) {
                     <Loader2 className="h-3 w-3 animate-spin" />
                   ) : null}
                   Undo Downgrade
+                </button>
+              </div>
+            </div>
+          </div>
+        </SettingSection>
+      )}
+
+      {/* Scheduled Billing Cycle Change */}
+      {isBillingCycleChangeScheduled && pendingPlanChange && (
+        <SettingSection
+          id="scheduled-cycle-change"
+          icon={RefreshCw}
+          title="Scheduled Cycle Change"
+          description="Details of your upcoming billing cycle switch."
+        >
+          <div className="px-6 py-5">
+            <div className="flex flex-col md:flex-row md:items-center gap-6 justify-between rounded-xl border border-blue-500/20 bg-blue-500/[0.02] p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
+
+                {/* Visual Transition */}
+                <div className="flex items-center gap-2 bg-secondary/20 p-2.5 rounded-xl border border-border/40">
+                  <div className="flex flex-col items-center">
+                    <div
+                      className={`flex h-9 w-9 items-center justify-center rounded-lg border ${style.bg} ${style.text} ${style.border}`}
+                      style={{ boxShadow: `0 0 10px ${style.glow}` }}
+                    >
+                      <IconComponent className="h-4 w-4" />
+                    </div>
+                    <span className="text-[9px] text-muted-foreground mt-1 capitalize">{period}</span>
+                  </div>
+
+                  <div className="text-blue-500/60 flex items-center justify-center">
+                    <RefreshCw className="h-4 w-4" />
+                  </div>
+
+                  <div className="flex flex-col items-center">
+                    <div
+                      className={`flex h-9 w-9 items-center justify-center rounded-lg border ${style.bg} ${style.text} ${style.border}`}
+                      style={{ boxShadow: `0 0 10px ${style.glow}` }}
+                    >
+                      <IconComponent className="h-4 w-4" />
+                    </div>
+                    <span className="text-[9px] text-muted-foreground mt-1 capitalize">{pendingPlanChange.newPeriod}</span>
+                  </div>
+                </div>
+
+                {/* Cycle change explanation text */}
+                <div className="space-y-0.5">
+                  <div className="text-sm font-semibold text-foreground flex items-center gap-2 flex-wrap">
+                    Billing Cycle Change Scheduled
+                  </div>
+                  <div className="text-xs text-muted-foreground leading-relaxed">
+                    Switching <span className="font-semibold text-foreground">{planName}</span> from{" "}
+                    <span className="font-semibold text-foreground capitalize">{period}</span> to{" "}
+                    <span className="font-semibold text-foreground capitalize">
+                      {pendingPlanChange.newPeriod}
+                    </span>{" "}
+                    billing on <span className="font-medium text-foreground">{renewsVal}</span>.
+                  </div>
+                </div>
+              </div>
+
+              {/* Undo cycle change button */}
+              <div className="shrink-0">
+                <button
+                  onClick={handleCancelDowngrade}
+                  disabled={cancelDowngradeLoading}
+                  className="inline-flex h-9 items-center gap-2 rounded-xl border border-blue-500/20 bg-blue-500/5 px-4 text-xs font-semibold text-blue-500 hover:bg-blue-500/10 hover:text-blue-600 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {cancelDowngradeLoading ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : null}
+                  Undo Cycle Change
                 </button>
               </div>
             </div>
