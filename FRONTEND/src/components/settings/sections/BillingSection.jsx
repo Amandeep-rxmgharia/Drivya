@@ -394,7 +394,7 @@ export default function BillingSection({ userProfile }) {
           id="recent-refund"
           icon={Undo2}
           title="Upgrade Refunds"
-          description="History of refunds processed for upgrading your plans."
+          description="Refunds typically take 5-7 business days to reflect in the you'r account"
         >
           <div className="px-6 py-3">
             <div className="rounded-xl border border-border/50 overflow-hidden divide-y divide-border/30 bg-secondary/5">
@@ -407,7 +407,7 @@ export default function BillingSection({ userProfile }) {
                 >
                   <div className="flex items-center gap-3 min-w-0 flex-1">
                     {/* Plan Shift Icons */}
-                    <div className="flex items-center gap-1 bg-secondary/35 p-1 rounded-lg border border-border/40 shrink-0">
+                    <div className="flex items-center gap-1  p-1 rounded-lg  shrink-0">
                       {(() => {
                         const OldIcon = PLAN_ICONS[refund.oldPlanKey] || Zap;
                         const oldStyle = PLAN_STYLES[refund.oldPlanKey] || PLAN_STYLES.free;

@@ -882,7 +882,7 @@ export async function verifyUpgradePayment(razorpayPaymentId, razorpaySubscripti
     try {
       await razorpay.subscriptions.cancel(oldSub.razorpaySubscriptionId, false); // Cancel immediately for upgrades
     } catch (err) {
-      console.warn(`[Upgrade] Failed to cancel old Razorpay subscription ${oldSub.razorpaySubscriptionId}: ${err.message}`);
+      console.warn(`[Upgrade] Failed to cancel old Razorpay subscription ${oldSub.razorpaySubscriptionId}: ${err}`);
     }
 
     oldSub.status = SUBSCRIPTION_STATUS.CANCELLED;
