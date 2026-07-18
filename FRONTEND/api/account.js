@@ -81,3 +81,20 @@ export const deactivateAccount = async () => {
   const response = await api.patch("/api/account/deactivate");
   return response.data;
 };
+
+export const requestEmailChange = async ({ newEmail, password, twoFACode }) => {
+  const response = await api.post("/api/account/email/change-request", {
+    newEmail,
+    password,
+    twoFACode,
+  });
+  return response.data;
+};
+
+export const confirmEmailChange = async ({ newEmail, otp }) => {
+  const response = await api.post("/api/account/email/change-confirm", {
+    newEmail,
+    otp,
+  });
+  return response.data;
+};

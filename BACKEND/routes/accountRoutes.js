@@ -13,6 +13,8 @@ import {
   deactivateAccount,
   getSharingDefaults,
   updateSharingDefaults,
+  requestEmailChange,
+  confirmEmailChange,
 } from "../controllers/accountController.js";
 import {
   listSessions,
@@ -60,6 +62,10 @@ router.patch(
   handleValidationErrors,
   updateProfile,
 );
+
+// ─── Email Change ────────────────────────────────────────────
+router.post("/email/change-request", throttle(1000), requestEmailChange);
+router.post("/email/change-confirm", throttle(1000), confirmEmailChange);
 
 // ─── Avatar Upload / Delete ──────────────────────────────────
 // Not strictly required, but still sensitive: require 2FA

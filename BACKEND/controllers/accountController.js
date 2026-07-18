@@ -7,9 +7,14 @@ import Directory from "../models/directoryModel.js";
 import File from "../models/fileModel.js";
 import Notification from "../models/notificationModel.js";
 import Share from "../models/shareModel.js";
+import OTP from "../models/otpModel.js";
 import { clearTokenCookies } from "../config/tokenUtils.js";
 import { deleteFile } from "../services/storageService.js";
 import { createNotification } from "../services/notificationService.js";
+import { sendOTPEmail } from "../utils/mailer.js";
+import { decryptStringAesGcm } from "../utils/cryptoUtils.js";
+import { verifyTotpCode } from "../utils/totpUtils.js";
+import bcrypt from "bcrypt";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const AVATAR_DIR = path.resolve(__dirname, "..", "storage", "avatars");
@@ -494,6 +499,188 @@ export const deactivateAccount = async (req, res, next) => {
     clearTokenCookies(res);
 
     return res.json({ message: "Account deactivated successfully." });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── Email Change Flow ────────────────────────────────────────
+export const requestEmailChange = async (req, res, next) => {
+  const { newEmail, password, twoFACode } = req.body;
+
+  if (!newEmail) {
+    return res.status(400).json({ message: "New email is required." });
+  }
+
+  // Validate format
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  if (!emailRegex.test(newEmail)) {
+    return res.status(400).json({ message: "Please enter a valid email." });
+  }
+
+  try {
+    const normalizedNewEmail = newEmail?.toLowerCase().trim();
+
+    // Fetch user with select("+password") to verify
+    const user = await User.findById(req.user.id).select(
+      "+password twoFAEnabled twoFASecretEnc twoFASecretIv twoFASecretAuthTag twoFABackupCodes"
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    if (normalizedNewEmail === user.email?.toLowerCase()) {
+      return res.status(400).json({ message: "New email must be different from current email." });
+    }
+
+    // Check if new email is already in use
+    const emailExists = await User.findOne({ email: normalizedNewEmail }).lean();
+    if (emailExists) {
+      return res.status(400).json({ message: "Email is already in use by another account." });
+    }
+
+    // Verify Password if set
+    if (user.password) {
+      if (!password) {
+        return res.status(400).json({ message: "Password is required to request email change." });
+      }
+      const isMatch = await user.comparePassword(password);
+      if (!isMatch) {
+        return res.status(401).json({ message: "Incorrect password." });
+      }
+    }
+
+    // Verify 2FA if enabled
+    if (user.twoFAEnabled) {
+      if (!twoFACode) {
+        return res.status(400).json({ message: "2FA code is required." });
+      }
+      if (!user.twoFASecretEnc || !user.twoFASecretIv || !user.twoFASecretAuthTag) {
+        return res.status(400).json({ message: "2FA setup is incomplete on your account." });
+      }
+
+      const secretBase32 = decryptStringAesGcm({
+        ciphertextB64: user.twoFASecretEnc,
+        ivB64: user.twoFASecretIv,
+        authTagB64: user.twoFASecretAuthTag,
+      });
+
+      const normalizedCode = String(twoFACode).trim();
+      let verified = false;
+
+      // Try TOTP code first
+      if (verifyTotpCode(secretBase32, normalizedCode, { window: 1 })) {
+        verified = true;
+      }
+
+      // Try Backup code next
+      if (!verified && user.twoFABackupCodes?.length > 0) {
+        for (const entry of user.twoFABackupCodes) {
+          if (entry.used) continue;
+          const match = await bcrypt.compare(normalizedCode, entry.hash);
+          if (match) {
+            entry.used = true;
+            entry.usedAt = new Date();
+            await user.save();
+            verified = true;
+            break;
+          }
+        }
+      }
+
+      if (!verified) {
+        return res.status(401).json({ message: "Invalid 2FA code." });
+      }
+    }
+
+    // Generate 6-digit random OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Store in OTP database (expires in 10 minutes)
+    await OTP.findOneAndUpdate(
+      { email: normalizedNewEmail },
+      { otp, createdAt: new Date() },
+      { upsert: true, new: true }
+    );
+
+    // Send email to new email address
+    await sendOTPEmail(normalizedNewEmail, otp);
+
+    return res.json({ message: "Verification OTP has been sent to your new email." });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const confirmEmailChange = async (req, res, next) => {
+  const { newEmail, otp } = req.body;
+
+  if (!newEmail || !otp) {
+    return res.status(400).json({ message: "New email and OTP are required." });
+  }
+
+  try {
+    const normalizedNewEmail = newEmail.toLowerCase().trim();
+    const normalizedOtp = String(otp).trim();
+
+    // Verify OTP exists and is correct
+    const otpRecord = await OTP.findOne({ email: normalizedNewEmail, otp: normalizedOtp });
+    if (!otpRecord) {
+      return res.status(400).json({ message: "Invalid or expired verification code." });
+    }
+
+    // Verify new email is still available
+    const emailExists = await User.findOne({ email: normalizedNewEmail }).lean();
+    if (emailExists) {
+      return res.status(400).json({ message: "Email is already in use by another account." });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    const oldEmail = user.email;
+    user.email = normalizedNewEmail;
+    await user.save();
+
+    // Delete OTP record
+    await OTP.deleteOne({ _id: otpRecord._id });
+
+    // Send security notification
+    await createNotification(user._id, {
+      type: "security",
+      title: "Email address changed",
+      description: `Your account email was successfully changed from ${oldEmail} to ${normalizedNewEmail}.`,
+      actionLabel: "Account Settings",
+      actionPath: "/dashboard/settings/account",
+    });
+
+    // Fetch updated profile for response
+    const [updatedUser, userPwCheck] = await Promise.all([
+      User.findById(user._id).lean().select("-__v -password"),
+      User.findById(user._id).lean().select("+password"),
+    ]);
+
+    return res.json({
+      message: "Email address updated successfully.",
+      profile: {
+        id: updatedUser._id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        language: updatedUser.language || "en",
+        timezone: updatedUser.timezone || "auto",
+        avatarUrl: updatedUser.avatarUrl || "",
+        storageUsed: updatedUser.storageUsed || 0,
+        storageLimit: updatedUser.storageLimit || 1024 * 1024 * 1024,
+        memberSince: updatedUser.createdAt,
+        loginAlerts: updatedUser.loginAlerts !== false,
+        twoFAEnabled: !!updatedUser.twoFAEnabled,
+        authProvider: updatedUser.authProvider || "local",
+        hasPassword: !!userPwCheck?.password,
+      },
+    });
   } catch (err) {
     next(err);
   }

@@ -16,6 +16,8 @@ import {
   Upload,
   ImageOff,
   PauseCircle,
+  Key,
+  ArrowLeft,
 } from "lucide-react";
 import {
   SettingSection,
@@ -31,6 +33,8 @@ import {
   deleteAvatar,
   deleteAccount,
   deactivateAccount,
+  requestEmailChange,
+  confirmEmailChange,
 } from "../../../../api/account.js";
 import { logoutUser } from "../../../../api/auth.js";
 
@@ -194,6 +198,7 @@ function EditProfileModal({
   onAvatarUpload,
   onAvatarRemove,
   avatarUploading,
+  onOpenEmailChange,
 }) {
   const [form, setForm] = useState({
     name: "",
@@ -405,7 +410,7 @@ function EditProfileModal({
             </p>
           </div>
 
-          {/* Email field (read-only) */}
+          {/* Email field (read-only with edit option) */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-foreground/80 flex items-center gap-1.5">
               <Mail className="h-3 w-3 text-muted-foreground" />
@@ -414,14 +419,26 @@ function EditProfileModal({
                 Verified
               </span>
             </label>
-            <input
-              type="email"
-              value={profile.email}
-              disabled
-              className="h-10 w-full rounded-xl border border-border bg-secondary/20 px-3.5 text-sm text-foreground/60 cursor-not-allowed"
-            />
+            <div className="flex gap-2">
+              <input
+                type="email"
+                value={profile.email}
+                disabled
+                className="h-10 flex-1 rounded-xl border border-border bg-secondary/20 px-3.5 text-sm text-foreground/60 cursor-not-allowed"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenEmailChange?.();
+                }}
+                className="h-10 rounded-xl border border-border bg-secondary/40 px-3.5 text-xs font-semibold text-foreground hover:bg-secondary/60 hover:text-primary transition-all shrink-0"
+              >
+                Change
+              </button>
+            </div>
             <p className="text-[10px] text-muted-foreground">
-              Email cannot be changed. Contact support for help.
+              Changing email requires password and verification code.
             </p>
           </div>
 
@@ -742,6 +759,347 @@ function DeactivateModal({ open, onClose, onConfirm, loading }) {
   );
 }
 
+/* ═══════════════════════ Change Email Modal ═══════════════════════ */
+
+function ChangeEmailModal({ open, onClose, profile, onEmailChanged }) {
+  const [step, setStep] = useState(1); // 1: Request, 2: OTP Confirm
+  const [newEmail, setNewEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [twoFACode, setTwoFACode] = useState("");
+  const [otpDigits, setOtpDigits] = useState(Array(6).fill(""));
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setStep(1);
+      setNewEmail("");
+      setPassword("");
+      setTwoFACode("");
+      setOtpDigits(Array(6).fill(""));
+      setLoading(false);
+      setError("");
+      setSuccess(false);
+    }
+  }, [open]);
+
+  // Focus the first input box when step becomes 2
+  useEffect(() => {
+    if (step === 2 && open) {
+      setTimeout(() => {
+        const firstInput = document.getElementById("email-otp-input-0");
+        if (firstInput) firstInput.focus();
+      }, 200);
+    }
+  }, [step, open]);
+
+  if (!open) return null;
+
+  const handleRequestChange = async (e) => {
+    if (e) e.preventDefault();
+    setError("");
+
+    if (!newEmail.trim()) {
+      setError("Please enter your new email address.");
+      return;
+    }
+    if (newEmail.trim().toLowerCase() === profile.email.toLowerCase()) {
+      setError("New email must be different from current email.");
+      return;
+    }
+    if (profile.hasPassword && !password) {
+      setError("Password is required.");
+      return;
+    }
+    if (profile.twoFAEnabled && !twoFACode.trim()) {
+      setError("Two-factor verification code is required.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await requestEmailChange({
+        newEmail: newEmail.trim(),
+        password: profile.hasPassword ? password : "",
+        twoFACode: profile.twoFAEnabled ? twoFACode.trim() : "",
+      });
+      setStep(2);
+    } catch (err) {
+      setError(
+        err?.response?.data?.message ||
+        "Failed to request email change. Please check your credentials."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOtpChange = (index, value) => {
+    if (!/^\d*$/.test(value)) return;
+    const newDigits = [...otpDigits];
+    newDigits[index] = value.slice(-1);
+    setOtpDigits(newDigits);
+
+    // Auto-focus next input if value is filled
+    if (value && index < 5) {
+      const nextInput = document.getElementById(`email-otp-input-${index + 1}`);
+      if (nextInput) nextInput.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index, e) => {
+    if (e.key === "Backspace" && !otpDigits[index] && index > 0) {
+      const prevInput = document.getElementById(`email-otp-input-${index - 1}`);
+      if (prevInput) {
+        prevInput.focus();
+        const newDigits = [...otpDigits];
+        newDigits[index - 1] = "";
+        setOtpDigits(newDigits);
+      }
+    }
+  };
+
+  const handleOtpPaste = (e) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData("text").trim();
+    if (!/^\d{6}$/.test(pastedData)) return;
+
+    const newDigits = pastedData.split("");
+    setOtpDigits(newDigits);
+
+    // Focus last input
+    const lastInput = document.getElementById("email-otp-input-5");
+    if (lastInput) lastInput.focus();
+  };
+
+  const handleConfirmChange = async (e) => {
+    if (e) e.preventDefault();
+    setError("");
+
+    const joinedOtp = otpDigits.join("");
+    if (joinedOtp.length < 6) {
+      setError("Please enter the 6-digit OTP code.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const data = await confirmEmailChange({
+        newEmail: newEmail.trim(),
+        otp: joinedOtp,
+      });
+      setSuccess(true);
+      if (onEmailChanged && data?.profile) {
+        onEmailChanged(data.profile);
+      }
+      setTimeout(() => {
+        onClose();
+      }, 1500);
+    } catch (err) {
+      setError(
+        err?.response?.data?.message ||
+        "Invalid or expired OTP code."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center">
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-modal-backdrop"
+        onClick={onClose}
+      />
+      <div className="relative w-full max-w-md rounded-2xl border border-border bg-background shadow-2xl mx-4 overflow-hidden animate-modal-panel">
+        
+        {/* Header */}
+        <div className="px-6 pt-6 pb-4 border-b border-border/30 relative">
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary/60 hover:text-foreground transition-all"
+          >
+            <X className="h-4 w-4" />
+          </button>
+          
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 border border-primary/25 text-primary shadow-[0_0_20px_rgba(var(--primary-rgb),0.15)]">
+            <Mail className="h-6 w-6" />
+          </div>
+          <h2 className="font-display text-2xl font-bold tracking-tight text-foreground text-center mt-3.5">
+            {step === 1 ? "Change Email" : "Enter OTP"}
+          </h2>
+          <p className="text-xs text-muted-foreground text-center max-w-sm mx-auto mt-1.5 leading-relaxed">
+            {step === 1 
+              ? "Verify your credentials and enter your new email address."
+              : <span>We've sent a 6-digit verification code to <span className="font-semibold text-foreground">{newEmail}</span>.</span>}
+          </p>
+        </div>
+
+        {/* Step 1: Request Change Form */}
+        {step === 1 && !success && (
+          <form onSubmit={handleRequestChange} className="px-6 py-6 space-y-5">
+            {/* Error Message */}
+            {error && (
+              <div className="p-3 text-xs bg-destructive/10 border border-destructive/20 text-destructive rounded-xl flex items-center gap-2 font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-destructive flex-shrink-0 animate-pulse" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <div className="space-y-1.5 relative">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">
+                New Email Address
+              </label>
+              <div className="relative group">
+                <Mail className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                <input
+                  type="email"
+                  placeholder="name@example.com"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  className="w-full bg-muted/15 border border-border/30 rounded-xl py-3 pl-10 pr-4 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/45 focus:bg-muted/10 transition-all font-medium text-foreground placeholder:text-muted-foreground/60"
+                  required
+                />
+              </div>
+            </div>
+
+            {profile.hasPassword && (
+              <div className="space-y-1.5 relative">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">
+                  Current Password
+                </label>
+                <div className="relative group">
+                  <Lock className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                  <input
+                    type="password"
+                    placeholder="Enter password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full bg-muted/15 border border-border/30 rounded-xl py-3 pl-10 pr-4 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/45 focus:bg-muted/10 transition-all font-medium text-foreground placeholder:text-muted-foreground/60"
+                    required
+                  />
+                </div>
+              </div>
+            )}
+
+            {profile.twoFAEnabled && (
+              <div className="space-y-1.5 relative">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">
+                  Two-Factor Authentication
+                </label>
+                <div className="relative group">
+                  <Shield className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                  <input
+                    type="text"
+                    placeholder="6-digit TOTP code"
+                    value={twoFACode}
+                    onChange={(e) => setTwoFACode(e.target.value)}
+                    className="w-full bg-muted/15 border border-border/30 rounded-xl py-3 pl-10 pr-4 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/45 focus:bg-muted/10 transition-all font-medium text-foreground placeholder:text-muted-foreground/60"
+                    maxLength={16}
+                    required
+                  />
+                </div>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full cursor-pointer bg-gradient-primary text-primary-foreground font-semibold py-3 rounded-xl hover:opacity-90 shadow-glow transition-all flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Processing...</span>
+                </>
+              ) : (
+                <span>Continue</span>
+              )}
+            </button>
+          </form>
+        )}
+
+        {/* Step 2: Confirm OTP Form */}
+        {step === 2 && !success && (
+          <form onSubmit={handleConfirmChange} className="px-6 py-6 space-y-6">
+            {/* Error Message */}
+            {error && (
+              <div className="p-3 text-xs bg-destructive/10 border border-destructive/20 text-destructive rounded-xl flex items-center gap-2 font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-destructive flex-shrink-0 animate-pulse" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block text-center">
+                Verification Code
+              </label>
+              <div className="flex justify-center gap-2" onPaste={handleOtpPaste}>
+                {otpDigits.map((digit, idx) => (
+                  <input
+                    key={idx}
+                    id={`email-otp-input-${idx}`}
+                    type="text"
+                    maxLength={1}
+                    pattern="\d*"
+                    value={digit}
+                    onChange={(e) => handleOtpChange(idx, e.target.value)}
+                    onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                    className="w-11 h-12 text-center text-lg font-bold bg-primary/5 border border-primary/5 shadow-[0_0_20px_rgba(var(--primary-rgb),0.15)] rounded-xl outline-none focus:border-primary focus:ring-1 focus:ring-primary/45 focus:bg-muted/10 transition-all text-foreground"
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <button
+                type="submit"
+                disabled={loading || otpDigits.join("").length < 6}
+                className="w-full cursor-pointer bg-gradient-primary text-primary-foreground font-semibold py-3 rounded-xl hover:opacity-90 shadow-glow transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Verifying...</span>
+                  </>
+                ) : (
+                  <span>Verify Code</span>
+                )}
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => {
+                  setStep(1);
+                  setError("");
+                }}
+                disabled={loading}
+                className="text-primary hover:underline font-semibold bg-transparent border-none cursor-pointer mt-1 text-xs"
+              >
+                Change email address
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* Success Screen */}
+        {success && (
+          <div className="px-6 py-10 flex flex-col items-center justify-center text-center space-y-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.15)]">
+              <Check className="h-6 w-6" />
+            </div>
+            <div>
+              <h2 className="font-display text-2xl font-bold tracking-tight text-foreground">Email Updated</h2>
+              <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed max-w-xs mx-auto">Your new email address has been saved successfully.</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ═══════════════════════ Main Component ═══════════════════════ */
 
 export default function AccountSection({ userProfile, setUserProfile }) {
@@ -761,6 +1119,7 @@ export default function AccountSection({ userProfile, setUserProfile }) {
   const [deactivateOpen, setDeactivateOpen] = useState(false);
   const [deactivating, setDeactivating] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [emailChangeOpen, setEmailChangeOpen] = useState(false);
 
   // ─── Helper: sync profile to parent ────────────────────────
   const syncToParent = (p) => {
@@ -811,6 +1170,13 @@ export default function AccountSection({ userProfile, setUserProfile }) {
       syncToParent(data.profile);
       window.dispatchEvent(new Event("refresh-drive"));
     }
+  };
+
+  // ─── Handle email changed successfully ─────────────────────
+  const handleEmailChanged = (updatedProfile) => {
+    setProfile(updatedProfile);
+    syncToParent(updatedProfile);
+    window.dispatchEvent(new Event("refresh-drive"));
   };
 
   // ─── Avatar upload ─────────────────────────────────────────
@@ -927,9 +1293,17 @@ export default function AccountSection({ userProfile, setUserProfile }) {
             </span>
           }
         >
-          <span className="text-sm text-foreground/80 font-medium">
-            {profile.email}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-foreground/80 font-medium">
+              {profile.email}
+            </span>
+            <button
+              onClick={() => setEmailChangeOpen(true)}
+              className="text-xs font-semibold text-primary hover:text-primary/80 hover:underline transition-all"
+            >
+              Change
+            </button>
+          </div>
         </SettingRow>
       </SettingSection>
 
@@ -1027,6 +1401,7 @@ export default function AccountSection({ userProfile, setUserProfile }) {
         onAvatarUpload={handleAvatarUpload}
         onAvatarRemove={handleAvatarRemove}
         avatarUploading={avatarUploading}
+        onOpenEmailChange={() => setEmailChangeOpen(true)}
       />
       <DeleteModal
         open={deleteOpen}
@@ -1040,6 +1415,12 @@ export default function AccountSection({ userProfile, setUserProfile }) {
         onClose={() => setDeactivateOpen(false)}
         onConfirm={handleDeactivateAccount}
         loading={deactivating}
+      />
+      <ChangeEmailModal
+        open={emailChangeOpen}
+        onClose={() => setEmailChangeOpen(false)}
+        profile={profile}
+        onEmailChanged={handleEmailChanged}
       />
     </div>
   );
