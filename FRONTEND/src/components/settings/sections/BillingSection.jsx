@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { AnimatePresence, motion } from "motion/react";
 import {
   CreditCard,
   Receipt,
@@ -17,6 +18,10 @@ import {
   Shield,
   RefreshCw,
   ShieldCheck,
+  AlertTriangle,
+  Info,
+  ArrowRight,
+  X,
 } from "lucide-react";
 import {
   SettingSection,
@@ -359,41 +364,6 @@ export default function BillingSection({ userProfile }) {
             </div>
           </div>
 
-          {/* Cancel Confirmation */}
-          {showCancelConfirm && (
-            <div className="mt-4 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
-              <p className="text-sm font-medium text-foreground mb-1">
-                Are you sure you want to cancel?
-              </p>
-              <p className="text-xs text-muted-foreground mb-3">
-                Your {planName} features will remain active until {renewsVal}. After that, you'll be downgraded to Spark Free.
-              </p>
-              {cancelError && (
-                <p className="text-xs text-destructive mb-2 flex items-center gap-1">
-                  <XCircle className="h-3 w-3" /> {cancelError}
-                </p>
-              )}
-              <div className="flex gap-2">
-                <button
-                  onClick={handleCancel}
-                  disabled={cancelLoading}
-                  className="inline-flex h-8 items-center gap-2 rounded-lg bg-destructive px-3 text-xs font-semibold text-destructive-foreground hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-50"
-                >
-                  {cancelLoading ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : null}
-                  Yes, Cancel Subscription
-                </button>
-                <button
-                  onClick={() => setShowCancelConfirm(false)}
-                  className="inline-flex h-8 items-center rounded-lg border border-border px-3 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors cursor-pointer"
-                >
-                  Keep Plan
-                </button>
-              </div>
-            </div>
-          )}
-
           <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
               { label: "Storage", value: storageVal },
@@ -729,6 +699,110 @@ export default function BillingSection({ userProfile }) {
           )}
         </div>
       </SettingSection>
+
+      {/* Cancel Subscription Modal */}
+      <AnimatePresence>
+        {showCancelConfirm && (
+          <CancelSubscriptionModal
+            isOpen={showCancelConfirm}
+            onClose={() => {
+              setShowCancelConfirm(false);
+              setCancelError("");
+            }}
+            onConfirm={handleCancel}
+            planName={planName}
+            renewsVal={renewsVal}
+            loading={cancelLoading}
+            error={cancelError}
+          />
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/* ───────────────────────── Cancel Subscription Modal ───────────────────────── */
+
+function CancelSubscriptionModal({
+  isOpen,
+  onClose,
+  onConfirm,
+  planName,
+  renewsVal,
+  loading,
+  error,
+}) {
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    if (isOpen) {
+      document.addEventListener("keydown", handleEscape);
+    }
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [isOpen, onClose]);
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="absolute inset-0 bg-background/80 backdrop-blur-md"
+      />
+
+      {/* Modal Card */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 15 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 15 }}
+        transition={{ type: "spring", stiffness: 380, damping: 28 }}
+        className="relative z-10 w-full max-w-sm rounded-2xl border border-border bg-card/95 dark:bg-card/80 dark:backdrop-blur-xl shadow-elegant overflow-hidden p-6"
+      >
+        {/* Header */}
+        <div className="flex items-start gap-3.5">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-destructive/20 bg-destructive/10 text-destructive">
+            <AlertTriangle className="h-4.5 w-4.5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="font-display text-base font-bold text-foreground">
+              Cancel Subscription?
+            </h3>
+            <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
+              Your <span className="font-semibold text-foreground">{planName}</span> benefits will remain active until <span className="font-medium text-foreground">{renewsVal}</span>. After that, you'll be downgraded to the free plan.
+            </p>
+          </div>
+        </div>
+
+        {/* Error reporting */}
+        {error && (
+          <div className="mt-4 rounded-xl border border-destructive/25 bg-destructive/10 p-3 text-xs text-destructive">
+            {error}
+          </div>
+        )}
+
+        {/* Footer Actions */}
+        <div className="mt-6 flex items-center justify-end gap-2.5">
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center justify-center rounded-xl border border-border bg-secondary/40 px-3.5 h-9 text-xs font-semibold text-foreground/80 hover:text-foreground hover:bg-secondary/70 transition-colors cursor-pointer"
+          >
+            Keep Plan
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={loading}
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-destructive px-3.5 h-9 text-xs font-semibold text-destructive-foreground shadow-sm hover:opacity-90 active:translate-y-px transition-all disabled:opacity-50 cursor-pointer"
+          >
+            {loading && <Loader2 className="h-3 w-3 animate-spin" />}
+            Cancel Subscription
+          </button>
+        </div>
+      </motion.div>
     </div>
   );
 }

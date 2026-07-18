@@ -120,22 +120,22 @@ const rowEase = "duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]";
 
 const StatMini = memo(function StatMini({ icon: Icon, label, value, accent }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-secondary/30 px-4 py-3">
+    <div className="flex flex-col sm:flex-row items-center sm:items-center text-center sm:text-left gap-1.5 sm:gap-3 rounded-xl border border-border/60 bg-secondary/30 px-2 py-2.5 sm:px-4 sm:py-3">
       <div
         className={cn(
-          "flex h-9 w-9 items-center justify-center rounded-lg border shrink-0",
+          "flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg border shrink-0",
           accent
             ? "border-accent/20 bg-accent/10 text-accent"
             : "border-primary/20 bg-primary/10 text-primary",
         )}
       >
-        <Icon className="h-4 w-4" />
+        <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
       </div>
       <div className="min-w-0">
-        <div className="font-display text-lg font-semibold tracking-tight text-foreground tabular-nums leading-none">
+        <div className="font-display text-sm sm:text-lg font-semibold tracking-tight text-foreground tabular-nums leading-none">
           {value}
         </div>
-        <div className="text-[10px] font-medium text-muted-foreground mt-0.5">
+        <div className="text-[9px] sm:text-[10px] font-medium text-muted-foreground mt-0.5 sm:mt-1">
           {label}
         </div>
       </div>

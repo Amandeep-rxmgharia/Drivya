@@ -1691,7 +1691,7 @@ export function DropboxModal({
           ) : !isConnected ? (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center max-w-sm mx-auto">
               <div className="relative mb-6">
-                <div className="absolute -inset-2 rounded-full bg-gradient-primary opacity-25 blur-xl animate-pulse" />
+                <div className="absolute -inset-2 rounded-full" />
                 <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl bg-secondary/30 border border-border shadow-xl">
                   <img src={dropboxLogo} alt="" className="h-10 w-10" />
                 </div>
