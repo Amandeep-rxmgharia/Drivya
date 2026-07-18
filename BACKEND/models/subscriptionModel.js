@@ -22,6 +22,10 @@ const subscriptionSchema = new Schema(
       type: String,
       default: "",
     },
+    razorpayPaymentId: {
+      type: String,
+      default: "",
+    },
     planKey: {
       type: String,
       enum: Object.values(PLAN_KEYS).filter((k) => k !== PLAN_KEYS.FREE),
@@ -66,6 +70,18 @@ const subscriptionSchema = new Schema(
       newSubscriptionId: { type: Schema.Types.ObjectId, ref: "Subscription", default: null },
       scheduledAt: { type: Date, default: null },
       effectiveAfter: { type: Date, default: null },
+    },
+
+    // ─── Refund (issued on upgrade) ─────────────────────────────
+    refund: {
+      amount: { type: Number, default: null },           // net refund in INR
+      grossAmount: { type: Number, default: null },      // before gateway deduction
+      razorpayRefundId: { type: String, default: null },
+      type: { type: String, enum: ["full", "prorated", null], default: null },
+      gatewayCharges: { type: Number, default: null },
+      processedAt: { type: Date, default: null },
+      newPlanKey: { type: String, default: null },
+      newPlanName: { type: String, default: null },
     },
   },
   {

@@ -20,6 +20,7 @@ import {
   ChevronRight,
   TrendingUp,
   RefreshCw,
+  Undo2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -286,7 +287,7 @@ export default function Payment() {
             }
 
             // 4. Success
-            setSuccessPlan({ ...result.subscription, changeType: result.changeType });
+            setSuccessPlan({ ...result.subscription, changeType: result.changeType, refund: result.refund || null });
             setStatus("success");
             handleSuccessSideEffects(result.subscription, result.changeType);
           } catch (err) {
@@ -407,7 +408,7 @@ export default function Payment() {
                     ? "Plan Upgraded"
                     : "Subscription Active"}
             </h1>
-            <p className="text-muted-foreground text-sm mb-8 leading-relaxed">
+            <p className="text-muted-foreground text-sm mb-6 leading-relaxed">
               {successPlan?.changeType === "billing_cycle_change" ? (
                 <>Your <span className="text-gradient font-bold">{successPlan?.planName || "plan"}</span> billing will switch to{" "}<span className="font-semibold text-foreground">{successPlan?.period}</span>{" "}after the current cycle ends{successPlan?.effectiveAfter ? ` on ${new Date(successPlan.effectiveAfter).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}` : ""}. No changes until then.</>
               ) : successPlan?.changeType === "downgrade" ? (
@@ -416,6 +417,52 @@ export default function Payment() {
                 <>Your drive storage space has been {successPlan?.changeType === "upgrade" ? "upgraded" : "set"} to{" "}<span className="text-gradient font-bold">{successPlan?.planName || "new tier"}</span>{" "}limits immediately.</>
               )}
             </p>
+
+            {/* ─── Refund Info Card (shown on upgrade) ─── */}
+            {successPlan?.refund && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15, duration: 0.3 }}
+                className="w-full max-w-sm mb-6 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] backdrop-blur-sm overflow-hidden"
+              >
+                <div className="px-4 py-3 border-b border-emerald-500/10 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Undo2 className="h-3.5 w-3.5 text-emerald-500" />
+                    <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                      {successPlan.refund.type === "full" ? "Full Refund" : "Prorated Refund"}
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/15 rounded-full px-2 py-0.5">
+                    {successPlan.refund.type === "full" ? "100%" : "Pro-rata"}
+                  </span>
+                </div>
+                <div className="px-4 py-3 space-y-2">
+                  {successPlan.refund.type === "prorated" && (
+                    <>
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-muted-foreground">Prorated amount</span>
+                        <span className="font-semibold text-foreground">₹{successPlan.refund.grossAmount?.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-muted-foreground">Gateway charges (2%)</span>
+                        <span className="font-semibold text-red-500">−₹{successPlan.refund.gatewayCharges?.toFixed(2)}</span>
+                      </div>
+                      <div className="h-px bg-border/50 my-1" />
+                    </>
+                  )}
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-semibold text-foreground">Refund Amount</span>
+                    <span className="text-lg font-display font-extrabold text-emerald-600 dark:text-emerald-400">
+                      ₹{successPlan.refund.amount?.toFixed(2)}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground/70 leading-relaxed">
+                    Refund will be credited to your original payment method within 5–7 business days.
+                  </p>
+                </div>
+              </motion.div>
+            )}
 
             <div className="flex gap-3">
               <button
@@ -751,6 +798,14 @@ export default function Payment() {
                           </span>
                         </div>
                       )}
+                      {changeType === "upgrade" && currentPlanObj.price[period] > 0 && (
+                        <div className="flex items-center gap-2 mt-1 px-3 py-2 rounded-xl bg-emerald-500/8 border border-emerald-500/15">
+                          <Undo2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                          <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                            Refund from {currentPlanObj.name} plan will be calculated
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Total */}
@@ -865,7 +920,7 @@ export default function Payment() {
                           )}
                           {changeType === "upgrade" && (
                             <p className="text-[10px] text-muted-foreground/70 text-center">
-                              Your current plan will be cancelled immediately.
+                              Your current plan will be cancelled immediately. A refund for unused time will be initiated.
                             </p>
                           )}
                           {changeType === "downgrade" && (

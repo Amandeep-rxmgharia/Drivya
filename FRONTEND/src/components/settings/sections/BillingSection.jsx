@@ -22,6 +22,7 @@ import {
   Info,
   ArrowRight,
   X,
+  Undo2,
 } from "lucide-react";
 import {
   SettingSection,
@@ -386,6 +387,99 @@ export default function BillingSection({ userProfile }) {
           </div>
         </div>
       </SettingSection>
+
+      {/* Refund Details & History */}
+      {subData?.refundHistory && subData.refundHistory.length > 0 && (
+        <SettingSection
+          id="recent-refund"
+          icon={Undo2}
+          title="Upgrade Refunds"
+          description="History of refunds processed for upgrading your plans."
+        >
+          <div className="px-6 py-3">
+            <div className="rounded-xl border border-border/50 overflow-hidden divide-y divide-border/30 bg-secondary/5">
+              {subData.refundHistory.map((refund, idx) => (
+                <div
+                  key={refund.id}
+                  className={`flex items-center justify-between p-4 hover:bg-secondary/10 transition-colors gap-3 ${
+                    idx === 0 ? "bg-emerald-500/[0.02]" : ""
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    {/* Plan Shift Icons */}
+                    <div className="flex items-center gap-1 bg-secondary/35 p-1 rounded-lg border border-border/40 shrink-0">
+                      {(() => {
+                        const OldIcon = PLAN_ICONS[refund.oldPlanKey] || Zap;
+                        const oldStyle = PLAN_STYLES[refund.oldPlanKey] || PLAN_STYLES.free;
+                        return (
+                          <div
+                            className={`flex h-6 w-6 items-center justify-center rounded border ${oldStyle.bg} ${oldStyle.text} ${oldStyle.border}`}
+                            title={`From: ${refund.oldPlanName}`}
+                          >
+                            <OldIcon className="h-3.5 w-3.5" />
+                          </div>
+                        );
+                      })()}
+                      
+                      <ArrowRight className="h-3 w-3 text-muted-foreground/60" />
+                      
+                      {(() => {
+                        const nextPlanKey = refund.newPlanKey || "pro";
+                        const nextStyle = PLAN_STYLES[nextPlanKey] || PLAN_STYLES.pro;
+                        const NextIcon = PLAN_ICONS[nextPlanKey] || Crown;
+                        return (
+                          <div
+                            className={`flex h-6 w-6 items-center justify-center rounded border ${nextStyle.bg} ${nextStyle.text} ${nextStyle.border}`}
+                            title={`To: ${refund.newPlanName || "Pro"}`}
+                          >
+                            <NextIcon className="h-3.5 w-3.5" />
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs hidden md:inline font-semibold text-foreground truncate max-w-[120px] sm:max-w-none">
+                          {refund.oldPlanName} to {refund.newPlanName || "Pro"}
+                        </span>
+                        {idx === 0 && (
+                          <span className="text-[8px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.2 rounded-full">
+                            Latest
+                          </span>
+                        )}
+                        <span className="text-[9px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                          {refund.type === "full" ? "Full Refund" : "Prorated"}
+                        </span>
+                      </div>
+                      <div className="text-[10px]  text-muted-foreground mt-0.5 truncate max-w-[160px] sm:max-w-none">
+                        {new Date(refund.processedAt).toLocaleDateString("en-IN", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric"
+                        })} • {refund.razorpayRefundId || "Refund Initiated"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    <div className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                      +₹{refund.amount.toFixed(2)}
+                    </div>
+                    {refund.type === "prorated" ? (
+                      <div className="text-[9px] text-muted-foreground/80">
+                        fee ₹{refund.gatewayCharges.toFixed(2)}
+                      </div>
+                    ) : (
+                      undefined
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </SettingSection>
+      )}
 
       {/* Continuation Auth Required Banner */}
       {continuationAuth?.needed && (

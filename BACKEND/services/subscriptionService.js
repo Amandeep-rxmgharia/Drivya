@@ -10,8 +10,11 @@ import {
   getPlanLimits,
   isUpgrade,
   isBillingCycleChange,
+  GATEWAY_CHARGE_PERCENT,
+  FULL_REFUND_WINDOW_MINUTES,
 } from "../constants/subscriptionConstants.js";
 import { createNotification } from "./notificationService.js";
+import { sendRefundEmail } from "../utils/mailer.js";
 
 const { RAZORPAY_KEY_SECRET } = process.env;
 
@@ -146,7 +149,7 @@ export async function verifyPayment(
   // 2. Update subscription status
   const subscription = await Subscription.findOneAndUpdate(
     { razorpaySubscriptionId },
-    { status: SUBSCRIPTION_STATUS.AUTHENTICATED },
+    { status: SUBSCRIPTION_STATUS.AUTHENTICATED, razorpayPaymentId },
     { new: true },
   );
 
@@ -325,6 +328,8 @@ export async function getSubscriptionDetails(userId) {
       bandwidthLimit: user.bandwidthLimit,
     },
     subscription: null,
+    lastRefund: null,
+    refundHistory: [],
   };
 
   // Fetch active subscription details if any
@@ -378,6 +383,46 @@ export async function getSubscriptionDetails(userId) {
         }
       }
     }
+  }
+
+  // Check for refund history on all upgraded subscriptions
+  const upgradedSubs = await Subscription.find({
+    userId,
+    cancelReason: "upgraded",
+    "refund.amount": { $gt: 0 },
+  })
+    .sort({ "refund.processedAt": -1 })
+    .lean();
+
+  result.refundHistory = upgradedSubs.map((sub, idx) => {
+    // Resolve newPlanKey and newPlanName dynamically if missing in the DB record
+    let newPlanKey = sub.refund.newPlanKey;
+    if (!newPlanKey) {
+      if (idx === 0) {
+        newPlanKey = result.plan.key; // current active plan
+      } else {
+        newPlanKey = upgradedSubs[idx - 1].planKey; // the plan they upgraded to in the next step
+      }
+    }
+    const newPlanName = PLANS[newPlanKey]?.name || newPlanKey;
+
+    return {
+      id: sub._id,
+      amount: sub.refund.amount,
+      grossAmount: sub.refund.grossAmount,
+      type: sub.refund.type,
+      gatewayCharges: sub.refund.gatewayCharges,
+      processedAt: sub.refund.processedAt,
+      razorpayRefundId: sub.refund.razorpayRefundId,
+      oldPlanKey: sub.planKey,
+      oldPlanName: PLANS[sub.planKey]?.name || sub.planKey,
+      newPlanKey,
+      newPlanName,
+    };
+  });
+
+  if (result.refundHistory.length > 0) {
+    result.lastRefund = result.refundHistory[0];
   }
 
   return result;
@@ -555,6 +600,178 @@ export async function changePlan(userId, newPlanKey, period) {
   }
 }
 
+// ─── Calculate Refund for Upgrade ─────────────────────────────────
+function calculateRefund(oldSub) {
+  const plan = PLANS[oldSub.planKey];
+  if (!plan) return null;
+
+  const planPrice = plan.price[oldSub.period];
+  if (!planPrice || planPrice <= 0) return null;
+
+  const now = new Date();
+  const periodStart = oldSub.currentPeriodStart ? new Date(oldSub.currentPeriodStart) : null;
+  const periodEnd = oldSub.currentPeriodEnd ? new Date(oldSub.currentPeriodEnd) : null;
+
+  if (!periodStart || !periodEnd) return null;
+
+  // Check if within full-refund window (10 minutes from period start)
+  const minutesSinceStart = (now - periodStart) / (1000 * 60);
+  if (minutesSinceStart <= FULL_REFUND_WINDOW_MINUTES) {
+    return {
+      amount: planPrice,
+      grossAmount: planPrice,
+      type: "full",
+      gatewayCharges: 0,
+    };
+  }
+
+  // Prorated refund
+  const totalMs = periodEnd - periodStart;
+  const usedMs = now - periodStart;
+  const remainingFraction = Math.max(0, (totalMs - usedMs) / totalMs);
+
+  const grossRefund = parseFloat((planPrice * remainingFraction).toFixed(2));
+  if (grossRefund <= 0) return null;
+
+  const gatewayCharges = parseFloat((grossRefund * GATEWAY_CHARGE_PERCENT / 100).toFixed(2));
+  const netRefund = parseFloat((grossRefund - gatewayCharges).toFixed(2));
+
+  if (netRefund <= 0) return null;
+
+  return {
+    amount: netRefund,
+    grossAmount: grossRefund,
+    type: "prorated",
+    gatewayCharges,
+  };
+}
+
+// ─── Process Refund via Razorpay ──────────────────────────────────
+async function processRefund(oldSub, refundInfo, user, newPlanName, newPlanKey) {
+  try {
+    let targetPaymentId = oldSub.razorpayPaymentId || null;
+
+    // Fallback 1: Fetch invoices for this specific subscription to get the paid payment_id
+    if (!targetPaymentId) {
+      try {
+        const invoices = await razorpay.invoices.all({
+          subscription_id: oldSub.razorpaySubscriptionId,
+          count: 20,
+        });
+        if (invoices && invoices.items) {
+          const paidInvoice = invoices.items.find(inv => inv.status === "paid" && inv.payment_id);
+          if (paidInvoice) {
+            targetPaymentId = paidInvoice.payment_id;
+            console.log(`[Refund] Found payment_id ${targetPaymentId} from paid invoice of subscription ${oldSub.razorpaySubscriptionId}`);
+          }
+        }
+      } catch (invoiceErr) {
+        console.warn(`[Refund] Could not fetch invoices for subscription ${oldSub.razorpaySubscriptionId}: ${invoiceErr.message}`);
+      }
+    }
+
+    // Fallback 2: try fetching subscription details from Razorpay to get payment info
+    if (!targetPaymentId) {
+      try {
+        const rzpSub = await razorpay.subscriptions.fetch(oldSub.razorpaySubscriptionId);
+        if (rzpSub && rzpSub.payment_id) {
+          targetPaymentId = rzpSub.payment_id;
+        }
+      } catch (fetchErr) {
+        console.warn(`[Refund] Could not fetch Razorpay subscription ${oldSub.razorpaySubscriptionId}: ${fetchErr.message}`);
+      }
+    }
+
+    // Fallback 3: Query recent payments
+    if (!targetPaymentId) {
+      try {
+        const payments = await razorpay.payments.all({
+          count: 50,
+        });
+        if (payments && payments.items) {
+          for (const payment of payments.items) {
+            if (
+              payment.status === "captured" &&
+              payment.notes?.userId === oldSub.userId.toString()
+            ) {
+              targetPaymentId = payment.id;
+              break;
+            }
+          }
+        }
+      } catch (paymentsErr) {
+        console.warn(`[Refund] Could not fetch recent payments: ${paymentsErr.message}`);
+      }
+    }
+
+    let razorpayRefundId = null;
+
+    if (targetPaymentId) {
+      // Issue the refund via Razorpay
+      const refundAmountPaise = Math.round(refundInfo.amount * 100);
+      try {
+        const rzpRefund = await razorpay.payments.refund(targetPaymentId, {
+          amount: refundAmountPaise,
+          notes: {
+            reason: "upgrade_refund",
+            oldPlan: oldSub.planKey,
+            refundType: refundInfo.type,
+            userId: oldSub.userId.toString(),
+          },
+        });
+        razorpayRefundId = rzpRefund.id;
+        console.log(`[Refund] Razorpay refund ${rzpRefund.id} created for ₹${refundInfo.amount} on payment ${targetPaymentId}`);
+      } catch (refundErr) {
+        console.error(`[Refund] Razorpay refund failed for payment ${targetPaymentId}: ${refundErr.message}`);
+        // Continue — we still record the refund intent in our DB
+      }
+    } else {
+      console.warn(`[Refund] No payment found for subscription ${oldSub.razorpaySubscriptionId}. Refund recorded in DB only.`);
+    }
+
+    // Store refund info on the old subscription
+    oldSub.refund = {
+      amount: refundInfo.amount,
+      grossAmount: refundInfo.grossAmount,
+      razorpayRefundId,
+      type: refundInfo.type,
+      gatewayCharges: refundInfo.gatewayCharges,
+      processedAt: new Date(),
+      newPlanKey,
+      newPlanName,
+    };
+
+    // Send refund email
+    const oldPlanName = PLANS[oldSub.planKey]?.name || oldSub.planKey;
+    try {
+      await sendRefundEmail(user.email, {
+        userName: user.name,
+        oldPlanName,
+        newPlanName,
+        refundAmount: refundInfo.amount,
+        grossAmount: refundInfo.grossAmount,
+        refundType: refundInfo.type,
+        gatewayCharges: refundInfo.gatewayCharges,
+      });
+    } catch (emailErr) {
+      console.error(`[Refund] Failed to send refund email to ${user.email}: ${emailErr.message}`);
+    }
+
+    // Create in-app notification about the refund
+    const refundLabel = refundInfo.type === "full" ? "Full refund" : "Prorated refund";
+    await notify(
+      oldSub.userId,
+      "Refund Initiated",
+      `${refundLabel} of ₹${refundInfo.amount.toFixed(2)} has been initiated for your ${oldPlanName} plan. ${refundInfo.type === "prorated" ? `Gateway charges of ₹${refundInfo.gatewayCharges.toFixed(2)} were deducted. ` : ""}Refunds take 5–7 business days.`,
+    );
+
+    return { razorpayRefundId, ...refundInfo };
+  } catch (err) {
+    console.error(`[Refund] Unexpected error processing refund: ${err.message}`);
+    return null;
+  }
+}
+
 // ─── Handle Upgrade ──────────────────────────────────────────────
 async function handleUpgrade(userId, currentSub, newPlanKey, period, razorpayPlanId) {
   const user = await User.findById(userId).select("name email subscription").lean();
@@ -622,6 +839,10 @@ export async function verifyUpgradePayment(razorpayPaymentId, razorpaySubscripti
     throw Object.assign(new Error("Subscription not found."), { status: 404 });
   }
 
+  // Fetch user for refund email
+  const user = await User.findById(newSub.userId).select("name email").lean();
+  const newPlanName = PLANS[newSub.planKey]?.name || newSub.planKey;
+
   // 3. Find and cancel the OLD active subscription immediately
   const oldSub = await Subscription.findOne({
     userId: newSub.userId,
@@ -629,7 +850,15 @@ export async function verifyUpgradePayment(razorpayPaymentId, razorpaySubscripti
     _id: { $ne: newSub._id },
   });
 
+  let refundResult = null;
+
   if (oldSub) {
+    // ─── Calculate and process refund BEFORE cancelling ───────
+    const refundInfo = calculateRefund(oldSub);
+    if (refundInfo && user) {
+      refundResult = await processRefund(oldSub, refundInfo, user, newPlanName, newSub.planKey);
+    }
+
     // Cancel any scheduled future subscription (either downgrade target or continuation)
     if (oldSub.pendingPlanChange && oldSub.pendingPlanChange.newRazorpaySubscriptionId) {
       const pendingRzpId = oldSub.pendingPlanChange.newRazorpaySubscriptionId;
@@ -673,6 +902,7 @@ export async function verifyUpgradePayment(razorpayPaymentId, razorpaySubscripti
 
   // 4. Activate new subscription
   newSub.status = SUBSCRIPTION_STATUS.AUTHENTICATED;
+  newSub.razorpayPaymentId = razorpayPaymentId;
   await newSub.save();
 
   await activateSubscription(razorpaySubscriptionId);
@@ -680,12 +910,15 @@ export async function verifyUpgradePayment(razorpayPaymentId, razorpaySubscripti
   const updatedSub = await Subscription.findOne({ razorpaySubscriptionId }).lean();
   const planName = PLANS[updatedSub.planKey]?.name || updatedSub.planKey;
 
-  // 5. Notify user
+  // 5. Notify user about upgrade
   const oldPlanName = oldSub ? (PLANS[oldSub.planKey]?.name || oldSub.planKey) : "previous plan";
+  const refundNote = refundResult
+    ? ` A refund of ₹${refundResult.amount.toFixed(2)} has been initiated.`
+    : "";
   await notify(
     updatedSub.userId,
     "Plan Upgraded",
-    `You've upgraded from ${oldPlanName} to ${planName}. Your new limits are active immediately!`,
+    `You've upgraded from ${oldPlanName} to ${planName}. Your new limits are active immediately!${refundNote}`,
   );
 
   return {
@@ -698,6 +931,12 @@ export async function verifyUpgradePayment(razorpayPaymentId, razorpaySubscripti
       status: updatedSub.status,
       planName,
     },
+    refund: refundResult ? {
+      amount: refundResult.amount,
+      grossAmount: refundResult.grossAmount,
+      type: refundResult.type,
+      gatewayCharges: refundResult.gatewayCharges,
+    } : null,
   };
 }
 
@@ -921,7 +1160,7 @@ export async function verifyBillingCycleChangeAuth(razorpayPaymentId, razorpaySu
   // 2. Find the new (billing cycle change) subscription
   const newSub = await Subscription.findOneAndUpdate(
     { razorpaySubscriptionId },
-    { status: SUBSCRIPTION_STATUS.AUTHENTICATED },
+    { status: SUBSCRIPTION_STATUS.AUTHENTICATED, razorpayPaymentId },
     { new: true },
   );
   if (!newSub) {
@@ -1002,7 +1241,7 @@ export async function verifyDowngradeAuth(razorpayPaymentId, razorpaySubscriptio
   // 2. Find the new (downgrade) subscription
   const newSub = await Subscription.findOneAndUpdate(
     { razorpaySubscriptionId },
-    { status: SUBSCRIPTION_STATUS.AUTHENTICATED },
+    { status: SUBSCRIPTION_STATUS.AUTHENTICATED, razorpayPaymentId },
     { new: true },
   );
   if (!newSub) {
@@ -1265,6 +1504,7 @@ export async function verifyContinuationAuth(userId, razorpayPaymentId, razorpay
 
   // 3. Mark the continuation sub as properly authenticated
   contSub.status = SUBSCRIPTION_STATUS.AUTHENTICATED;
+  contSub.razorpayPaymentId = razorpayPaymentId;
   await contSub.save();
 
   // Find the parent subscription and clear its cancelledAt since it is now authenticated to continue
@@ -1531,6 +1771,7 @@ async function handlePaymentCaptured(payload) {
   if (payment.method && payment.subscription_id) {
     const updateData = {
       "paymentMethod.type": payment.method,
+      razorpayPaymentId: payment.id,
     };
 
     if (payment.card?.last4) {

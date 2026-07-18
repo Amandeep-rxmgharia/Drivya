@@ -35,6 +35,12 @@ export const PERIODS = Object.freeze({
   YEARLY: "yearly",
 });
 
+/** Gateway charge percentage deducted from prorated refunds (Razorpay ~2%). */
+export const GATEWAY_CHARGE_PERCENT = 2;
+
+/** If a user upgrades within this many minutes of subscribing, they get a full refund (no gateway deduction). */
+export const FULL_REFUND_WINDOW_MINUTES = 10;
+
 /**
  * Full plan definitions.
  * `razorpayPlanId` values are populated from env vars
