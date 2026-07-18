@@ -43,7 +43,7 @@ export const PERIODS = Object.freeze({
 export const PLANS = Object.freeze({
   [PLAN_KEYS.FREE]: {
     name: "Starter",
-    storage: 5 * GB,
+    storage: 2 * GB,
     bandwidth: 10 * GB,
     maxUpload: 150 * MB,
     trashDays: 5,

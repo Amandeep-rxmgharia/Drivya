@@ -41,8 +41,8 @@ const PLANS = [
     shortName: "Starter",
     icon: Zap,
     price: { monthly: 0, yearly: 0 },
-    storage: 5 * GB,
-    storageLabel: "5 GB",
+    storage: 2 * GB,
+    storageLabel: "2 GB",
     bandwidth: 10 * GB,
     bandwidthLabel: "10 GB",
     maxUpload: 150 * MB,
@@ -142,7 +142,7 @@ const PAID_PLANS = PLANS.filter((p) => p.key !== "free");
 // Plan ordering for upgrade/downgrade detection
 const PLAN_ORDER = { free: 0, spark_go: 1, boost: 2, pro: 3, apex: 4 };
 
-// Log-scaled fill so 5 GB → 1 TB reads as a meaningful gradient instead of
+// Log-scaled fill so 2 GB → 1 TB reads as a meaningful gradient instead of
 // every paid tier's bar looking almost full next to the free tier.
 const MAX_STORAGE_LOG = Math.log2(PLANS[PLANS.length - 1].storage);
 const MIN_STORAGE_LOG = Math.log2(PLANS[0].storage);
@@ -771,7 +771,7 @@ export default function Payment() {
                             {changeType === "billing_cycle_change" ? (
                               <>
                                 <span className="text-2xl font-display font-extrabold text-foreground">
-                                  ₹5 
+                                  ₹0 
                                 </span>
                               
                               </>

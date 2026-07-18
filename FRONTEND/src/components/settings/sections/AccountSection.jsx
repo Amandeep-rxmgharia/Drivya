@@ -871,11 +871,9 @@ export default function AccountSection({ userProfile, setUserProfile }) {
 
   // ─── Derive tier label ────────────────────────────────────
   const tierLabel =
-    profile.storageLimit > 5 * 1024 * 1024 * 1024
-      ? "Team"
-      : profile.storageLimit > 2 * 1024 * 1024 * 1024
-        ? "Pro"
-        : "Free";
+    profile.storageLimit > 2 * 1024 * 1024 * 1024
+      ? "Pro"
+      : "Free";
 
   if (loading) {
     return (

@@ -94,7 +94,7 @@ const userSchema = new Schema(
     },
     storageLimit: {
       type: Number,
-      default: 5 * 1024 * 1024 * 1024, // 5 GB default (Spark Free)
+      default: 2 * 1024 * 1024 * 1024, // 2 GB default (Spark Free)
       min: [0, "Storage limit cannot be negative"],
     },
     bandwidthUsed: {

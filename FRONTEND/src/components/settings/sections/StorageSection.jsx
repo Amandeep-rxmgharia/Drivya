@@ -334,9 +334,9 @@ export default function StorageSection({ userProfile, setUserProfile }) {
           >
             <span className="flex items-center gap-2">
               <span className="text-sm font-semibold text-foreground">
-                {formatBytes(storageLimit > 5 * 1024 * 1024 * 1024 ? 50 * 1024 * 1024 * 1024 : 2 * 1024 * 1024 * 1024)}
+                {formatBytes(storageLimit > 2 * 1024 * 1024 * 1024 ? 50 * 1024 * 1024 * 1024 : 2 * 1024 * 1024 * 1024)}
               </span>
-              {storageLimit > 5 * 1024 * 1024 * 1024 && (
+              {storageLimit > 2 * 1024 * 1024 * 1024 && (
                 <span className="rounded-md bg-primary/10 border border-primary/20 px-1.5 py-0.5 text-[9px] font-bold text-primary">
                   Pro
                 </span>
