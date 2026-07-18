@@ -10,6 +10,8 @@ import {
   changePlan,
   verifyPlanChange,
   cancelDowngrade,
+  getContinuationAuth,
+  verifyContinuationAuth,
 } from "../controllers/subscriptionController.js";
 
 const router = Router();
@@ -28,5 +30,9 @@ router.get("/invoices", authenticate, getInvoices);
 router.post("/change-plan", authenticate, changePlan);
 router.post("/verify-change", authenticate, verifyPlanChange);
 router.post("/cancel-downgrade", authenticate, cancelDowngrade);
+
+// Protected: continuation subscription auth
+router.get("/continuation-auth", authenticate, getContinuationAuth);
+router.post("/verify-continuation", authenticate, verifyContinuationAuth);
 
 export default router;

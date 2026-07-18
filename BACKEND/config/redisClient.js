@@ -34,6 +34,23 @@ console.log("✅ Redis connected");
  */
 export async function createSubscriber() {
   const sub = redis.duplicate();
+
+  sub.on("error", (err) => {
+    console.error("Subscriber Redis error:", err);
+  });
+
+  sub.on("reconnecting", () => {
+    console.log("Subscriber reconnecting...");
+  });
+
+  sub.on("ready", () => {
+    console.log("Subscriber ready");
+  });
+
+  sub.on("end", () => {
+    console.log("Subscriber connection closed");
+  });
+
   await sub.connect();
   return sub;
 }

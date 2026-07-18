@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -138,11 +139,19 @@ export function FilesLayout({
   const [sortOpen, setSortOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
 
-  // Reset selection when directory changes
+  const [searchParams] = useSearchParams();
+  const selectId = searchParams.get("select");
+
+  // Sync selectedId with currentDirId and selectId parameter
   useEffect(() => {
-    setSelectedId(null);
-    setActiveId(null);
-  }, [currentDirId]);
+    if (selectId) {
+      setSelectedId(selectId);
+      setActiveId(selectId);
+    } else {
+      setSelectedId(null);
+      setActiveId(null);
+    }
+  }, [currentDirId, selectId]);
 
   // Load share status for file badges
   useEffect(() => {

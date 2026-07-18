@@ -340,6 +340,7 @@ export async function getSubscriptionDetails(userId) {
         currentPeriodEnd: sub.currentPeriodEnd,
         paymentMethod: sub.paymentMethod,
         cancelledAt: sub.cancelledAt,
+        cancelReason: sub.cancelReason || null,
       };
 
       // Include pending downgrade info if present
@@ -351,6 +352,30 @@ export async function getSubscriptionDetails(userId) {
           effectiveAfter: sub.pendingPlanChange.effectiveAfter,
           scheduledAt: sub.pendingPlanChange.scheduledAt,
         };
+      }
+
+      // Check if there is a continuation sub that needs Razorpay autopay authorization
+      if (
+        sub.cancelReason === "continuation" &&
+        sub.pendingPlanChange?.newSubscriptionId
+      ) {
+        const contSub = await Subscription.findById(sub.pendingPlanChange.newSubscriptionId).lean();
+        // The continuation sub was created with status CREATED.
+        // We detect that authorization is needed when the status is still CREATED.
+        // Once authorized, it moves to AUTHENTICATED and no longer needs auth.
+        if (
+          contSub &&
+          contSub.status === SUBSCRIPTION_STATUS.CREATED
+        ) {
+          result.subscription.continuationAuth = {
+            needed: true,
+            continuationSubId: contSub._id,
+            razorpaySubscriptionId: contSub.razorpaySubscriptionId,
+            planKey: contSub.planKey,
+            planName: PLANS[contSub.planKey]?.name || contSub.planKey,
+            period: contSub.period,
+          };
+        }
       }
     }
   }
@@ -1121,12 +1146,13 @@ export async function cancelScheduledDowngrade(userId) {
         razorpayCustomerId: oldSub.razorpayCustomerId || "",
         planKey: oldSub.planKey,
         period: oldSub.period,
-        status: SUBSCRIPTION_STATUS.AUTHENTICATED,
+        status: SUBSCRIPTION_STATUS.CREATED,
       });
 
       continuationSubId = contSub._id;
 
-      // Point the old sub's pendingPlanChange to the continuation (same plan)
+      // Point the old sub's pendingPlanChange to the continuation (same plan).
+      // Since it is cancelled on Razorpay, set cancelledAt so the UI knows it will cancel unless continuation is authenticated.
       oldSub.pendingPlanChange = {
         newPlanKey: oldSub.planKey,
         newPeriod: oldSub.period,
@@ -1135,6 +1161,7 @@ export async function cancelScheduledDowngrade(userId) {
         scheduledAt: new Date(),
         effectiveAfter: oldSub.currentPeriodEnd,
       };
+      oldSub.cancelledAt = new Date();
       oldSub.cancelReason = "continuation";
       await oldSub.save();
     } catch (err) {
@@ -1175,6 +1202,98 @@ export async function cancelScheduledDowngrade(userId) {
     message: wasCycleChange
       ? `Cycle change cancelled. You remain on ${planName} (${oldSub.period}).`
       : `Downgrade cancelled. You remain on the ${planName} plan.`,
+  };
+}
+
+// ─── Get Continuation Auth Details ───────────────────────────────
+export async function getContinuationAuthDetails(userId) {
+  // Find the current subscription with a continuation pending
+  const currentSub = await Subscription.findOne({
+    userId,
+    cancelReason: "continuation",
+    "pendingPlanChange.newSubscriptionId": { $ne: null },
+  });
+
+  if (!currentSub) {
+    throw Object.assign(new Error("No continuation subscription found that needs authorization."), { status: 404 });
+  }
+
+  const contSub = await Subscription.findById(currentSub.pendingPlanChange.newSubscriptionId);
+  if (!contSub) {
+    throw Object.assign(new Error("Continuation subscription record not found."), { status: 404 });
+  }
+
+  // Only allow auth if the continuation sub is still pending
+  if (contSub.status !== SUBSCRIPTION_STATUS.CREATED && contSub.status !== SUBSCRIPTION_STATUS.AUTHENTICATED) {
+    throw Object.assign(new Error("Continuation subscription is already active or cancelled."), { status: 400 });
+  }
+
+  const planName = PLANS[contSub.planKey]?.name || contSub.planKey;
+
+  return {
+    razorpaySubscriptionId: contSub.razorpaySubscriptionId,
+    razorpayKeyId: process.env.RAZORPAY_KEY_ID,
+    planName,
+    planKey: contSub.planKey,
+    period: contSub.period,
+  };
+}
+
+// ─── Verify Continuation Auth ────────────────────────────────────
+export async function verifyContinuationAuth(userId, razorpayPaymentId, razorpaySubscriptionId, razorpaySignature) {
+  // 1. HMAC verification
+  const body = razorpayPaymentId + "|" + razorpaySubscriptionId;
+  const expectedSignature = crypto
+    .createHmac("sha256", RAZORPAY_KEY_SECRET)
+    .update(body)
+    .digest("hex");
+
+  if (expectedSignature !== razorpaySignature) {
+    throw Object.assign(new Error("Authentication verification failed — invalid signature."), { status: 400 });
+  }
+
+  // 2. Find the continuation subscription
+  const contSub = await Subscription.findOne({ razorpaySubscriptionId });
+  if (!contSub) {
+    throw Object.assign(new Error("Continuation subscription not found."), { status: 404 });
+  }
+
+  // Ensure this continuation sub belongs to the requesting user
+  if (contSub.userId.toString() !== userId.toString()) {
+    throw Object.assign(new Error("Subscription does not belong to this user."), { status: 403 });
+  }
+
+  // 3. Mark the continuation sub as properly authenticated
+  contSub.status = SUBSCRIPTION_STATUS.AUTHENTICATED;
+  await contSub.save();
+
+  // Find the parent subscription and clear its cancelledAt since it is now authenticated to continue
+  const parentSub = await Subscription.findOne({
+    userId,
+    "pendingPlanChange.newSubscriptionId": contSub._id,
+  });
+  if (parentSub) {
+    parentSub.cancelledAt = null;
+    await parentSub.save();
+  }
+
+  // 4. Notify user
+  const planName = PLANS[contSub.planKey]?.name || contSub.planKey;
+  await notify(
+    userId,
+    "Autopay Authorized",
+    `Your ${planName} plan continuation has been authorized for automatic payments. Your subscription will continue seamlessly.`,
+  );
+
+  return {
+    success: true,
+    subscription: {
+      id: contSub._id,
+      planKey: contSub.planKey,
+      period: contSub.period,
+      status: contSub.status,
+      planName,
+    },
   };
 }
 

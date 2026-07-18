@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect, useCallback, memo } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useState, useMemo, useEffect, useCallback, memo, useRef } from "react";
+import { useOutletContext, useSearchParams } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 import { AnimatePresence, motion } from "motion/react";
@@ -229,6 +229,8 @@ function SharedFilesSection({
   onRevokeShare,
   onDownload,
 }) {
+  const [searchParams] = useSearchParams();
+  const selectId = searchParams.get("select");
   const [searchQuery, setSearchQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const [sortBy, setSortBy] = useState("recent");
@@ -463,6 +465,7 @@ function SharedFilesSection({
                 passwordProtected={file.password}
                 visibility={file.visibility}
                 copiedId={copiedId}
+                selectId={selectId}
                 onCopyLink={handleCopyLink}
                 onToggleLink={handleToggleLink}
                 onOpenModal={handleOpenModal}
@@ -515,6 +518,7 @@ const SharedFileCard = memo(function SharedFileCard({
   passwordProtected,
   visibility,
   copiedId,
+  selectId,
   onCopyLink,
   onToggleLink,
   onOpenModal,
@@ -528,6 +532,18 @@ const SharedFileCard = memo(function SharedFileCard({
     ? new Date(file.expiresAt) < new Date()
     : false;
   const isCopied = copiedId === file.id;
+  const isSelected = file.id === selectId || file.resourceId === selectId || file._raw?.id === selectId;
+
+  const cardRef = useRef(null);
+
+  useEffect(() => {
+    if (isSelected && cardRef.current) {
+      const timer = setTimeout(() => {
+        cardRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [isSelected]);
 
   return (
     <article
@@ -544,15 +560,18 @@ const SharedFileCard = memo(function SharedFileCard({
       }}
     >
       <div
+        ref={cardRef}
         className={cn(
           "relative w-full text-left rounded-xl border outline-none",
           "bg-card border-border shadow-sm dark:bg-card/50 dark:backdrop-blur-sm dark:shadow-none",
           rowEase,
           "transition-[transform,box-shadow,border-color,background-color]",
-          hovered && [
-            "-translate-y-px border-primary/25 bg-secondary/60",
-            "shadow-sm dark:shadow-[0_8px_24px_-12px_rgba(59,130,246,0.2)]",
-          ],
+          isSelected
+            ? "border-primary bg-primary/5 dark:bg-primary/10 shadow-[0_0_15px_rgba(59,130,246,0.35)] ring-1 ring-primary/30"
+            : (hovered && [
+                "-translate-y-px border-primary/25 bg-secondary/60",
+                "shadow-sm dark:shadow-[0_8px_24px_-12px_rgba(59,130,246,0.2)]",
+              ]),
           "focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
           isGrid && "flex h-full flex-col p-4",
           !isGrid && "p-3.5 sm:p-4",

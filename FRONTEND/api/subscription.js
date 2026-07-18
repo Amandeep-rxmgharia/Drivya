@@ -48,3 +48,15 @@ export const cancelScheduledDowngrade = async () => {
   const response = await api.post("/api/subscription/cancel-downgrade");
   return response.data;
 };
+
+// ─── Continuation Auth ───────────────────────────────────────────
+
+export const getContinuationAuth = async () => {
+  const response = await api.get("/api/subscription/continuation-auth");
+  return response.data;
+};
+
+export const verifyContinuationAuth = async (data) => {
+  const response = await api.post("/api/subscription/verify-continuation", data);
+  return response.data;
+};

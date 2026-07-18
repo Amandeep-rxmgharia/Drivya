@@ -22,6 +22,7 @@ import dropboxRoutes, { dropboxCallbackHandler } from "./routes/dropboxRoutes.js
 import aiRoutes from "./routes/aiRoutes.js";
 import webhookRoutes from "./routes/webhookRoutes.js";
 import subscriptionRoutes from "./routes/subscriptionRoutes.js";
+import searchRoutes from "./routes/searchRoutes.js";
 import { connectDb } from "./config/db.js";
 import redis from "./config/redisClient.js";
 import { ensureStorageRoot } from "./services/storageService.js";
@@ -110,6 +111,7 @@ app.use("/api/storage", storageRoutes);
 app.use("/api/google", googleDriveRoutes);
 app.use("/api/dropbox", dropboxRoutes);
 app.use("/api/ai", aiRoutes);
+app.use("/api/search", searchRoutes);
 app.use("/api/subscription", subscriptionRoutes);
 app.get("/auth/google/callback", googleCallbackHandler);
 app.get("/auth/google/login/callback", googleLoginCallbackHandler);

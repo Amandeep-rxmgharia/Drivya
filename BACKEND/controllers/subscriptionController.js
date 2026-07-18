@@ -9,6 +9,8 @@ import {
   verifyDowngradeAuth as verifyDowngradeSvc,
   verifyBillingCycleChangeAuth as verifyBillingCycleChangeSvc,
   cancelScheduledDowngrade as cancelDowngradeSvc,
+  getContinuationAuthDetails as getContinuationAuthSvc,
+  verifyContinuationAuth as verifyContinuationAuthSvc,
 } from "../services/subscriptionService.js";
 import { PLANS, PLAN_KEYS, PERIODS } from "../constants/subscriptionConstants.js";
 
@@ -170,6 +172,38 @@ export const verifyPlanChange = async (req, res, next) => {
 export const cancelDowngrade = async (req, res, next) => {
   try {
     const result = await cancelDowngradeSvc(req.user.id);
+    return res.json(result);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── Get Continuation Auth Details ──────────────────────────────
+export const getContinuationAuth = async (req, res, next) => {
+  try {
+    const result = await getContinuationAuthSvc(req.user.id);
+    return res.json(result);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── Verify Continuation Auth ───────────────────────────────────
+export const verifyContinuationAuth = async (req, res, next) => {
+  try {
+    const { razorpay_payment_id, razorpay_subscription_id, razorpay_signature } = req.body;
+
+    if (!razorpay_payment_id || !razorpay_subscription_id || !razorpay_signature) {
+      return res.status(400).json({ message: "Missing verification fields." });
+    }
+
+    const result = await verifyContinuationAuthSvc(
+      req.user.id,
+      razorpay_payment_id,
+      razorpay_subscription_id,
+      razorpay_signature,
+    );
+
     return res.json(result);
   } catch (err) {
     next(err);

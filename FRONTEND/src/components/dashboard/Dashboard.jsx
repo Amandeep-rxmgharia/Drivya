@@ -21,6 +21,7 @@ import {
   Trash2,
   Upload,
   User,
+  File,
   CreditCard,
   ShieldCheck,
   HardDrive,
@@ -44,6 +45,8 @@ import { FloatingActionButton } from "./FloatingActionButton.jsx";
 import { AiAssistantPanel } from "./AiAssistantPanel.jsx";
 import { DashboardLoader } from "./DashboardLoader.jsx";
 import { getCurrentUser, logoutUser } from "../../../api/auth.js";
+import { searchItems } from "../../../api/search.js";
+import { detectFileKind, getFileTypeStyle } from "@/lib/file-types.js";
 import { AuthProvider } from "@/lib/AuthContext";
 import {
   listNotifications,
@@ -422,6 +425,58 @@ function Topbar({
   const navigate = useNavigate();
   const { mode, setMode } = useTheme();
 
+  // Search states
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState({ files: [], directories: [], collaborators: [] });
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchRef = useRef(null);
+
+  // Close search dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (searchRef.current && !searchRef.current.contains(event.target)) {
+        setSearchOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Close search dropdown on ESC
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setSearchOpen(false);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Search with 300ms debounce
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults({ files: [], directories: [], collaborators: [] });
+      setSearchLoading(false);
+      return;
+    }
+
+    setSearchLoading(true);
+    const delayDebounceFn = setTimeout(async () => {
+      try {
+        const data = await searchItems(searchQuery);
+        setSearchResults(data);
+      } catch (err) {
+        console.error("Search failed:", err);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery]);
+
   const isMac =
     typeof window !== "undefined" &&
     /Mac|iPod|iPhone|iPad/.test(navigator.platform || "");
@@ -495,19 +550,148 @@ function Topbar({
         </button>}
 
         {/* search */}
-        <div className="flex-1">
+        <div className="flex-1" ref={searchRef}>
           <div className="group relative">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input
               type="text"
               id="topbar-search-input"
-              placeholder="Search files, folders, people…"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setSearchOpen(true);
+              }}
+              onFocus={() => setSearchOpen(true)}
+              placeholder="Search files, folders, collaborators…"
               className="h-10 w-full rounded-xl border border-border bg-secondary/30 pl-10 pr-24 text-sm text-foreground placeholder:text-muted-foreground/80 focus:outline-none focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all"
             />
             <div className="absolute right-2.5 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-1">
               <Kbd>{modKeySymbol}</Kbd>
               <Kbd>K</Kbd>
             </div>
+
+            {/* Search Dropdown */}
+            <AnimatePresence>
+              {searchOpen && (searchQuery.trim() || searchLoading) && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  transition={{ duration: 0.15, ease: "easeOut" }}
+                  className="absolute top-full left-0 mt-2 w-full z-50 rounded-2xl border border-border/80 bg-background/95 backdrop-blur-xl shadow-2xl p-4 overflow-y-auto max-h-[400px] scrollbar-thin"
+                >
+                  {searchLoading ? (
+                    <div className="flex items-center justify-center py-8 gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      Searching...
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {searchResults.files.length === 0 &&
+                      searchResults.directories.length === 0 &&
+                      searchResults.collaborators.length === 0 ? (
+                        <div className="text-center py-6 text-sm text-muted-foreground">
+                          No results found for "{searchQuery}"
+                        </div>
+                      ) : (
+                        <>
+                          {/* Folders */}
+                          {searchResults.directories.length > 0 && (
+                            <div>
+                              <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80 mb-2 px-2.5">
+                                Folders
+                              </div>
+                              <div className="space-y-1">
+                                {searchResults.directories.map((dir) => (
+                                  <button
+                                    key={dir._id}
+                                    onClick={() => {
+                                      navigate(`/dashboard/drive?dir=${dir._id}`);
+                                      setSearchOpen(false);
+                                      setSearchQuery("");
+                                    }}
+                                    className="w-full text-left flex items-center gap-3 px-2.5 py-2 rounded-xl hover:bg-secondary/60 text-sm font-medium transition-all group/item"
+                                  >
+                                    <Folder className="h-4 w-4 text-violet-500 shrink-0" />
+                                    <span className="truncate text-foreground group-hover/item:text-primary transition-colors">
+                                      {dir.name}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Files */}
+                          {searchResults.files.length > 0 && (
+                            <div>
+                              <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80 mb-2 px-2.5">
+                                Files
+                              </div>
+                              <div className="space-y-1">
+                                {searchResults.files.map((file) => {
+                                  const kind = detectFileKind(file.originalName, file.mimeType);
+                                  const style = getFileTypeStyle(kind);
+                                  const IconComponent = style.icon || File;
+                                  return (
+                                    <button
+                                      key={file._id}
+                                      onClick={() => {
+                                        navigate(`/dashboard/drive?dir=${file.directoryId}&select=${file._id}`);
+                                        setSearchOpen(false);
+                                        setSearchQuery("");
+                                      }}
+                                      className="w-full text-left flex items-center gap-3 px-2.5 py-2 rounded-xl hover:bg-secondary/60 text-sm font-medium transition-all group/item"
+                                    >
+                                      <IconComponent className={`h-4 w-4 ${style.iconColor || "text-muted-foreground"} shrink-0`} />
+                                      <span className="truncate text-foreground group-hover/item:text-primary transition-colors">
+                                        {file.originalName}
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Collaborators */}
+                          {searchResults.collaborators.length > 0 && (
+                            <div>
+                              <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80 mb-2 px-2.5">
+                                Collaborators
+                              </div>
+                              <div className="space-y-1">
+                                {searchResults.collaborators.map((collab) => (
+                                  <button
+                                    key={collab.id}
+                                    onClick={() => {
+                                      navigate(`/dashboard/shared?select=${collab.shareId}`);
+                                      setSearchOpen(false);
+                                      setSearchQuery("");
+                                    }}
+                                    className="w-full text-left flex items-center gap-3 px-2.5 py-2 rounded-xl hover:bg-secondary/60 text-sm font-medium transition-all group/item"
+                                  >
+                                    <User className="h-4 w-4 text-emerald-500 shrink-0" />
+                                    <div className="min-w-0 flex-1">
+                                      <div className="truncate font-semibold text-foreground group-hover/item:text-primary transition-colors leading-none">
+                                        {collab.name}
+                                      </div>
+                                      <div className="truncate text-[11px] text-muted-foreground mt-1 leading-none">
+                                        {collab.email} · collaborating on <span className="italic font-medium text-foreground">{collab.shareName}</span>
+                                      </div>
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
 

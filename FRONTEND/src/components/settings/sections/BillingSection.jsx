@@ -16,6 +16,7 @@ import {
   Rocket,
   Shield,
   RefreshCw,
+  ShieldCheck,
 } from "lucide-react";
 import {
   SettingSection,
@@ -25,6 +26,8 @@ import {
   getInvoices,
   cancelSubscription,
   cancelScheduledDowngrade,
+  getContinuationAuth,
+  verifyContinuationAuth,
 } from "../../../../api/subscription.js";
 
 const PLAN_NAMES = {
@@ -86,6 +89,8 @@ export default function BillingSection({ userProfile }) {
   const [cancelError, setCancelError] = useState("");
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancelDowngradeLoading, setCancelDowngradeLoading] = useState(false);
+  const [continuationAuthLoading, setContinuationAuthLoading] = useState(false);
+  const [continuationAuthError, setContinuationAuthError] = useState("");
 
   // Fetch subscription + invoices on mount
   useEffect(() => {
@@ -124,6 +129,8 @@ export default function BillingSection({ userProfile }) {
   const pendingPlanChange = subscription?.pendingPlanChange;
   const isActive = subscription?.status === "active" || subscription?.status === "authenticated";
   const isCancelled = subscription?.cancelledAt != null;
+  const isContinuation = subscription?.cancelReason === "continuation";
+  const continuationAuth = subscription?.continuationAuth;
   const isDowngradeScheduled =
     (userProfile?.subscription?.status === "downgrade_scheduled" || !!pendingPlanChange) &&
     (!pendingPlanChange || pendingPlanChange.newPlanKey !== planKey);
@@ -204,6 +211,75 @@ export default function BillingSection({ userProfile }) {
     }
   };
 
+  // Continuation auth handler — opens Razorpay Checkout for auth-only
+  const handleContinuationAuth = async () => {
+    setContinuationAuthLoading(true);
+    setContinuationAuthError("");
+    try {
+      // 1. Get the continuation sub's Razorpay details
+      const data = await getContinuationAuth();
+
+      // 2. Open Razorpay Checkout for auth-only
+      const options = {
+        key: data.razorpayKeyId,
+        subscription_id: data.razorpaySubscriptionId,
+        name: "Drivya",
+        description: `Authorize ${data.planName} Plan Continuation — ${data.period === "yearly" ? "Yearly" : "Monthly"}`,
+        handler: async (response) => {
+          // 3. Verify the auth signature
+          try {
+            await verifyContinuationAuth({
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_subscription_id: response.razorpay_subscription_id,
+              razorpay_signature: response.razorpay_signature,
+            });
+
+            // 4. Refresh subscription data
+            const sub = await getSubscription();
+            setSubData(sub);
+            window.dispatchEvent(new CustomEvent("refresh-drive"));
+
+            // Toast success
+            window.dispatchEvent(
+              new CustomEvent("add-drivya-notification", {
+                detail: {
+                  title: "Autopay Authorized",
+                  description: `Your ${data.planName} plan continuation is now authorized for seamless billing.`,
+                  type: "success",
+                  actionPath: "/dashboard/settings/billing",
+                  actionLabel: "View Billing",
+                },
+              }),
+            );
+          } catch (err) {
+            setContinuationAuthError(err.response?.data?.message || "Authorization verification failed.");
+          }
+        },
+        theme: {
+          color: "#7c3aed",
+        },
+        modal: {
+          ondismiss: () => {
+            setContinuationAuthLoading(false);
+          },
+          confirm_close: true,
+        },
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.on("payment.failed", (response) => {
+        setContinuationAuthError(
+          response.error?.description || "Authorization failed. Please try again.",
+        );
+      });
+      rzp.open();
+      setContinuationAuthLoading(false); // modal is now open
+    } catch (err) {
+      setContinuationAuthError(err.response?.data?.message || "Failed to start authorization. Please try again.");
+      setContinuationAuthLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -272,7 +348,7 @@ export default function BillingSection({ userProfile }) {
                       Cancel
                     </button>
                   )}
-                  {isCancelled && !isDowngradeScheduled && (
+                  {isCancelled && !isDowngradeScheduled && (!isContinuation || continuationAuth?.needed) && (
                     <span className="inline-flex h-9 items-center gap-1.5 px-3 text-[11px] font-semibold text-amber-500 bg-amber-500/10 border border-amber-500/20 rounded-xl">
                       <AlertCircle className="h-3 w-3" />
                       Cancels {renewsVal}
@@ -340,6 +416,60 @@ export default function BillingSection({ userProfile }) {
           </div>
         </div>
       </SettingSection>
+
+      {/* Continuation Auth Required Banner */}
+      {continuationAuth?.needed && (
+        <SettingSection
+          id="continuation-auth"
+          icon={ShieldCheck}
+          title="Authorization Required"
+          description="Authorize autopay to ensure uninterrupted service."
+        >
+          <div className="px-6 py-5">
+            <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.04] p-4">
+              <div className="flex flex-col md:flex-row md:items-center gap-4 justify-between">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500">
+                    <ShieldCheck className="h-5 w-5" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-sm font-semibold text-foreground">
+                      Autopay Authorization Needed
+                    </div>
+                    <div className="text-xs text-muted-foreground leading-relaxed">
+                      Your <span className="font-semibold text-foreground">{continuationAuth.planName}</span> plan
+                      continuation requires payment method authorization to ensure automatic billing
+                      when your current cycle ends{subscription?.currentPeriodEnd ? (
+                        <> on <span className="font-medium text-foreground">{renewsVal}</span></>
+                      ) : null}.
+                      Without authorization, your subscription may lapse.
+                    </div>
+                    {continuationAuthError && (
+                      <p className="text-xs text-destructive flex items-center gap-1 mt-1">
+                        <XCircle className="h-3 w-3" /> {continuationAuthError}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="shrink-0">
+                  <button
+                    onClick={handleContinuationAuth}
+                    disabled={continuationAuthLoading}
+                    className="inline-flex h-9 items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-5 text-xs font-semibold text-white shadow-sm hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-50"
+                  >
+                    {continuationAuthLoading ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <ShieldCheck className="h-3.5 w-3.5" />
+                    )}
+                    Authorize Now
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </SettingSection>
+      )}
 
       {/* Scheduled Downgrade */}
       {isDowngradeScheduled && pendingPlanChange && (
