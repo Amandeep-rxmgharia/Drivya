@@ -46,13 +46,13 @@ import { useOutletContext } from "react-router-dom";
 import {getStoragePreferences} from '../../api/storage.js'
 /* ───────────────────────── Helpers ───────────────────────── */
 function useAutoDeleteDays() {
-  const [value, setValue] = useState(null);
+  const [value, setValue] = useState(30);
 
   useEffect(() => {
     async function loadPreferences() {
       try {
         const autoTrashDays = await getStoragePreferences();
-        setValue(autoTrashDays?.preferences?.trashAutoEmptyDays);
+        setValue(autoTrashDays?.preferences?.trashAutoEmptyDays || 30);
       } catch (error) {
         console.error(error);
       }
@@ -61,7 +61,7 @@ function useAutoDeleteDays() {
     loadPreferences();
   }, []);
 
-  return value;
+  return value || 30;
 }
 
 // function getAutoDeleteDays() {
@@ -632,7 +632,7 @@ function CategoryGroup({
 
 /* ───────────────────────── Empty State ───────────────────────── */
 
-function EmptyState({ hasFilters }) {
+function EmptyState({ hasFilters, AUTO_DELETE_DAYS }) {
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center px-4">
       <div className="relative">
@@ -653,7 +653,7 @@ function EmptyState({ hasFilters }) {
       <p className="mt-2 text-sm text-muted-foreground max-w-sm leading-relaxed">
         {hasFilters
           ? "Try adjusting your filters or search to find what you're looking for."
-          : "Files you delete will appear here for 30 days before being permanently removed. Your drive is clean!"}
+          : `Files you delete will appear here for ${AUTO_DELETE_DAYS || 30} days before being permanently removed. Your drive is clean!`}
       </p>
     </div>
   );
@@ -1221,7 +1221,7 @@ export default function TrashFiles() {
               </button>
             </div>
           ) : grouped.length === 0 ? (
-            <EmptyState hasFilters={hasFilters} />
+            <EmptyState hasFilters={hasFilters} AUTO_DELETE_DAYS={AUTO_DELETE_DAYS} />
           ) : (
             grouped.map((group, gi) => (
               <CategoryGroup

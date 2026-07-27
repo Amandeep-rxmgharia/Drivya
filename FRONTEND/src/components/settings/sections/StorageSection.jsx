@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { HardDrive, Trash2, FileUp, Bell, RefreshCw, AlertTriangle, Clock } from "lucide-react";
+import { HardDrive, Trash2, FileUp, Bell, RefreshCw, AlertTriangle, Clock, ArrowUpDown } from "lucide-react";
 import { AnimatePresence } from "motion/react";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import {
@@ -24,21 +24,25 @@ import { formatBytes } from "@/lib/file-types";
 
 /** Convert days number to select value */
 function daysToSelectValue(days) {
+  if (days === 5) return "5d";
   if (days === 7) return "7d";
+  if (days === 15) return "15d";
   if (days === 30) return "30d";
+  if (days === 45) return "45d";
   if (days === 60) return "60d";
   if (days === 90) return "90d";
-  if (days === null || days === undefined) return "never";
   return "30d";
 }
 
 /** Convert select value to days number */
 function selectValueToDays(val) {
+  if (val === "5d") return 5;
   if (val === "7d") return 7;
+  if (val === "15d") return 15;
   if (val === "30d") return 30;
+  if (val === "45d") return 45;
   if (val === "60d") return 60;
   if (val === "90d") return 90;
-  if (val === "never") return null;
   return 30;
 }
 
@@ -112,6 +116,9 @@ export default function StorageSection({ userProfile, setUserProfile }) {
   const [saveError, setSaveError] = useState(null);
   const [savePending, setSavePending] = useState(false);
 
+  // ── Plan-based trash day limit ──
+  const [maxTrashDays, setMaxTrashDays] = useState(90);
+
   // ── Local-only settings (no backend) ──
   const [compressionPref, setCompressionPref] = useState("none");
 
@@ -146,6 +153,9 @@ export default function StorageSection({ userProfile, setUserProfile }) {
         setTrashAutoEmpty(daysToSelectValue(prefs.trashAutoEmptyDays));
         setAlertThreshold80(prefs.alertAt80 !== false);
         setAlertThreshold95(prefs.alertAt95 !== false);
+      }
+      if (res?.maxTrashDays) {
+        setMaxTrashDays(res.maxTrashDays);
       }
     } catch (err) {
       setSaveError(
@@ -205,6 +215,26 @@ export default function StorageSection({ userProfile, setUserProfile }) {
   // Trash display
   const trashSize = overview?.trash?.totalSize ?? 0;
   const trashCount = overview?.trash?.count ?? 0;
+
+  // ── Bandwidth display values ──
+  const bandwidthUsed = overview?.bandwidthUsed ?? 0;
+  const bandwidthLimit = overview?.bandwidthLimit ?? 10 * 1024 * 1024 * 1024;
+  const bandwidthPct = bandwidthLimit > 0 ? Math.min(100, (bandwidthUsed / bandwidthLimit) * 100) : 0;
+
+  // ── Trash day options filtered by plan ──
+  const trashDayOptions = useMemo(() => {
+    const allOptions = [
+      { value: "5d", label: "5 days", days: 5 },
+      { value: "7d", label: "7 days", days: 7 },
+      { value: "15d", label: "15 days", days: 15 },
+      { value: "30d", label: "30 days", days: 30 },
+      { value: "45d", label: "45 days", days: 45 },
+      { value: "60d", label: "60 days", days: 60 },
+      { value: "90d", label: "90 days", days: 90 },
+    ];
+    const allowed = allOptions.filter((opt) => opt.days <= maxTrashDays);
+    return allowed;
+  }, [maxTrashDays]);
 
   // ── Empty Trash handler ──
   const handleEmptyTrash = useCallback(() => {
@@ -334,14 +364,45 @@ export default function StorageSection({ userProfile, setUserProfile }) {
           >
             <span className="flex items-center gap-2">
               <span className="text-sm font-semibold text-foreground">
-                {formatBytes(storageLimit > 2 * 1024 * 1024 * 1024 ? 50 * 1024 * 1024 * 1024 : 2 * 1024 * 1024 * 1024)}
+                {overview?.maxUpload != null ? formatBytes(overview.maxUpload) : "Unlimited"}
               </span>
-              {storageLimit > 2 * 1024 * 1024 * 1024 && (
-                <span className="rounded-md bg-primary/10 border border-primary/20 px-1.5 py-0.5 text-[9px] font-bold text-primary">
-                  Pro
-                </span>
-              )}
+              <span className="rounded-md bg-primary/10 border border-primary/20 px-1.5 py-0.5 text-[9px] font-bold text-primary">
+                {overview?.planName || "Starter"}
+              </span>
             </span>
+          </SettingRow>
+
+          {/* Bandwidth Usage */}
+          <SettingRow
+            label="Bandwidth Usage"
+            description="Monthly data transfer used for downloads and previews."
+          >
+            <div className="w-full max-w-xs space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-foreground tabular-nums">
+                  {formatBytes(bandwidthUsed)}
+                </span>
+                <span className="text-muted-foreground">
+                  of {formatBytes(bandwidthLimit)}
+                </span>
+              </div>
+              <div className="h-2 w-full rounded-full bg-secondary/30 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    bandwidthPct >= 90
+                      ? "bg-destructive"
+                      : bandwidthPct >= 70
+                        ? "bg-amber-500"
+                        : "bg-primary"
+                  }`}
+                  style={{ width: `${bandwidthPct}%` }}
+                />
+              </div>
+              <div className="text-[10px] text-muted-foreground/70 flex items-center gap-1">
+                <ArrowUpDown className="h-3 w-3" />
+                Resets each billing cycle
+              </div>
+            </div>
           </SettingRow>
         </SettingSection>
 
@@ -359,45 +420,37 @@ export default function StorageSection({ userProfile, setUserProfile }) {
             <SettingSelect
               value={trashAutoEmpty}
               onChange={setTrashAutoEmpty}
-              options={[
-                { value: "7d", label: "7 days" },
-                { value: "30d", label: "30 days" },
-                { value: "60d", label: "60 days" },
-                { value: "90d", label: "90 days" },
-                { value: "never", label: "Never (manual only)" },
-              ]}
+              options={trashDayOptions}
             />
           </SettingRow>
 
-          {trashAutoEmpty !== "never" && (
-            <>
-              <SettingRow
-                label="Next Scheduled Cleanup"
-                description="Expired trash files are automatically deleted on a daily schedule."
-              >
-                <div className="flex items-center gap-2">
-                  <Clock className="h-3.5 w-3.5 text-primary" />
-                  <span className="text-sm font-medium text-foreground tabular-nums">
-                    {getNextCleanupDisplay()}
-                  </span>
-                </div>
-              </SettingRow>
+          <SettingRow
+            label="Next Scheduled Cleanup"
+            description="Expired trash files are automatically deleted on a daily schedule."
+          >
+            <div className="flex items-center gap-2">
+              <Clock className="h-3.5 w-3.5 text-primary" />
+              <span className="text-sm font-medium text-foreground tabular-nums">
+                {getNextCleanupDisplay()}
+              </span>
+            </div>
+          </SettingRow>
 
-              <SettingRow>
-                <SettingBanner variant="info" icon={Trash2}>
-                  Files in trash will be permanently deleted after{" "}
-                  {trashAutoEmpty === "7d"
-                    ? "7 days"
-                    : trashAutoEmpty === "30d"
-                      ? "30 days"
-                      : trashAutoEmpty === "60d"
-                        ? "60 days"
-                        : "90 days"}
-                  . This cannot be undone.
-                </SettingBanner>
-              </SettingRow>
-            </>
-          )}
+          <SettingRow>
+            <SettingBanner variant="info" icon={Trash2}>
+              Files in trash will be permanently deleted after{" "}
+              {{
+                "5d": "5 days",
+                "7d": "7 days",
+                "15d": "15 days",
+                "30d": "30 days",
+                "45d": "45 days",
+                "60d": "60 days",
+                "90d": "90 days",
+              }[trashAutoEmpty] || "30 days"}
+              . This cannot be undone.
+            </SettingBanner>
+          </SettingRow>
         </SettingSection>
 
         {/* ═══ Storage Alerts ═══ */}

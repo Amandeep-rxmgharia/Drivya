@@ -51,6 +51,11 @@ const PLANS = [
     trashDays: 5,
     color: "#64748b",
     glowColor: "rgba(148, 163, 184, 0.08)",
+    perks: [
+      "10 GB monthly bandwidth",
+      "Up to 150 MB file upload",
+      "5-day trash recovery",
+    ],
   },
   {
     key: "spark_go",
@@ -62,12 +67,17 @@ const PLANS = [
     storageLabel: "50 GB",
     bandwidth: 25 * GB,
     bandwidthLabel: "25 GB",
-    maxUpload: null,
-    maxUploadLabel: "Unlimited",
+    maxUpload: 2 * GB,
+    maxUploadLabel: "2 GB",
     trashDays: 15,
     color: "#3b82f6",
     glowColor: "rgba(59, 130, 246, 0.15)",
-    perks: ["Unlimited file uploads", "Email support", "15-day trash recovery"],
+    perks: [
+      "25 GB monthly bandwidth",
+      "Up to 2 GB file upload",
+      "Email support",
+      "15-day trash recovery",
+    ],
   },
   {
     key: "boost",
@@ -79,16 +89,16 @@ const PLANS = [
     storageLabel: "100 GB",
     bandwidth: 70 * GB,
     bandwidthLabel: "70 GB",
-    maxUpload: null,
-    maxUploadLabel: "Unlimited",
+    maxUpload: 10 * GB,
+    maxUploadLabel: "10 GB",
     trashDays: 30,
     color: "#8b5cf6",
     glowColor: "rgba(139, 92, 246, 0.15)",
     perks: [
-      "Unlimited file uploads",
+      "70 GB monthly bandwidth",
+      "Up to 10 GB file upload",
       "Priority email support",
       "30-day trash recovery",
-      "Advanced sharing controls",
     ],
   },
   {
@@ -102,16 +112,16 @@ const PLANS = [
     storageLabel: "500 GB",
     bandwidth: 300 * GB,
     bandwidthLabel: "300 GB",
-    maxUpload: null,
-    maxUploadLabel: "Unlimited",
+    maxUpload: 50 * GB,
+    maxUploadLabel: "50 GB",
     trashDays: 45,
     color: "#f59e0b",
     glowColor: "rgba(245, 158, 11, 0.2)",
     perks: [
-      "Unlimited file uploads",
+      "300 GB monthly bandwidth",
+      "Up to 50 GB file upload",
       "24/7 priority support",
       "45-day trash recovery",
-      "Version history",
     ],
   },
   {
@@ -130,8 +140,8 @@ const PLANS = [
     color: "#f43f5e",
     glowColor: "rgba(244, 63, 94, 0.15)",
     perks: [
-      "Unlimited file uploads",
-      "Dedicated support line",
+      "700 GB monthly bandwidth",
+      "Unlimited file upload size",
       "60-day trash recovery",
       "Early access to features",
     ],
@@ -712,7 +722,7 @@ export default function Payment() {
 
                       {/* Perks */}
                       <ul className="relative space-y-1.5 mb-5 flex-1">
-                        {(plan.perks || []).slice(0, 4).map((perk) => (
+                        {(plan.perks || []).map((perk) => (
                           <li
                             key={perk}
                             className="flex items-start gap-1.5 text-[11px] text-muted-foreground leading-snug"

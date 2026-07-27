@@ -394,7 +394,7 @@ export default function BillingSection({ userProfile }) {
           id="recent-refund"
           icon={Undo2}
           title="Upgrade Refunds"
-          description="Refunds typically take 5-7 business days to reflect in the you'r account"
+          description="Refunds typically take 5-7 business days to reflect in you'r account"
         >
           <div className="px-6 py-3">
             <div className="rounded-xl border border-border/50 overflow-hidden divide-y divide-border/30 bg-secondary/5">

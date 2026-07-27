@@ -239,7 +239,7 @@ function Sidebar({ collapsed, onClose, mobileOpen, userProfile }) {
             to="/dashboard/settings"
             className={[
               "group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
-              activeSegment === "settings"
+              activeSegment === "settings" || location.pathname.startsWith("/dashboard/settings")
                 ? "bg-secondary/70 text-foreground"
                 : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground",
               collapsed ? "justify-center" : "",
@@ -538,16 +538,19 @@ function Topbar({
         <button onClick={onMobileMenu} className={`${iconBtn} lg:hidden`}>
           <Menu className="h-4 w-4" />
         </button>
-        {useLocation().pathname !== "/dashboard/payment" && <button
-          onClick={onToggleSidebar}
-          className={`${iconBtn} hidden lg:inline-flex`}
-        >
-          {sidebarCollapsed ? (
-            <PanelLeftOpen className="h-4 w-4 hidden lg:block" />
-          ) : (
-            <PanelLeftClose className="h-4 w-4 hidden lg:block" />
+        {useLocation().pathname !== "/dashboard/payment" &&
+          !useLocation().pathname.startsWith("/dashboard/settings") && (
+            <button
+              onClick={onToggleSidebar}
+              className={`${iconBtn} hidden lg:inline-flex`}
+            >
+              {sidebarCollapsed ? (
+                <PanelLeftOpen className="h-4 w-4 hidden lg:block" />
+              ) : (
+                <PanelLeftClose className="h-4 w-4 hidden lg:block" />
+              )}
+            </button>
           )}
-        </button>}
 
         {/* search */}
         <div className="flex-1" ref={searchRef}>
@@ -1206,9 +1209,11 @@ export function DashboardLayout() {
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
   const navigate = useNavigate();
   useEffect(() => {
-    if (location.pathname === "/dashboard/payment") {
+    if (
+      location.pathname === "/dashboard/payment" ||
+      location.pathname.startsWith("/dashboard/settings")
+    ) {
       setCollapsed(true);
-      console.log('running');
     } else {
       setCollapsed(false);
     }

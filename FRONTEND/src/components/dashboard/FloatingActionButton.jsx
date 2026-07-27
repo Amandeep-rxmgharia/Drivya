@@ -285,7 +285,7 @@ function UploadFilesModal({ onClose, initialFiles = [] }) {
       setUploading(false);
       setUploadProgress({});
       setErrorMessage(
-        err.response?.data?.message || "Upload failed. Please ensure file sizes are within 50MB and quota is not exceeded."
+        err.response?.data?.message || "Upload failed. Please ensure file sizes and storage quota are within your plan limits."
       );
     }
   };

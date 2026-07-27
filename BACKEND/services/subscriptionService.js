@@ -224,6 +224,7 @@ export async function syncPlanLimits(userId, planKey) {
   await User.findByIdAndUpdate(userId, {
     storageLimit: limits.storage,
     bandwidthLimit: limits.bandwidth,
+    bandwidthUsed: 0, // Reset bandwidth usage on plan activation/change
     "storagePreferences.trashAutoEmptyDays": limits.trashDays,
   });
 }
@@ -1613,7 +1614,10 @@ async function handleSubscriptionCharged(payload) {
   subscription.status = SUBSCRIPTION_STATUS.ACTIVE;
   await subscription.save();
 
-  // Ensure user is still marked as active
+  // Reset bandwidth usage for the new billing cycle
+  await User.findByIdAndUpdate(subscription.userId, {
+    bandwidthUsed: 0,
+  });
   await User.findByIdAndUpdate(subscription.userId, {
     "subscription.status": "active",
   });

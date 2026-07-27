@@ -138,9 +138,9 @@ const userSchema = new Schema(
         default: 30,
         validate: {
           validator: function (v) {
-            return v === null || [7, 30, 60, 90].includes(v);
+            return [5, 7, 15, 30, 45, 60, 90].includes(v);
           },
-          message: "trashAutoEmptyDays must be one of: null, 7, 30, 60, 90",
+          message: "trashAutoEmptyDays must be one of: 5, 7, 15, 30, 45, 60, 90",
         },
       },
       alertAt80: {

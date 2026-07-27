@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import File from "../models/fileModel.js";
 import User from "../models/userModel.js";
+import { PLANS, PLAN_KEYS } from "../constants/subscriptionConstants.js";
 
 // ─── Get Storage Overview ────────────────────────────────────────
 // Returns real storage usage, category breakdown, and trash stats.
@@ -11,7 +12,7 @@ export const getStorageOverview = async (req, res, next) => {
     // Parallel: user quota + file aggregation
     const [user, aggregation] = await Promise.all([
       User.findById(userId)
-        .select("storageUsed storageLimit")
+        .select("storageUsed storageLimit bandwidthUsed bandwidthLimit subscription")
         .lean(),
 
       File.aggregate([
@@ -104,9 +105,17 @@ export const getStorageOverview = async (req, res, next) => {
       count: cat.count,
     }));
 
+    const planKey = user.subscription?.plan || PLAN_KEYS.FREE;
+    const plan = PLANS[planKey] || PLANS[PLAN_KEYS.FREE];
+
     return res.json({
       storageUsed: user.storageUsed || 0,
       storageLimit: user.storageLimit || 1024 * 1024 * 1024,
+      bandwidthUsed: user.bandwidthUsed || 0,
+      bandwidthLimit: user.bandwidthLimit || 10 * 1024 * 1024 * 1024,
+      maxUpload: plan.maxUpload,
+      planKey,
+      planName: plan.name,
       breakdown: categories,
       trash: {
         totalSize: trashData.totalSize,
@@ -123,19 +132,31 @@ export const getStorageOverview = async (req, res, next) => {
 export const getStoragePreferences = async (req, res, next) => {
   try {
     const user = await User.findById(req.user.id)
-      .select("storagePreferences")
+      .select("storagePreferences subscription")
       .lean();
 
     if (!user) {
       return res.status(404).json({ message: "User not found." });
     }
 
+    // Resolve the plan's max allowed trash days
+    const planKey = user.subscription?.plan || PLAN_KEYS.FREE;
+    const plan = PLANS[planKey] || PLANS[PLAN_KEYS.FREE];
+    const maxTrashDays = plan.trashDays;
+
+    // Clamp the default to the plan's max so lower-tier plans get a valid value
+    const savedDays = user.storagePreferences?.trashAutoEmptyDays;
+    const effectiveDays = savedDays != null
+      ? Math.min(savedDays, maxTrashDays)
+      : maxTrashDays;
+
     return res.json({
       preferences: {
-        trashAutoEmptyDays: user.storagePreferences?.trashAutoEmptyDays ?? 30,
+        trashAutoEmptyDays: effectiveDays,
         alertAt80: user.storagePreferences?.alertAt80 !== false,
         alertAt95: user.storagePreferences?.alertAt95 !== false,
       },
+      maxTrashDays,
     });
   } catch (err) {
     next(err);
@@ -158,17 +179,38 @@ export const updateStoragePreferences = async (req, res, next) => {
   }
 
   try {
+    // Validate trashAutoEmptyDays against the user's plan limit
+    if (req.body.trashAutoEmptyDays !== undefined) {
+      if (req.body.trashAutoEmptyDays === null || req.body.trashAutoEmptyDays <= 0) {
+        return res.status(400).json({ message: "Auto-empty trash days must be a valid number." });
+      }
+      const user = await User.findById(req.user.id).select("subscription").lean();
+      const planKey = user?.subscription?.plan || PLAN_KEYS.FREE;
+      const plan = PLANS[planKey] || PLANS[PLAN_KEYS.FREE];
+      const maxTrashDays = plan.trashDays;
+
+      if (req.body.trashAutoEmptyDays > maxTrashDays) {
+        return res.status(400).json({
+          message: `Your ${plan.name} plan allows up to ${maxTrashDays}-day trash recovery. Upgrade your plan for longer retention.`,
+          maxTrashDays,
+        });
+      }
+    }
+
     const user = await User.findByIdAndUpdate(
       req.user.id,
       { $set: updates },
       { new: true, runValidators: true },
     )
-      .select("storagePreferences")
+      .select("storagePreferences subscription")
       .lean();
 
     if (!user) {
       return res.status(404).json({ message: "User not found." });
     }
+
+    const planKey = user.subscription?.plan || PLAN_KEYS.FREE;
+    const plan = PLANS[planKey] || PLANS[PLAN_KEYS.FREE];
 
     return res.json({
       message: "Storage preferences updated.",
@@ -177,6 +219,7 @@ export const updateStoragePreferences = async (req, res, next) => {
         alertAt80: user.storagePreferences?.alertAt80 !== false,
         alertAt95: user.storagePreferences?.alertAt95 !== false,
       },
+      maxTrashDays: plan.trashDays,
     });
   } catch (err) {
     next(err);

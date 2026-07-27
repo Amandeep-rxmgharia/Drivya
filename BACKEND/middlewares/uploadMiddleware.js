@@ -2,7 +2,7 @@ import multer from "multer";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 
-const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE) || 50 * 1024 * 1024; // 50 MB
+const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE) || 50 * 1024 * 1024 * 1024; // 50 GB maximum system cap
 const MAX_FILES_PER_REQUEST = parseInt(process.env.MAX_FILES_PER_REQUEST) || 10;
 
 /**

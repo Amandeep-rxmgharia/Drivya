@@ -24,10 +24,61 @@ import {
   verifyDownloadToken,
 } from "../config/tokenUtils.js";
 import { createNotification } from "../services/notificationService.js";
+import { PLANS, PLAN_KEYS } from "../constants/subscriptionConstants.js";
 import {
   cacheDelByPrefix,
   invalidateShareTokenCache,
 } from "../services/cacheService.js";
+
+// ─── Bandwidth Helpers ──────────────────────────────────────────
+import { Transform } from "stream";
+
+/**
+ * Check if the user has enough bandwidth. Does NOT increment.
+ * @returns {boolean} true if request can proceed, false if blocked (429 already sent).
+ */
+async function checkBandwidth(userId, expectedBytes, res) {
+  const user = await User.findById(userId).select("bandwidthUsed bandwidthLimit").lean();
+  if (user.bandwidthUsed + expectedBytes > user.bandwidthLimit) {
+    res.status(429).json({
+      message: "Bandwidth limit exceeded. Please wait for your next billing cycle or upgrade your plan.",
+      bandwidthUsed: user.bandwidthUsed,
+      bandwidthLimit: user.bandwidthLimit,
+    });
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Creates a pass-through Transform stream that counts actual bytes transferred.
+ * Records the total to the user's bandwidthUsed after the stream finishes.
+ */
+function createBandwidthTracker(userId) {
+  let totalBytes = 0;
+  let recorded = false;
+
+  const tracker = new Transform({
+    transform(chunk, encoding, callback) {
+      totalBytes += chunk.length;
+      this.push(chunk);
+      callback();
+    },
+  });
+
+  const record = () => {
+    if (recorded || totalBytes === 0) return;
+    recorded = true;
+    User.updateOne({ _id: userId }, { $inc: { bandwidthUsed: totalBytes } })
+      .catch((err) => console.error("[Bandwidth] Tracking error:", err.message));
+  };
+
+  // Record on stream end (normal completion) or close (client disconnect)
+  tracker.on("end", record);
+  tracker.on("close", record);
+
+  return tracker;
+}
 
 // ─── Upload Files ────────────────────────────────────────────────
 export const uploadFiles = async (req, res, next) => {
@@ -59,10 +110,35 @@ export const uploadFiles = async (req, res, next) => {
     // Calculate total upload size
     const totalUploadSize = req.files.reduce((sum, f) => sum + f.size, 0);
 
-    // Check quota
+    // Check quota and plan upload limits
     const user = await User.findById(userId)
-      .select("storageUsed storageLimit storagePreferences")
+      .select("storageUsed storageLimit storagePreferences subscription")
       .lean();
+
+    const planKey = user?.subscription?.plan || PLAN_KEYS.FREE;
+    const plan = PLANS[planKey] || PLANS[PLAN_KEYS.FREE];
+    const maxUpload = plan.maxUpload;
+
+    if (maxUpload !== null && maxUpload !== undefined) {
+      for (const f of req.files) {
+        if (f.size > maxUpload) {
+          const formattedMax = maxUpload >= 1024 * 1024 * 1024
+            ? `${(maxUpload / (1024 * 1024 * 1024)).toFixed(1)} GB`
+            : `${(maxUpload / (1024 * 1024)).toFixed(0)} MB`;
+          const formattedSize = f.size >= 1024 * 1024 * 1024
+            ? `${(f.size / (1024 * 1024 * 1024)).toFixed(1)} GB`
+            : `${(f.size / (1024 * 1024)).toFixed(1)} MB`;
+
+          return res.status(413).json({
+            message: `File "${f.originalname}" (${formattedSize}) exceeds the maximum upload limit of ${formattedMax} for your ${plan.name} plan. Upgrade your plan for larger uploads.`,
+            maxUpload,
+            fileSize: f.size,
+            fileName: f.originalname,
+            planName: plan.name,
+          });
+        }
+      }
+    }
 
     if (user.storageUsed + totalUploadSize > user.storageLimit) {
       return res.status(413).json({
@@ -214,6 +290,9 @@ export const downloadFile = async (req, res, next) => {
       return res.status(404).json({ message: "File not found." });
     }
 
+    // Check and track bandwidth
+    if (!(await checkBandwidth(userId, file.size, res))) return;
+
     const stream = getFileStream(file.storagePath);
 
     // Record download activity (fire-and-forget, deduplicated)
@@ -246,7 +325,8 @@ export const downloadFile = async (req, res, next) => {
       }
     });
 
-    stream.pipe(res);
+    // Pipe through bandwidth tracker to count actual bytes transferred
+    stream.pipe(createBandwidthTracker(userId)).pipe(res);
   } catch (err) {
     next(err);
   }
@@ -296,6 +376,9 @@ export const downloadFileByToken = async (req, res, next) => {
       return res.status(404).json({ message: "File not found." });
     }
 
+    // Check and track bandwidth
+    if (!(await checkBandwidth(decoded.userId, file.size, res))) return;
+
     const stream = getFileStream(file.storagePath);
 
     // Record download activity (fire-and-forget)
@@ -327,7 +410,8 @@ export const downloadFileByToken = async (req, res, next) => {
       }
     });
 
-    stream.pipe(res);
+    // Pipe through bandwidth tracker to count actual bytes transferred
+    stream.pipe(createBandwidthTracker(decoded.userId)).pipe(res);
   } catch (err) {
     next(err);
   }
@@ -381,6 +465,10 @@ export const previewFile = async (req, res, next) => {
       }
 
       const chunkSize = end - start + 1;
+
+      // Check bandwidth (using chunk size for range requests)
+      if (!(await checkBandwidth(userId, chunkSize, res))) return;
+
       const stream = getFileStream(file.storagePath, { start, end });
 
       res.status(206).set({
@@ -388,11 +476,17 @@ export const previewFile = async (req, res, next) => {
         "Content-Length": chunkSize,
       });
 
-      stream.pipe(res);
+      // Track actual bytes transferred
+      stream.pipe(createBandwidthTracker(userId)).pipe(res);
     } else {
+      // Check bandwidth for full file
+      if (!(await checkBandwidth(userId, fileSize, res))) return;
+
       res.set("Content-Length", fileSize);
       const stream = getFileStream(file.storagePath);
-      stream.pipe(res);
+
+      // Track actual bytes transferred
+      stream.pipe(createBandwidthTracker(userId)).pipe(res);
     }
   } catch (err) {
     next(err);

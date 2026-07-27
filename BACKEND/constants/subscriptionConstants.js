@@ -60,7 +60,7 @@ export const PLANS = Object.freeze({
     name: "Lite",
     storage: 50 * GB,
     bandwidth: 25 * GB,
-    maxUpload: null, // unlimited
+    maxUpload: 2 * GB,
     trashDays: 15,
     price: { monthly: 39, yearly: 399 },
     razorpayPlanId: {
@@ -72,7 +72,7 @@ export const PLANS = Object.freeze({
     name: "Plus",
     storage: 100 * GB,
     bandwidth: 70 * GB,
-    maxUpload: null,
+    maxUpload: 10 * GB,
     trashDays: 30,
     price: { monthly: 149, yearly: 1499 },
     razorpayPlanId: {
@@ -84,7 +84,7 @@ export const PLANS = Object.freeze({
     name: "Pro",
     storage: 500 * GB,
     bandwidth: 300 * GB,
-    maxUpload: null,
+    maxUpload: 50 * GB,
     trashDays: 45,
     price: { monthly: 399, yearly: 3999 },
     featured: true,
@@ -97,7 +97,7 @@ export const PLANS = Object.freeze({
     name: "Max",
     storage: 1 * TB,
     bandwidth: 700 * GB,
-    maxUpload: null,
+    maxUpload: null, // unlimited
     trashDays: 60,
     price: { monthly: 699, yearly: 6999 },
     razorpayPlanId: {

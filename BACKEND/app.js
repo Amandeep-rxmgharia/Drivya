@@ -28,6 +28,7 @@ import redis from "./config/redisClient.js";
 import { ensureStorageRoot } from "./services/storageService.js";
 import { migrateActivityDate } from "./scripts/migrateActivityDate.js";
 import { startTrashCronJob } from "./jobs/trashCronJob.js";
+import { startBandwidthResetCronJob } from "./jobs/bandwidthResetCronJob.js";
 
 const { PORT = 3000, CORS_ORIGIN = "http://localhost:5173", NODE_ENV } = process.env;
 
@@ -46,6 +47,7 @@ await migrateActivityDate();
 
 // ─── Start Cron Jobs ─────────────────────────────────────────
 startTrashCronJob();
+startBandwidthResetCronJob();
 
 const app = express();
 
