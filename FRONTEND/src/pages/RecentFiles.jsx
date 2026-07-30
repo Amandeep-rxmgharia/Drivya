@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useOutletContext } from "react-router-dom";
 import {
   Eye,
@@ -109,14 +109,14 @@ export default function RecentFiles() {
   }, []);
 
   // Track total count from the first fetch
-  const handleFetch = async (params) => {
+  const handleFetch = useCallback(async (params) => {
     const result = await listActivities(params);
     // On initial load (no cursor), update total count estimate
     if (!params.cursor) {
       setTotalCount(result.items.length + (result.pagination?.hasNextPage ? "+" : ""));
     }
     return result;
-  };
+  }, []);
 
   return (
     <>

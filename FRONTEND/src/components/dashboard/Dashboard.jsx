@@ -204,7 +204,7 @@ function Sidebar({ collapsed, onClose, mobileOpen, userProfile }) {
                     100,
                     Math.round(
                       ((userProfile?.storageUsed || 0) * 100) /
-                        (userProfile?.storageLimit || 1024 * 1024 * 1024),
+                      (userProfile?.storageLimit || 1024 * 1024 * 1024),
                     ),
                   )}%`,
                 }}
@@ -591,8 +591,8 @@ function Topbar({
                   ) : (
                     <div className="space-y-4">
                       {searchResults.files.length === 0 &&
-                      searchResults.directories.length === 0 &&
-                      searchResults.collaborators.length === 0 ? (
+                        searchResults.directories.length === 0 &&
+                        searchResults.collaborators.length === 0 ? (
                         <div className="text-center py-6 text-sm text-muted-foreground">
                           No results found for "{searchQuery}"
                         </div>
@@ -770,21 +770,19 @@ function Topbar({
                 <div className="flex gap-1.5 p-0.5 mb-2 rounded-lg bg-secondary/35 border border-border/40">
                   <button
                     onClick={() => setFilter("all")}
-                    className={`flex-1 py-1 px-2 text-[11px] font-semibold rounded-md transition-all ${
-                      filter === "all"
+                    className={`flex-1 py-1 px-2 text-[11px] font-semibold rounded-md transition-all ${filter === "all"
                         ? "bg-secondary text-foreground shadow-sm"
                         : "text-muted-foreground hover:text-foreground"
-                    }`}
+                      }`}
                   >
                     All ({notifications.length})
                   </button>
                   <button
                     onClick={() => setFilter("unread")}
-                    className={`flex-1 py-1 px-2 text-[11px] font-semibold rounded-md transition-all ${
-                      filter === "unread"
+                    className={`flex-1 py-1 px-2 text-[11px] font-semibold rounded-md transition-all ${filter === "unread"
                         ? "bg-secondary text-foreground shadow-sm"
                         : "text-muted-foreground hover:text-foreground"
-                    }`}
+                      }`}
                   >
                     Unread ({notifications.filter((n) => !n.read).length})
                   </button>
@@ -824,11 +822,10 @@ function Topbar({
                                 setBellOpen(false);
                               }
                             }}
-                            className={`group/item relative flex gap-3 p-2.5 rounded-xl border transition-all cursor-pointer ${
-                              n.read
+                            className={`group/item relative flex gap-3 p-2.5 rounded-xl border transition-all cursor-pointer ${n.read
                                 ? "bg-transparent border-transparent hover:bg-secondary/40 text-muted-foreground"
                                 : "bg-secondary/40 border-border/40 hover:bg-secondary/60 text-foreground"
-                            }`}
+                              }`}
                           >
                             {/* Left Icon */}
                             <div className="relative shrink-0 mt-0.5">
@@ -894,7 +891,6 @@ function Topbar({
                                           );
                                           // Immediate delete after copy
                                           deleteNotification(n.id, e);
-                                          setBellOpen(false);
                                         } catch {
                                           // still attempt delete to avoid leaving password behind
                                           deleteNotification(n.id, e);
@@ -1071,11 +1067,10 @@ function Topbar({
                         <button
                           key={themeItem.id}
                           onClick={() => setMode(themeItem.id)}
-                          className={`flex items-center justify-center gap-1.5 px-1.5 py-1 rounded-lg text-[11px] font-medium border transition-all ${
-                            isSelected
+                          className={`flex items-center justify-center gap-1.5 px-1.5 py-1 rounded-lg text-[11px] font-medium border transition-all ${isSelected
                               ? "bg-secondary border-border/80 text-foreground"
                               : "bg-transparent border-transparent text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
-                          }`}
+                            }`}
                         >
                           <themeItem.icon className="h-3 w-3" />
                           <span>{themeItem.label}</span>
@@ -1201,7 +1196,7 @@ const mapUserProfile = (user) => {
 };
 
 export function DashboardLayout() {
-    const location = useLocation();
+  const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [aiAssistantOpen, setAiAssistantOpen] = useState(false);
@@ -1274,11 +1269,11 @@ export function DashboardLayout() {
 
               const toastPayload = isSharePassword
                 ? {
-                    id: toastId,
-                    type: n.type,
-                    title: "Password delivered to inbox",
-                    description: `Password for ${n.metadata?.resourceName || "your shared file"} is ready. Open notifications to copy (it will auto-delete shortly).`,
-                  }
+                  id: toastId,
+                  type: n.type,
+                  title: "Password delivered to inbox",
+                  description: `Password for ${n.metadata?.resourceName || "your shared file"} is ready. Open notifications to copy (it will auto-delete shortly).`,
+                }
                 : { id: toastId, ...n };
 
               setToasts((prev) => [...prev, toastPayload]);
@@ -1287,7 +1282,7 @@ export function DashboardLayout() {
                 setToasts((prev) => prev.filter((t) => t.id !== toastId));
               }, 6500);
             }
-          } catch (e) {}
+          } catch (e) { }
         };
 
         es.onerror = () => {
@@ -1324,7 +1319,7 @@ export function DashboardLayout() {
 
   // ─── Handlers that call the API ────────────────────────────
   const markAsRead = (id) => {
-    apiMarkAsRead(id).catch(() => {});
+    apiMarkAsRead(id).catch(() => { });
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
     );
@@ -1342,24 +1337,24 @@ export function DashboardLayout() {
       }),
     );
     if (currentlyRead) {
-      apiMarkAsRead(id).catch(() => {});
+      apiMarkAsRead(id).catch(() => { });
     }
   };
 
   const deleteNotification = (id, event) => {
     event?.stopPropagation();
     setNotifications((prev) => prev.filter((n) => (n._id || n.id) !== id));
-    apiDeleteNotification(id).catch(() => {});
+    apiDeleteNotification(id).catch(() => { });
   };
 
   const markAllRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    apiMarkAllAsRead().catch(() => {});
+    apiMarkAllAsRead().catch(() => { });
   };
 
   const clearAllNotifications = () => {
     setNotifications([]);
-    apiClearNotifications().catch(() => {});
+    apiClearNotifications().catch(() => { });
   };
 
   useEffect(() => {
@@ -1549,7 +1544,8 @@ export function DashboardLayout() {
             collapsed={collapsed}
             mobileOpen={mobileOpen}
             onClose={() => {
-              setMobileOpen(false)}}
+              setMobileOpen(false)
+            }}
             userProfile={userProfile}
           />
           <motion.div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

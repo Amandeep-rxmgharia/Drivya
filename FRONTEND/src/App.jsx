@@ -26,6 +26,8 @@ const Settings = lazy(() => import("./pages/Settings"));
 const Payment = lazy(() => import("./pages/Payment"));
 const PublicShare = lazy(() => import("./pages/PublicShare"));
 const AdminPanel = lazy(() => import("./pages/AdminPanel"));
+const TermsOfService = lazy(() => import("./pages/TermsOfService"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 import { RequireRole } from "@/components/auth/RouteGuard";
 
 export default function App() {
@@ -51,6 +53,22 @@ export default function App() {
           element: (
             <Suspense fallback={null}>
               <Auth />
+            </Suspense>
+          ),
+        },
+        {
+          path: "/terms",
+          element: (
+            <Suspense fallback={null}>
+              <TermsOfService />
+            </Suspense>
+          ),
+        },
+        {
+          path: "/privacy",
+          element: (
+            <Suspense fallback={null}>
+              <PrivacyPolicy />
             </Suspense>
           ),
         },

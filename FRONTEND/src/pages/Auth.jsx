@@ -1086,9 +1086,15 @@ export default function Auth() {
         {/* Footer Meta */}
         <div className="relative z-10 flex items-center justify-between text-xs text-muted-foreground">
           <span>© {new Date().getFullYear()} Drivya Technologies Inc.</span>
-          <span className="hover:text-foreground cursor-pointer transition-colors">
-            Privacy & Terms
-          </span>
+          <div className="flex items-center gap-2">
+            <Link to="/privacy" className="hover:text-foreground transition-colors">
+              Privacy Policy
+            </Link>
+            <span>•</span>
+            <Link to="/terms" className="hover:text-foreground transition-colors">
+              Terms of Service
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -2203,19 +2209,19 @@ export default function Auth() {
                               </div>
                               <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors leading-relaxed font-medium">
                                 I agree to the{" "}
-                                <a
-                                  href="#terms"
+                                <Link
+                                  to="/terms"
                                   className="text-primary hover:underline font-semibold"
                                 >
                                   Terms of Service
-                                </a>{" "}
+                                </Link>{" "}
                                 and{" "}
-                                <a
-                                  href="#privacy"
+                                <Link
+                                  to="/privacy"
                                   className="text-primary hover:underline font-semibold"
                                 >
                                   Privacy Policy
-                                </a>
+                                </Link>
                                 .
                               </span>
                             </label>
