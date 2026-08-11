@@ -157,7 +157,7 @@ const processThumbnailQueue = () => {
       activeThumbnailRequests--;
       setTimeout(() => {
         processThumbnailQueue();
-      }, 50);
+      }, 10);
     });
 };
 
@@ -1607,9 +1607,9 @@ export function DropboxModal({
 
         <div className="relative flex items-end lg:items-center justify-between px-5 py-4 border-b border-border/70 bg-secondary/10 z-10 shrink-0">
           <div className="flex-col md:flex-row flex md:items-center gap-3">
-            <div className="flex h-7 w-7 items-center justify-center">
+            {isConnected && <div className="flex h-7 w-7 items-center justify-center">
               <img src={dropboxLogo} alt="" className="h-6 w-6" />
-            </div>
+            </div>}
             <div>
               <h2 className="hidden lg:block text-sm font-bold tracking-tight text-foreground font-display">
                 Import from Dropbox

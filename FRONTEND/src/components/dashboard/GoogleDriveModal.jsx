@@ -189,7 +189,7 @@ const processThumbnailQueue = () => {
       activeThumbnailRequests--;
       setTimeout(() => {
         processThumbnailQueue();
-      }, 50);
+      }, 10);
     });
 };
 
@@ -1653,9 +1653,9 @@ export function GoogleDriveModal({
         {/* ── Header ── */}
         <div className="relative flex items-end lg:items-center justify-between px-5 py-4 border-b border-border/70 bg-secondary/10 z-10 shrink-0">
           <div className="flex-col md:flex-row flex md:items-center gap-3">
-            <div className="flex h-7 w-7 items-center justify-center">
-              {isConnected && <img src={GDriveLogo} alt="" />}
-            </div>
+            {isConnected && <div className="flex h-7 w-7 items-center justify-center">
+              <img src={GDriveLogo} alt="" />
+            </div>}
             <div>
               <h2 className="hidden lg:block text-sm font-bold tracking-tight text-foreground font-display">
                 Import from Google Drive

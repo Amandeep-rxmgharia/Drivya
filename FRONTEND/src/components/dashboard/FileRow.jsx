@@ -122,6 +122,7 @@ export function FileRow({
     <article
       ref={revealRef}
       role="row"
+      data-file-id={file.id}
       aria-selected={selected}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}

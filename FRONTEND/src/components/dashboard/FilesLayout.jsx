@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
@@ -142,16 +142,33 @@ export function FilesLayout({
   const [searchParams] = useSearchParams();
   const selectId = searchParams.get("select");
 
+  const scrolledRef = useRef(false);
+
   // Sync selectedId with currentDirId and selectId parameter
   useEffect(() => {
     if (selectId) {
       setSelectedId(selectId);
       setActiveId(selectId);
+      scrolledRef.current = false; // reset so we scroll again
     } else {
       setSelectedId(null);
       setActiveId(null);
     }
   }, [currentDirId, selectId]);
+
+  // Scroll to the selected file once items have loaded
+  useEffect(() => {
+    if (!selectId || isLoading || allItems.length === 0 || scrolledRef.current) return;
+    // Small delay to let the FileRow DOM nodes render
+    const timer = setTimeout(() => {
+      const el = document.querySelector(`[data-file-id="${selectId}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        scrolledRef.current = true;
+      }
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [selectId, isLoading, allItems]);
 
   // Load share status for file badges
   useEffect(() => {
