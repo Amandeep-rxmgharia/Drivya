@@ -600,7 +600,7 @@ export const trashFile = async (req, res, next) => {
     createNotification(userId, {
       type: "system",
       title: `Moved "${file.originalName}" to trash`,
-      description: "The file can be restored from trash within 30 days.",
+      description: "The file can be restored from trash.",
       actionLabel: "View trash",
       actionPath: "/dashboard/trash",
     }).catch((err) => console.error("Notification[trash]:", err));

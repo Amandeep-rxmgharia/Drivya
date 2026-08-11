@@ -12,17 +12,17 @@ const {
 const clientConfig = REDIS_URL
   ? { url: REDIS_URL }
   : {
-      username: REDIS_USERNAME || "default",
-      password: REDIS_PASSWORD,
-      socket: {
-        host: REDIS_HOST || "localhost",
-        port: parseInt(REDIS_PORT, 10) || 6379,
-      },
-    };
+    username: REDIS_USERNAME || "default",
+    password: "Jus#0203*",
+    socket: {
+      host: "localhost",
+      // port: parseInt(REDIS_PORT, 10) || 6379,
+    },
+  };
 
 const redis = createClient(clientConfig);
 
-redis.on("error", (err) => console.error("❌ Redis error:", err.message));
+redis.on("error", (err) => console.error("❌ Redis error:", err));
 redis.on("reconnecting", () => console.log("🔄 Redis reconnecting..."));
 
 await redis.connect();

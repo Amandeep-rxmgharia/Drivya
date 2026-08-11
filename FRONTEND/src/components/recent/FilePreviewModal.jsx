@@ -226,7 +226,6 @@ export function FilePreviewModal({
   const { label: kindLabel } = getFileTypeStyle(kind);
 
   const isUploading = file.uploadStatus === "uploading";
-console.log(file);
   return createPortal(
     <>
       {/* Backdrop */}

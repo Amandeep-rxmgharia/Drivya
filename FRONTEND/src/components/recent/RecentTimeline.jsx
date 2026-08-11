@@ -348,7 +348,6 @@ function RecentFileRow({ file, view, formatTime, onPreview, onShare }) {
   const [hovered, setHovered] = useState(false);
   const { ref: revealRef, isVisible } = useScrollReveal();
   const kind = detectFileKind(file.name, file.kind);
-  console.log(kind);
   const isGrid = view === "grid";
   const isUploading = file.uploadStatus === "uploading";
 

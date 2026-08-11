@@ -51,7 +51,6 @@ const STARRED_FILES = [];
 /* ───────────────────────── Helpers ───────────────────────── */
 
 function formatRelativeTime(date) {
-  console.log(date);
   const now = Date.now();
   const diff = now - date.getTime();
   const mins = Math.floor(diff / 60000);

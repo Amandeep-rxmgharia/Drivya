@@ -271,7 +271,6 @@ export const googleLoginUrl = async (req, res) => {
 // ─── GET /auth/google/login/callback — OAuth redirect callback
 export const googleLoginCallback = async (req, res, next) => {
   const { code, error, state } = req.query;
-console.log(state);
   const frontendBase = CORS_ORIGIN;
 
   // Decode the redirect path from the OAuth state parameter

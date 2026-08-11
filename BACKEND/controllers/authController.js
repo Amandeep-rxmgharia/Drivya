@@ -153,7 +153,6 @@ export const login = async (req, res, next) => {
 
     const ua = parseUserAgent(req.headers["user-agent"]);
     const ipLoc = parseIpAndLocation(req);
-console.log(user.twoFAEnabled);
     // Create active session. If 2FA is enabled, keep session unverified.
     const sessionDoc = await Session.create({
       userId: user._id,

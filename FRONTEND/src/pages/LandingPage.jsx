@@ -1,6 +1,5 @@
 import { Navbar } from "@/components/drivya/Navbar";
 import { Hero } from "@/components/drivya/Hero";
-import { SocialProof } from "@/components/drivya/SocialProof";
 import { Features } from "@/components/drivya/Features";
 import { Showcase } from "@/components/drivya/Showcase";
 import { HowItWorks } from "@/components/drivya/HowItWorks";
@@ -28,7 +27,6 @@ export default function LandingPage() {
     <>
       <Navbar open={open} closeMobileMenu={closeMobileMenu} />
       <Hero />
-      {/* <SocialProof /> */}
       <Features />
       <Showcase />
       <HowItWorks />

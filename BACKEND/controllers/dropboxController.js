@@ -42,7 +42,7 @@ const IMPORT_LOCK_TTL = 1800; // 30 min safety net
 const localAbortControllers = new Map(); // userId → AbortController (process-local)
 
 async function acquireImportLock(userId) {
-  const result = await redis.set(`${IMPORT_LOCK_PREFIX}${userId}`, "1", { EX: IMPORT_LOCK_TTL, NX: true });
+  const result = await redis.set(`${IMPORT_LOCK_PREFIX}${userId}`, "1", { EX: IMPORT_LOCK_TTL, condition: 'NX' });
   return result === "OK";
 }
 

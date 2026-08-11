@@ -406,7 +406,6 @@ export default function PublicShare() {
       setTextContent(text);
       setEditValue(text);
     } catch (err) {
-      console.log(err.response?.data);
       setTextError(err.response?.data?.message || "Failed to load file text.");
       setSignedAccount(JSON.parse(err.response?.data)?.signedAccount)
     } finally {

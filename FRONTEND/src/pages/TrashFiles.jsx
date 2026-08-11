@@ -64,20 +64,6 @@ function useAutoDeleteDays() {
   return value || 30;
 }
 
-// function getAutoDeleteDays() {
-// // console.log(autoTrashDays);
-// const [value,setValue] = useState(null)
-// useEffect(async() => {
-// try {
-//   const autoTrashDays = await getStoragePreferences()
-// setValue(autoTrashDays?.preferences?.trashAutoEmptyDays)
-// } catch (error) {
-//   console.log('failed to load storagePreferences');
-// }
-// },[])
-// // return useOutletContext().userProfile?.trashAutoEmptyDays
-// return value
-// }
 function formatRelativeTime(date) {
   const now = Date.now();
   const diff = now - date.getTime();
@@ -191,7 +177,6 @@ function TrashHero({ files,AUTO_DELETE_DAYS }) {
   const expiringCount = files.filter(
     (f) => daysUntilAutoDelete(f.deletedAt,AUTO_DELETE_DAYS) <= 7,
   ).length;
-console.log(AUTO_DELETE_DAYS);
   return (
     <section
       className={`${card} ${subtleHover} relative overflow-hidden p-5 sm:p-6 md:p-10 animate-fade-in`}

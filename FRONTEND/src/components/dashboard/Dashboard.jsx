@@ -1468,7 +1468,6 @@ export function DashboardLayout() {
       try {
         const data = await getCurrentUser();
         if (data?.user) {
-          console.log(data.user);
           setUserProfile((prev) => ({
             ...prev,
             id: data.user._id,
