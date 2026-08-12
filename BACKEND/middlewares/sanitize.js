@@ -38,22 +38,44 @@ function sanitizeValue(val) {
 }
 
 /**
- * Express middleware that sanitizes req.body, req.query, and req.params
- * to strip MongoDB operator injection attempts.
- *
- * Uses Zod for type-safe validation of the sanitized output.
+ * Sanitize an object in-place by removing keys that start with "$"
+ * or contain "." (MongoDB dot notation). Recurses into nested objects.
+ */
+function sanitizeInPlace(obj) {
+  if (typeof obj !== "object" || obj === null) return;
+
+  for (const key of Object.keys(obj)) {
+    if (key.startsWith("$") || key.includes(".")) {
+      delete obj[key];
+    } else if (typeof obj[key] === "object" && obj[key] !== null) {
+      sanitizeInPlace(obj[key]);
+    }
+  }
+}
+
+/**
+ * Zod schema that validates input is a plain object, then strips
+ * any MongoDB operator keys via the sanitizeValue transform.
  */
 const sanitizedObject = z.record(z.string(), z.any()).transform(sanitizeValue);
 
+/**
+ * Express middleware that sanitizes req.body, req.query, and req.params
+ * to strip MongoDB operator injection attempts.
+ *
+ * req.body is reassignable so we use the full Zod transform.
+ * req.query and req.params are read-only getters in Express 5,
+ * so we sanitize them in-place.
+ */
 export function sanitizeInput(req, _res, next) {
   if (req.body && typeof req.body === "object") {
     req.body = sanitizedObject.parse(req.body);
   }
   if (req.query && typeof req.query === "object") {
-    req.query = sanitizedObject.parse(req.query);
+    sanitizeInPlace(req.query);
   }
   if (req.params && typeof req.params === "object") {
-    req.params = sanitizedObject.parse(req.params);
+    sanitizeInPlace(req.params);
   }
   next();
 }

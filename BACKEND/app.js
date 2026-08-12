@@ -124,7 +124,7 @@ app.get("/auth/dropbox/callback", dropboxCallbackHandler);
 
 // ─── Global Error Handler ────────────────────────────────────
 app.use((err, req, res, next) => {
-  console.error(`[${new Date().toISOString()}] Error:`, err.message);
+  console.error(`[${new Date().toISOString()}] Error:`, err);
 
   // Don't leak stack traces or internal details in production
   const status = err.status || err.statusCode || 500;
