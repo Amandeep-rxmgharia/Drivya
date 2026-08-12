@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { escapeHtml } from "./htmlEscape.js";
 
 // Simple mailer configuration
 // In development, if credentials are missing, we fallback to console log.
@@ -52,6 +53,11 @@ export async function sendRefundEmail(email, { userName, oldPlanName, newPlanNam
   const isFullRefund = refundType === "full";
   const refundLabel = isFullRefund ? "Full Refund" : "Prorated Refund";
 
+  // Escape user-supplied values before interpolating into HTML
+  const safeUserName = escapeHtml(userName);
+  const safeOldPlan = escapeHtml(oldPlanName);
+  const safeNewPlan = escapeHtml(newPlanName);
+
   const mailOptions = {
     from: `"Drivya Billing" <${SMTP_USER || "billing@drivya.com"}>`,
     to: email,
@@ -65,8 +71,8 @@ export async function sendRefundEmail(email, { userName, oldPlanName, newPlanNam
         </div>
         <div style="padding: 28px 24px;">
           <p style="color: #374151; margin: 0 0 20px; font-size: 14px; line-height: 1.6;">
-            Hi <strong>${userName}</strong>,<br/>
-            Your plan has been upgraded from <strong>${oldPlanName}</strong> to <strong>${newPlanName}</strong>.
+            Hi <strong>${safeUserName}</strong>,<br/>
+            Your plan has been upgraded from <strong>${safeOldPlan}</strong> to <strong>${safeNewPlan}</strong>.
             A refund for the unused portion of your previous plan has been initiated.
           </p>
           <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; margin-bottom: 20px;">

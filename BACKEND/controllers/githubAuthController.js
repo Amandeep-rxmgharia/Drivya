@@ -55,6 +55,19 @@ const {
   CORS_ORIGIN = "http://localhost:5173",
 } = process.env;
 
+/**
+ * Sanitize an OAuth redirect path to prevent open redirect and javascript: XSS.
+ * Only relative paths starting with "/" are allowed.
+ */
+function sanitizeRedirectPath(p) {
+  if (!p || typeof p !== "string") return "";
+  // Block protocol-based URLs, double-slash redirects, and javascript: URIs
+  if (p.includes("://") || p.startsWith("//") || p.toLowerCase().startsWith("javascript:")) return "";
+  // Must be a relative path
+  if (!p.startsWith("/")) return "";
+  return p;
+}
+
 // ─── Shared: Find or create user from GitHub profile ─────────
 async function findOrCreateGithubUser({ githubId, email, name, picture }, req) {
   const mongoSession = await mongoose.startSession();
@@ -179,8 +192,8 @@ export const githubLoginUrl = async (req, res) => {
 
   const scopes = ["read:user", "user:email"];
 
-  // Preserve the redirect path through the OAuth flow via the state parameter
-  const redirectPath = req.query.redirect || "";
+// Preserve the redirect path through the OAuth flow via the state parameter
+  const redirectPath = sanitizeRedirectPath(req.query.redirect);
   const statePayload = JSON.stringify({ provider: "github_login", redirect: redirectPath });
   const stateEncoded = Buffer.from(statePayload).toString("base64url");
 
@@ -201,7 +214,7 @@ export const githubLoginCallback = async (req, res, next) => {
   if (state) {
     try {
       const decoded = JSON.parse(Buffer.from(state, "base64url").toString());
-      redirectPath = decoded.redirect || "";
+      redirectPath = sanitizeRedirectPath(decoded.redirect);
     } catch (_) { /* ignore malformed state */ }
   }
   const redirectSuffix = redirectPath ? `&redirect=${encodeURIComponent(redirectPath)}` : "";

@@ -54,6 +54,19 @@ const {
 
 const oAuth2Client = new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_LOGIN_REDIRECT_URI);
 
+/**
+ * Sanitize an OAuth redirect path to prevent open redirect and javascript: XSS.
+ * Only relative paths starting with "/" are allowed.
+ */
+function sanitizeRedirectPath(p) {
+  if (!p || typeof p !== "string") return "";
+  // Block protocol-based URLs, double-slash redirects, and javascript: URIs
+  if (p.includes("://") || p.startsWith("//") || p.toLowerCase().startsWith("javascript:")) return "";
+  // Must be a relative path
+  if (!p.startsWith("/")) return "";
+  return p;
+}
+
 // ─── Shared: Find or create user from Google profile ─────────
 async function findOrCreateGoogleUser({ googleId, email, name, picture }, req) {
   const mongoSession = await mongoose.startSession();
@@ -255,7 +268,7 @@ export const googleLoginUrl = async (req, res) => {
   const scopes = ["openid", "email", "profile"];
 
   // Preserve the redirect path through the OAuth flow via the state parameter
-  const redirectPath = req.query.redirect || "";
+  const redirectPath = sanitizeRedirectPath(req.query.redirect);
   const statePayload = JSON.stringify({ provider: "google_login", redirect: redirectPath });
   const stateEncoded = Buffer.from(statePayload).toString("base64url");
   const url = oAuth2Client.generateAuthUrl({
@@ -278,7 +291,7 @@ export const googleLoginCallback = async (req, res, next) => {
   if (state) {
     try {
       const decoded = JSON.parse(Buffer.from(state, "base64url").toString());
-      redirectPath = decoded.redirect || "";
+      redirectPath = sanitizeRedirectPath(decoded.redirect);
     } catch (_) { /* ignore malformed state */ }
   }
   const redirectSuffix = redirectPath ? `&redirect=${encodeURIComponent(redirectPath)}` : "";
