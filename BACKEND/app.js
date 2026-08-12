@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
+import { sanitizeInput } from "./middlewares/sanitize.js";
 import { IPRateLimiter } from "./middlewares/rateLimiter.js";
 import authRoutes from "./routes/authRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
@@ -97,6 +98,7 @@ app.use("/api/webhooks", webhookRoutes);
 // ─── Body Parsers ────────────────────────────────────────────
 app.use(express.json({ limit: "10kb" })); // prevent large payload attacks
 app.use(cookieParser());
+app.use(sanitizeInput); // Strip MongoDB operators ($gt, $ne, etc.) from user input
 
 // ─── Routes ──────────────────────────────────────────────────
 app.use("/auth", authRoutes);

@@ -20,9 +20,10 @@ export const listUsers = async (req, res, next) => {
 
     const query = {};
     if (search) {
+      const escaped = String(search).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       query.$or = [
-        { name: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } },
+        { name: { $regex: escaped, $options: "i" } },
+        { email: { $regex: escaped, $options: "i" } },
       ];
     }
 

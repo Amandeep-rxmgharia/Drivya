@@ -16,7 +16,8 @@ export const searchAll = async (req, res, next) => {
       return res.json({ files: [], directories: [], collaborators: [], users: [] });
     }
 
-    const regex = new RegExp(q, "i");
+    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(escaped, "i");
 
     // Query in parallel
     const [files, directories, collaborators, users] = await Promise.all([
