@@ -26,7 +26,6 @@ import { FileTypeIcon } from "@/components/dashboard/FileTypeIcon";
 import { iconBtn } from "@/components/dashboard/dashboard-tokens";
 
 // Import mock files from RecentFiles
-// import { RECENT_FILES } from "@/pages/RecentFiles";
 import { listActivities } from "../../../api/activities.js";
 import { chatWithAi, applySmartOrganization } from "../../../api/ai.js";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
@@ -578,50 +577,6 @@ export function AiAssistantPanel({
     } finally {
       setIsTyping(false);
     }
-  };
-
-  const getMockSummary = (file) => {
-    const name = file.name.toLowerCase();
-    if (name.includes("guidelines")) {
-      return `### Brand Guidelines v3.pdf Summary
-- **Overview**: Outlines the revised corporate branding system for Drivya 2026.
-- **Key Sections**:
-  - Logo clearance guidelines & prohibited lockups.
-  - Harmony color specs (Primary Indigo/Vibrant Sky/Accent Violet HSL Hues).
-  - Typography weights (Inter Variable and Space Grotesk combinations).
-- **Security Check**: Signed with SHA-256 vault authentication. Ready for external design partners.`;
-    }
-    if (name.includes("keynote")) {
-      return `### Q4 Keynote Presentation Summary
-- **Overview**: Final slide presentation detailing the Q4 product roadmap.
-- **Key Metrics Highlighted**:
-  - Active retention growth: +14% QoQ.
-  - Multi-device syncing speed improvements (latency down to 180ms).
-  - Introduction of encrypted collaborative folders.
-- **Target Audience**: Core development team and key internal stake-holders.`;
-    }
-    if (name.includes("investor")) {
-      return `### Investor Deck Summary
-- **Overview**: Pitch deck for Series B fundraising.
-- **Content Outline**:
-  - Product market fit metrics (1.2M encrypted transactions in 2026).
-  - Financial targets & ARR trajectory: reaching $12M ARR by end of 2027.
-  - Security certifications list (SOC2 Type II, HIPAA storage compliance).
-- **Owner**: Maya P. (shared folder link enabled).`;
-    }
-    if (name.includes("routes")) {
-      return `### api-routes.ts Summary
-- **Overview**: TypeScript routing backend definitions.
-- **Details**:
-  - Secure endpoints for file upload handshakes and storage quota checking.
-  - Connects authentication validation middleware to storage API layers.
-  - Implements temporary URL encryption policies (AES-256).`;
-    }
-    return `### ${file.name} Summary
-- **Type**: ${file.kind || detectFileKind(file.name)}
-- **Size**: ${file.size}
-- **Owner**: ${file.owner}
-- **Analysis**: Standard file asset located in workspace. Encrypted at rest. Analysis indicates this contains application metadata and logs associated with the user profile.`;
   };
 
   const handleApplyOrganization = async (suggestions) => {

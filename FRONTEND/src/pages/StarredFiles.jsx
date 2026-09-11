@@ -44,9 +44,6 @@ import {
 import { downloadFile } from "../../api/drive.js";
 import { useOutletContext } from "react-router-dom";
 
-/* ───────────────────────── Mock Data ───────────────────────── */
-
-const STARRED_FILES = [];
 
 /* ───────────────────────── Helpers ───────────────────────── */
 
