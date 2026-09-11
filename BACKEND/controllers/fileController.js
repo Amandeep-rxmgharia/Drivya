@@ -5,11 +5,12 @@ import User from "../models/userModel.js";
 import Share from "../models/shareModel.js";
 import mime from "mime-types";
 import {
-  saveFile,
-  getFileStream,
-  deleteFile as deleteFromDisk,
-  deleteFiles as deleteFilesFromDisk,
-  updateFileContent as updateDiskContent,
+  generateUploadUrl,
+  generateDownloadUrl,
+  headObject,
+  deleteFile as deleteFromR2,
+  deleteFiles as deleteFilesFromR2,
+  updateFileContent as updateR2Content,
 } from "../services/storageService.js";
 import { deleteSharesForResource } from "../services/shareService.js";
 import { RESOURCE_TYPES } from "../constants/shareConstants.js";
@@ -30,16 +31,17 @@ import {
   invalidateShareTokenCache,
 } from "../services/cacheService.js";
 
-// ─── Bandwidth Helpers ──────────────────────────────────────────
-import { Transform } from "stream";
-
+// ─── Bandwidth Check & Increment Helper ─────────────────────────
 /**
- * Check if the user has enough bandwidth. Does NOT increment.
- * @returns {boolean} true if request can proceed, false if blocked (429 already sent).
+ * Check bandwidth limit and increment bandwidthUsed.
+ * @param {string} userId
+ * @param {number} fileSize - Size of the file in bytes
+ * @param {object} res - Express response object
+ * @returns {Promise<boolean>} false if bandwidth exceeded (response already sent)
  */
-async function checkBandwidth(userId, expectedBytes, res) {
+async function checkAndIncrementBandwidth(userId, fileSize, res) {
   const user = await User.findById(userId).select("bandwidthUsed bandwidthLimit").lean();
-  if (user.bandwidthUsed + expectedBytes > user.bandwidthLimit) {
+  if (user.bandwidthUsed + fileSize > user.bandwidthLimit) {
     res.status(429).json({
       message: "Bandwidth limit exceeded. Please wait for your next billing cycle or upgrade your plan.",
       bandwidthUsed: user.bandwidthUsed,
@@ -47,49 +49,24 @@ async function checkBandwidth(userId, expectedBytes, res) {
     });
     return false;
   }
+
+  await User.updateOne({ _id: userId }, { $inc: { bandwidthUsed: fileSize } });
   return true;
 }
 
-/**
- * Creates a pass-through Transform stream that counts actual bytes transferred.
- * Records the total to the user's bandwidthUsed after the stream finishes.
- */
-function createBandwidthTracker(userId) {
-  let totalBytes = 0;
-  let recorded = false;
-
-  const tracker = new Transform({
-    transform(chunk, encoding, callback) {
-      totalBytes += chunk.length;
-      this.push(chunk);
-      callback();
-    },
-  });
-
-  const record = () => {
-    if (recorded || totalBytes === 0) return;
-    recorded = true;
-    User.updateOne({ _id: userId }, { $inc: { bandwidthUsed: totalBytes } })
-      .catch((err) => console.error("[Bandwidth] Tracking error:", err.message));
-  };
-
-  // Record on stream end (normal completion) or close (client disconnect)
-  tracker.on("end", record);
-  tracker.on("close", record);
-
-  return tracker;
-}
-
-// ─── Upload Files ────────────────────────────────────────────────
-export const uploadFiles = async (req, res, next) => {
-  const session = await mongoose.startSession();
-
+// ─── Presign Upload ──────────────────────────────────────────────
+export const presignUpload = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    let { directoryId } = req.body;
+    let { files, directoryId } = req.body;
 
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({ message: "No files provided." });
+    if (!Array.isArray(files) || files.length === 0) {
+      return res.status(400).json({ message: "files array is required." });
+    }
+
+    const MAX_FILES = parseInt(process.env.MAX_FILES_PER_REQUEST) || 10;
+    if (files.length > MAX_FILES) {
+      return res.status(400).json({ message: `Maximum ${MAX_FILES} files per request.` });
     }
 
     // Default to root directory if not specified
@@ -108,11 +85,11 @@ export const uploadFiles = async (req, res, next) => {
     }
 
     // Calculate total upload size
-    const totalUploadSize = req.files.reduce((sum, f) => sum + f.size, 0);
+    const totalUploadSize = files.reduce((sum, f) => sum + (f.size || 0), 0);
 
     // Check quota and plan upload limits
     const user = await User.findById(userId)
-      .select("storageUsed storageLimit storagePreferences subscription")
+      .select("storageUsed storageLimit subscription")
       .lean();
 
     const planKey = user?.subscription?.plan || PLAN_KEYS.FREE;
@@ -120,7 +97,7 @@ export const uploadFiles = async (req, res, next) => {
     const maxUpload = plan.maxUpload;
 
     if (maxUpload !== null && maxUpload !== undefined) {
-      for (const f of req.files) {
+      for (const f of files) {
         if (f.size > maxUpload) {
           const formattedMax = maxUpload >= 1024 * 1024 * 1024
             ? `${(maxUpload / (1024 * 1024 * 1024)).toFixed(1)} GB`
@@ -130,10 +107,10 @@ export const uploadFiles = async (req, res, next) => {
             : `${(f.size / (1024 * 1024)).toFixed(1)} MB`;
 
           return res.status(413).json({
-            message: `File "${f.originalname}" (${formattedSize}) exceeds the maximum upload limit of ${formattedMax} for your ${plan.name} plan. Upgrade your plan for larger uploads.`,
+            message: `File "${f.name}" (${formattedSize}) exceeds the maximum upload limit of ${formattedMax} for your ${plan.name} plan. Upgrade your plan for larger uploads.`,
             maxUpload,
             fileSize: f.size,
-            fileName: f.originalname,
+            fileName: f.name,
             planName: plan.name,
           });
         }
@@ -149,21 +126,107 @@ export const uploadFiles = async (req, res, next) => {
       });
     }
 
+    // Generate presigned URLs for each file
+    const uploads = [];
+    for (const f of files) {
+      const storageName = generateStorageName(f.name);
+      const key = `${userId}/${storageName}`;
+      const { url, expiresAt } = await generateUploadUrl(key, f.mimeType || "application/octet-stream");
+
+      uploads.push({
+        presignedUrl: url,
+        storageName,
+        key,
+        originalName: f.name,
+        size: f.size,
+        mimeType: f.mimeType || "application/octet-stream",
+        expiresAt,
+      });
+    }
+
+    return res.json({
+      message: `${uploads.length} presigned upload URL(s) generated.`,
+      uploads,
+      directoryId,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── Confirm Upload ──────────────────────────────────────────────
+export const confirmUpload = async (req, res, next) => {
+  const session = await mongoose.startSession();
+
+  try {
+    const userId = req.user.id;
+    let { files, directoryId } = req.body;
+
+    if (!Array.isArray(files) || files.length === 0) {
+      return res.status(400).json({ message: "files array is required." });
+    }
+
+    // Default to root directory if not specified
+    if (!directoryId) {
+      const user = await User.findById(userId).select("rootDirId").lean();
+      if (!user?.rootDirId) {
+        return res.status(404).json({ message: "Root directory not found." });
+      }
+      directoryId = user.rootDirId.toString();
+    }
+
+    // Verify directory exists and belongs to user
+    const dir = await Directory.findOne({ _id: directoryId, userId }).lean();
+    if (!dir) {
+      return res.status(404).json({ message: "Target directory not found." });
+    }
+
+    // Validate each file exists in R2 before creating DB records
+    const verifiedFiles = [];
+    for (const f of files) {
+      const key = `${userId}/${f.storageName}`;
+      const head = await headObject(key);
+
+      if (!head.exists) {
+        return res.status(400).json({
+          message: `File "${f.originalName}" was not uploaded to storage. Please retry the upload.`,
+          storageName: f.storageName,
+        });
+      }
+
+      verifiedFiles.push({
+        ...f,
+        key,
+        actualSize: head.size,
+        actualContentType: head.contentType,
+      });
+    }
+
+    const totalUploadSize = verifiedFiles.reduce((sum, f) => sum + (f.actualSize || f.size), 0);
+
+    // Re-check quota with actual sizes
+    const user = await User.findById(userId)
+      .select("storageUsed storageLimit storagePreferences")
+      .lean();
+
+    if (user.storageUsed + totalUploadSize > user.storageLimit) {
+      return res.status(413).json({
+        message: "Storage quota exceeded. Please free up space or upgrade.",
+        storageUsed: user.storageUsed,
+        storageLimit: user.storageLimit,
+        uploadSize: totalUploadSize,
+      });
+    }
+
     const savedFiles = [];
-    const savedStoragePaths = [];
 
     await session.withTransaction(async () => {
-      for (const uploadedFile of req.files) {
-        const storageName = generateStorageName(uploadedFile.originalname);
-        const storagePath = await saveFile(
-          userId,
-          storageName,
-          uploadedFile.buffer,
-        );
-        savedStoragePaths.push(storagePath);
+      for (const vf of verifiedFiles) {
+        const storagePath = vf.key;
+        const fileSize = vf.actualSize || vf.size;
 
         // Handle duplicate file names: append (n) suffix
-        let finalName = uploadedFile.originalname;
+        let finalName = vf.originalName;
         let attempt = 0;
         let created = false;
 
@@ -173,9 +236,9 @@ export const uploadFiles = async (req, res, next) => {
               [
                 {
                   originalName: finalName,
-                  storageName,
-                  mimeType: uploadedFile.mimetype,
-                  size: uploadedFile.size,
+                  storageName: vf.storageName,
+                  mimeType: vf.actualContentType || vf.mimeType,
+                  size: fileSize,
                   userId,
                   directoryId,
                   storagePath,
@@ -212,7 +275,6 @@ export const uploadFiles = async (req, res, next) => {
     });
 
     // Record upload activity for each file (fire-and-forget)
-    let uploadCount = 0;
     for (const file of savedFiles) {
       recordActivity({
         userId,
@@ -226,7 +288,6 @@ export const uploadFiles = async (req, res, next) => {
         },
         parentDirId: directoryId,
       }).catch((err) => console.error("Activity[upload]:", err.message));
-      uploadCount++;
     }
 
     if (savedFiles.length > 0) {
@@ -279,7 +340,7 @@ export const uploadFiles = async (req, res, next) => {
   }
 };
 
-// ─── Download File ───────────────────────────────────────────────
+// ─── Download File (returns presigned URL) ───────────────────────
 export const downloadFile = async (req, res, next) => {
   try {
     const userId = req.user.id;
@@ -290,10 +351,15 @@ export const downloadFile = async (req, res, next) => {
       return res.status(404).json({ message: "File not found." });
     }
 
-    // Check and track bandwidth
-    if (!(await checkBandwidth(userId, file.size, res))) return;
+    // Generate presigned download URL
+    const { url, expiresAt } = await generateDownloadUrl(file.storagePath, {
+      responseContentDisposition: `attachment; filename="${encodeURIComponent(file.originalName)}"`,
+      responseContentType: file.mimeType,
+    });
 
-    const stream = getFileStream(file.storagePath);
+    // Check bandwidth limit and increment
+    const allowed = await checkAndIncrementBandwidth(userId, file.size, res);
+    if (!allowed) return; // bandwidth exceeded, response already sent
 
     // Record download activity (fire-and-forget, deduplicated)
     recordActivity({
@@ -309,24 +375,12 @@ export const downloadFile = async (req, res, next) => {
       parentDirId: file.directoryId,
     }).catch((err) => console.error("Activity[download]:", err.message));
 
-    res.set({
-      "Content-Type": file.mimeType,
-      "Content-Disposition": `attachment; filename="${encodeURIComponent(file.originalName)}"`,
-      "Content-Length": file.size,
+    return res.json({
+      downloadUrl: url,
+      fileName: file.originalName,
+      size: file.size,
+      mimeType: file.mimeType,
     });
-
-    // Handle stream errors — if the file read fails mid-transfer, destroy the response
-    stream.on("error", (err) => {
-      console.error("Download stream error:", err.message);
-      if (!res.headersSent) {
-        res.status(500).json({ message: "Error reading file from disk." });
-      } else {
-        res.destroy();
-      }
-    });
-
-    // Pipe through bandwidth tracker to count actual bytes transferred
-    stream.pipe(createBandwidthTracker(userId)).pipe(res);
   } catch (err) {
     next(err);
   }
@@ -376,10 +430,15 @@ export const downloadFileByToken = async (req, res, next) => {
       return res.status(404).json({ message: "File not found." });
     }
 
-    // Check and track bandwidth
-    if (!(await checkBandwidth(decoded.userId, file.size, res))) return;
+    // Generate presigned download URL
+    const { url, expiresAt } = await generateDownloadUrl(file.storagePath, {
+      responseContentDisposition: `attachment; filename="${encodeURIComponent(file.originalName)}"`,
+      responseContentType: file.mimeType,
+    });
 
-    const stream = getFileStream(file.storagePath);
+    // Check bandwidth limit and increment
+    const allowed = await checkAndIncrementBandwidth(decoded.userId, file.size, res);
+    if (!allowed) return;
 
     // Record download activity (fire-and-forget)
     recordActivity({
@@ -395,29 +454,18 @@ export const downloadFileByToken = async (req, res, next) => {
       parentDirId: file.directoryId,
     }).catch((err) => console.error("Activity[download-token]:", err.message));
 
-    res.set({
-      "Content-Type": file.mimeType,
-      "Content-Disposition": `attachment; filename="${encodeURIComponent(file.originalName)}"`,
-      "Content-Length": file.size,
+    return res.json({
+      downloadUrl: url,
+      fileName: file.originalName,
+      size: file.size,
+      mimeType: file.mimeType,
     });
-
-    stream.on("error", (err) => {
-      console.error("Download stream error:", err.message);
-      if (!res.headersSent) {
-        res.status(500).json({ message: "Error reading file from disk." });
-      } else {
-        res.destroy();
-      }
-    });
-
-    // Pipe through bandwidth tracker to count actual bytes transferred
-    stream.pipe(createBandwidthTracker(decoded.userId)).pipe(res);
   } catch (err) {
     next(err);
   }
 };
 
-// ─── Preview File (inline streaming with Range support) ──────────
+// ─── Preview File (returns presigned URL) ────────────────────────
 export const previewFile = async (req, res, next) => {
   try {
     const userId = req.user.id;
@@ -427,9 +475,6 @@ export const previewFile = async (req, res, next) => {
     if (!file) {
       return res.status(404).json({ message: "File not found." });
     }
-
-    const fileSize = file.size;
-    const range = req.headers.range;
 
     // Record preview/opened activity (fire-and-forget, deduplicated within 1h)
     recordActivity({
@@ -445,53 +490,28 @@ export const previewFile = async (req, res, next) => {
       parentDirId: file.directoryId,
     }).catch((err) => console.error("Activity[preview]:", err.message));
 
-    // Common headers
-    res.set({
-      "Content-Type": file.mimeType,
-      "Content-Disposition": `inline; filename="${encodeURIComponent(file.originalName)}"`,
-      "Accept-Ranges": "bytes",
-      "Cache-Control": "private, max-age=3600",
+    // Generate presigned preview URL
+    const { url, expiresAt } = await generateDownloadUrl(file.storagePath, {
+      responseContentDisposition: `inline; filename="${encodeURIComponent(file.originalName)}"`,
+      responseContentType: file.mimeType,
     });
 
-    if (range) {
-      // Parse Range header (e.g. "bytes=0-1023")
-      const parts = range.replace(/bytes=/, "").split("-");
-      const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+    // Check bandwidth limit and increment
+    const allowed = await checkAndIncrementBandwidth(userId, file.size, res);
+    if (!allowed) return;
 
-      if (start >= fileSize || end >= fileSize || start > end) {
-        res.status(416).set("Content-Range", `bytes */${fileSize}`);
-        return res.end();
-      }
-
-      const chunkSize = end - start + 1;
-
-      // Check bandwidth (using chunk size for range requests)
-      if (!(await checkBandwidth(userId, chunkSize, res))) return;
-
-      const stream = getFileStream(file.storagePath, { start, end });
-
-      res.status(206).set({
-        "Content-Range": `bytes ${start}-${end}/${fileSize}`,
-        "Content-Length": chunkSize,
-      });
-
-      // Track actual bytes transferred
-      stream.pipe(createBandwidthTracker(userId)).pipe(res);
-    } else {
-      // Check bandwidth for full file
-      if (!(await checkBandwidth(userId, fileSize, res))) return;
-
-      res.set("Content-Length", fileSize);
-      const stream = getFileStream(file.storagePath);
-
-      // Track actual bytes transferred
-      stream.pipe(createBandwidthTracker(userId)).pipe(res);
-    }
+    return res.json({
+      previewUrl: url,
+      fileName: file.originalName,
+      size: file.size,
+      mimeType: file.mimeType,
+    });
   } catch (err) {
     next(err);
   }
 };
+
+
 
 // ─── Rename File ─────────────────────────────────────────────────
 export const renameFile = async (req, res, next) => {
@@ -804,10 +824,10 @@ export const emptyTrash = async (req, res, next) => {
         ),
       );
 
-      // Disk cleanup — fire and forget
+      // R2 cleanup — fire and forget
       const storagePaths = trashedFiles.map((f) => f.storagePath);
-      deleteFilesFromDisk(storagePaths).catch((err) =>
-        console.error("Trash disk cleanup error:", err.message),
+      deleteFilesFromR2(storagePaths).catch((err) =>
+        console.error("Trash R2 cleanup error:", err.message),
       );
     });
 
@@ -853,9 +873,9 @@ export const permanentDeleteFile = async (req, res, next) => {
 
       await deleteActivitiesForResources([file._id], userId);
 
-      // Disk cleanup
-      deleteFromDisk(file.storagePath).catch((err) =>
-        console.error("File delete disk error:", err.message),
+      // R2 cleanup
+      deleteFromR2(file.storagePath).catch((err) =>
+        console.error("File delete R2 error:", err.message),
       );
     });
 
@@ -938,7 +958,7 @@ export const editFileContent = async (req, res, next) => {
       return res.status(404).json({ message: "File not found." });
     }
 
-    await updateDiskContent(file.storagePath, content);
+    await updateR2Content(file.storagePath, content);
 
     const newSize = Buffer.byteLength(content);
     file.size = newSize;

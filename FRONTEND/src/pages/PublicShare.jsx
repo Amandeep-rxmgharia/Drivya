@@ -395,14 +395,13 @@ export default function PublicShare() {
       if (accessToken) {
         headers.Authorization = `Bearer ${accessToken}`;
       }
-      const previewUrl = `/public/shares/${token}/preview`;
-      const response = await api.get(previewUrl, {
-        headers,
-        responseType: "text",
-      });
+      // Step 1: Get presigned preview URL from backend
+      const previewRes = await api.get(`/public/shares/${token}/preview`, { headers });
+      const presignedUrl = previewRes.data.previewUrl;
 
-      // Truncate preview if it's huge, but store full content for editing
-      const text = response.data;
+      // Step 2: Fetch text content directly from R2
+      const textRes = await fetch(presignedUrl);
+      const text = await textRes.text();
       setTextContent(text);
       setEditValue(text);
     } catch (err) {
@@ -457,21 +456,19 @@ export default function PublicShare() {
       if (accessToken) {
         headers.Authorization = `Bearer ${accessToken}`;
       }
-      // Step 1: Obtain a short-lived download token
-      const { data } = await api.post(`/public/shares/${token}/download-token`, {}, { headers });
+      // Get presigned download URL from backend
+      const { data } = await api.get(`/public/shares/${token}/download`, { headers });
 
-      // Step 2: Navigate hidden iframe to the public download URL
-      const downloadUrl = `${api.defaults.baseURL}/public/shares/download/${data.token}`;
-      let iframe = document.getElementById("__drivya_download_frame");
-      if (!iframe) {
-        iframe = document.createElement("iframe");
-        iframe.id = "__drivya_download_frame";
-        iframe.style.display = "none";
-        document.body.appendChild(iframe);
-      }
-      iframe.src = downloadUrl;
+      // Trigger native browser download via hidden anchor
+      const a = document.createElement("a");
+      a.href = data.downloadUrl;
+      a.download = data.fileName || metadata.name;
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     } catch (err) {
-      // alert("Download failed: Permission denied or expired share.");
+      // Download failed silently
     }
   };
 
@@ -516,14 +513,23 @@ export default function PublicShare() {
   const previewType = metadata ? getPreviewType(metadata.name) : "unsupported";
   const sizeStr = metadata ? formatSize(metadata.size) : "";
 
-  // Preview URL query binding
-  const filePreviewUrl = useMemo(() => {
-    if (!metadata) return "";
-    let url = `${api.defaults.baseURL}/public/shares/${token}/preview`;
-    if (accessToken) {
-      url += `?accessToken=${encodeURIComponent(accessToken)}`;
-    }
-    return url;
+  // Preview URL — fetch presigned URL from backend
+  const [filePreviewUrl, setFilePreviewUrl] = useState("");
+  useEffect(() => {
+    if (!metadata) { setFilePreviewUrl(""); return; }
+    const previewType = getPreviewType(metadata.name);
+    // Only fetch presigned URL for media types (text is handled separately)
+    if (previewType === "text" || previewType === "unsupported") { setFilePreviewUrl(""); return; }
+
+    let active = true;
+    const headers = {};
+    if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+
+    api.get(`/public/shares/${token}/preview`, { headers })
+      .then(({ data }) => { if (active) setFilePreviewUrl(data.previewUrl); })
+      .catch(() => { if (active) setFilePreviewUrl(""); });
+
+    return () => { active = false; };
   }, [token, metadata, accessToken]);
 
   const textLines = editValue.split("\n");

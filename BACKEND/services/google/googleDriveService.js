@@ -1,11 +1,5 @@
-import fs from "node:fs";
-import fsp from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { createDriveClient } from "../../config/googleOAuthConfig.js";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const STORAGE_ROOT = path.resolve(__dirname, "..", "..", "storage");
+import { saveFile } from "../storageService.js";
 
 // ─── Google Docs MIME → export format mapping ───────────────
 const GOOGLE_EXPORT_MAP = {
@@ -123,19 +117,21 @@ export async function getFileMetadata(tokens, fileId, userId = null) {
 }
 
 /**
- * Stream a file from Google Drive directly to disk.
- * Zero memory buffering — pipe-through architecture.
+ * Stream a file from Google Drive and upload to R2.
+ * Collects into buffer then uploads — supports AbortSignal for cancellation.
  *
  * @param {object} tokens - Decrypted Google OAuth tokens
  * @param {string} googleFileId
- * @param {string} destPath - Absolute path on disk
+ * @param {string} storagePath - R2 object key (e.g. "userId/storageName")
  * @param {(bytesWritten: number) => void} [onProgress] - Progress callback
+ * @param {string|null} userId
+ * @param {AbortSignal} [abortSignal]
  * @returns {Promise<{ bytesWritten: number, mimeType: string, fileName: string }>}
  */
 export async function streamImportFile(
   tokens,
   googleFileId,
-  destPath,
+  storagePath,
   onProgress,
   userId = null,
   abortSignal = null,
@@ -181,18 +177,15 @@ export async function streamImportFile(
     stream = downloadRes.data;
   }
 
-  // Ensure destination directory exists
-  await fsp.mkdir(path.dirname(destPath), { recursive: true });
-
-  // Pipe-through: Google stream → disk (no RAM buffering)
+  // Collect stream into buffer and upload to R2
   return new Promise((resolve, reject) => {
-    const writer = fs.createWriteStream(destPath);
+    const chunks = [];
     let bytesWritten = 0;
 
+    // Handle abort
     if (abortSignal) {
       const onAbort = () => {
         stream.destroy(new Error("Import cancelled"));
-        writer.destroy();
       };
       if (abortSignal.aborted) {
         onAbort();
@@ -202,31 +195,31 @@ export async function streamImportFile(
     }
 
     stream.on("data", (chunk) => {
+      chunks.push(chunk);
       bytesWritten += chunk.length;
       if (onProgress) onProgress(bytesWritten);
     });
 
     stream.on("error", (err) => {
-      writer.destroy();
-      // Clean up partial file
-      fsp.unlink(destPath).catch(() => {});
       reject(err);
     });
 
-    writer.on("error", (err) => {
-      stream.destroy();
-      fsp.unlink(destPath).catch(() => {});
-      reject(err);
-    });
+    stream.on("end", async () => {
+      try {
+        const buffer = Buffer.concat(chunks);
+        const slashIndex = storagePath.indexOf("/");
+        const folder = storagePath.substring(0, slashIndex);
+        const fileKey = storagePath.substring(slashIndex + 1);
+        await saveFile(folder, fileKey, buffer, finalMimeType);
 
-    writer.on("finish", () => {
-      resolve({
-        bytesWritten,
-        mimeType: finalMimeType,
-        fileName: finalName,
-      });
+        resolve({
+          bytesWritten,
+          mimeType: finalMimeType,
+          fileName: finalName,
+        });
+      } catch (err) {
+        reject(err);
+      }
     });
-
-    stream.pipe(writer);
   });
 }

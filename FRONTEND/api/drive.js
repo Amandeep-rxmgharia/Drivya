@@ -62,67 +62,110 @@ export const deleteDirectory = async (id) => {
 // ─── File API ────────────────────────────────────────────────────
 
 /**
- * Upload files to a directory.
+ * Upload files to a directory via presigned URLs (two-step flow).
+ * Step 1: POST /presign-upload → get presigned PUT URLs
+ * Step 2: PUT each file directly to R2
+ * Step 3: POST /confirm-upload → create DB records
+ *
  * @param {string} directoryId
  * @param {File[]} files - browser File objects
  * @param {(progress: number) => void} [onProgress] - 0-100
  */
 export const uploadFiles = async (directoryId, files, onProgress) => {
-  const formData = new FormData();
-  formData.append("directoryId", directoryId);
-  files.forEach((file) => formData.append("files", file));
+  // Step 1: Get presigned upload URLs from backend
+  const fileMeta = files.map((f) => ({
+    name: f.name,
+    size: f.size,
+    mimeType: f.type || "application/octet-stream",
+  }));
 
-  const response = await api.post("/api/files/upload", formData, {
-    headers: { "Content-Type": "multipart/form-data" },
-    onUploadProgress: (event) => {
-      if (onProgress && event.total) {
-        onProgress(Math.round((event.loaded * 100) / event.total));
-      }
-    },
+  const { data: presignData } = await api.post("/api/files/presign-upload", {
+    files: fileMeta,
+    directoryId: directoryId || undefined,
   });
-  return response.data;
+
+  const { uploads } = presignData;
+  const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+  let uploadedBytes = 0;
+
+  // Step 2: Upload each file directly to R2 via presigned PUT URL
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const upload = uploads[i];
+
+    await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", upload.presignedUrl, true);
+      xhr.setRequestHeader("Content-Type", upload.mimeType);
+
+      xhr.upload.onprogress = (e) => {
+        if (onProgress && e.lengthComputable) {
+          const fileDone = uploadedBytes + e.loaded;
+          onProgress(Math.round((fileDone * 100) / totalSize));
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          uploadedBytes += file.size;
+          resolve();
+        } else {
+          reject(new Error(`Upload failed for "${file.name}" (HTTP ${xhr.status})`));
+        }
+      };
+
+      xhr.onerror = () => reject(new Error(`Network error uploading "${file.name}"`));
+      xhr.send(file);
+    });
+  }
+
+  // Step 3: Confirm uploads with backend (creates DB records)
+  const confirmPayload = uploads.map((u, i) => ({
+    storageName: u.storageName,
+    originalName: u.originalName,
+    size: files[i].size,
+    mimeType: u.mimeType,
+  }));
+
+  const { data: confirmData } = await api.post("/api/files/confirm-upload", {
+    files: confirmPayload,
+    directoryId: presignData.directoryId,
+  });
+
+  return confirmData;
 };
 
 /**
- * Download a file via browser-native download (no memory buffering).
- *
- * The old approach used `axios.get(…, { responseType: "blob" })` which
- * buffers the entire file in JavaScript memory — this causes
- * `net::ERR_FAILED` for large video files.
- *
- * New approach (two-step, token-based):
- *  1. POST to /api/files/:id/download-token (authenticated via cookies).
- *     Returns a short-lived JWT (60s) embedding the file ID and user ID.
- *  2. Navigate a hidden iframe to /api/files/download/:token (public).
- *     The browser's download manager streams the file directly to disk.
+ * Download a file via presigned URL.
+ * Backend returns a presigned R2 download URL — we trigger
+ * the browser's native download via a hidden anchor element.
  *
  * @param {string} fileId
  * @param {string} fileName
  */
 export const downloadFile = async (fileId, fileName) => {
-  // Step 1: Obtain a short-lived download token (authenticated request)
-  const { data } = await api.post(`/api/files/${fileId}/download-token`);
+  const { data } = await api.get(`/api/files/${fileId}/download`);
 
-  // Step 2: Navigate hidden iframe to the public download URL
-  const downloadUrl = `${api.defaults.baseURL}/api/files/download/${data.token}`;
-  let iframe = document.getElementById("__drivya_download_frame");
-  if (!iframe) {
-    iframe = document.createElement("iframe");
-    iframe.id = "__drivya_download_frame";
-    iframe.style.display = "none";
-    document.body.appendChild(iframe);
-  }
-  iframe.src = downloadUrl;
+  // Trigger native browser download via hidden anchor
+  const a = document.createElement("a");
+  a.href = data.downloadUrl;
+  a.download = data.fileName || fileName;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 };
 
 /**
- * Get the preview URL for a file (for use in img/video/audio/iframe src).
- * Returns the full URL string — no fetch needed.
+ * Get a presigned preview URL for a file.
+ * Returns a temporary R2 URL that can be used as img/video/audio/iframe src.
+ * NOTE: This is now async — callers must await.
  * @param {string} fileId
- * @returns {string}
+ * @returns {Promise<string>}
  */
-export const getFilePreviewUrl = (fileId) => {
-  return `${api.defaults.baseURL}/api/files/${fileId}/preview`;
+export const getFilePreviewUrl = async (fileId) => {
+  const { data } = await api.get(`/api/files/${fileId}/preview`);
+  return data.previewUrl;
 };
 
 /**

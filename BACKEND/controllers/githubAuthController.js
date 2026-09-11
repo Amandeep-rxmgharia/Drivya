@@ -1,7 +1,4 @@
 import mongoose, { Types } from "mongoose";
-import fsp from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import User from "../models/userModel.js";
 import Session from "../models/sessionModel.js";
 import Directory from "../models/directoryModel.js";
@@ -13,12 +10,10 @@ import {
   generateDeactivatedToken,
 } from "../config/tokenUtils.js";
 import { createNotification } from "../services/notificationService.js";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const AVATAR_DIR = path.resolve(__dirname, "..", "storage", "avatars");
+import { saveFile } from "../services/storageService.js";
 
 /**
- * Download a GitHub profile picture and save it to disk.
+ * Download a GitHub profile picture and save it to R2.
  * Returns the local avatar URL path, or empty string on failure.
  */
 async function downloadGithubAvatar(pictureUrl, userId) {
@@ -38,9 +33,8 @@ async function downloadGithubAvatar(pictureUrl, userId) {
         ? ".webp"
         : ".jpg";
 
-    await fsp.mkdir(AVATAR_DIR, { recursive: true });
     const filename = `${userId}_github_${Date.now()}${ext}`;
-    await fsp.writeFile(path.join(AVATAR_DIR, filename), buffer);
+    await saveFile("avatars", filename, buffer, contentType);
     return `/api/account/avatar/${filename}`;
   } catch (err) {
     console.error("[downloadGithubAvatar] Failed:", err.message);

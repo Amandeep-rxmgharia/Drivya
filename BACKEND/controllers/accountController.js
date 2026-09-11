@@ -1,7 +1,5 @@
 import mongoose from "mongoose";
-import fsp from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import User from "../models/userModel.js";
 import Directory from "../models/directoryModel.js";
 import File from "../models/fileModel.js";
@@ -9,15 +7,17 @@ import Notification from "../models/notificationModel.js";
 import Share from "../models/shareModel.js";
 import OTP from "../models/otpModel.js";
 import { clearTokenCookies } from "../config/tokenUtils.js";
-import { deleteFile } from "../services/storageService.js";
+import {
+  deleteFile,
+  deleteFiles,
+  saveFile,
+  getFileStream,
+} from "../services/storageService.js";
 import { createNotification } from "../services/notificationService.js";
 import { sendOTPEmail } from "../utils/mailer.js";
 import { decryptStringAesGcm } from "../utils/cryptoUtils.js";
 import { verifyTotpCode } from "../utils/totpUtils.js";
 import bcrypt from "bcrypt";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const AVATAR_DIR = path.resolve(__dirname, "..", "storage", "avatars");
 
 // ─── Get Profile ─────────────────────────────────────────────
 export const getProfile = async (req, res, next) => {
@@ -137,27 +137,19 @@ export const uploadAvatar = async (req, res, next) => {
       return res.status(404).json({ message: "User not found." });
     }
 
-    // Ensure avatars directory exists
-    await fsp.mkdir(AVATAR_DIR, { recursive: true });
-
     // Generate unique filename
     const ext = path.extname(req.file.originalname).toLowerCase() || ".jpg";
     const filename = `${user._id}_${Date.now()}${ext}`;
-    const filePath = path.join(AVATAR_DIR, filename);
 
-    // Delete old avatar file if it exists
+    // Delete old avatar from R2 if it exists
     if (user.avatarUrl) {
       const oldFilename = user.avatarUrl.split("/").pop();
-      const oldPath = path.join(AVATAR_DIR, oldFilename);
-      try {
-        await fsp.unlink(oldPath);
-      } catch {
-        // ignore if old file doesn't exist
-      }
+      const oldKey = `avatars/${oldFilename}`;
+      deleteFile(oldKey).catch(() => { /* ignore */ });
     }
 
-    // Write new file
-    await fsp.writeFile(filePath, req.file.buffer);
+    // Upload new avatar to R2
+    await saveFile("avatars", filename, req.file.buffer, req.file.mimetype);
 
     // Update user record
     const avatarUrl = `/api/account/avatar/${filename}`;
@@ -188,15 +180,9 @@ export const uploadAvatar = async (req, res, next) => {
 export const getAvatar = async (req, res, next) => {
   try {
     const { filename } = req.params;
-    // Sanitize filename to prevent directory traversal
+    // Sanitize filename to prevent traversal
     const safeName = path.basename(filename);
-    const filePath = path.join(AVATAR_DIR, safeName);
-
-    try {
-      await fsp.access(filePath);
-    } catch {
-      return res.status(404).json({ message: "Avatar not found." });
-    }
+    const key = `avatars/${safeName}`;
 
     // Determine content type from extension
     const ext = path.extname(safeName).toLowerCase();
@@ -207,10 +193,14 @@ export const getAvatar = async (req, res, next) => {
       ".webp": "image/webp",
     };
 
-    res.set("Content-Type", contentTypes[ext] || "image/jpeg");
-    res.set("Cache-Control", "public, max-age=86400"); // Cache for 24h
-    const data = await fsp.readFile(filePath);
-    return res.send(data);
+    try {
+      const stream = await getFileStream(key);
+      res.set("Content-Type", contentTypes[ext] || "image/jpeg");
+      res.set("Cache-Control", "public, max-age=86400"); // Cache for 24h
+      stream.pipe(res);
+    } catch {
+      return res.status(404).json({ message: "Avatar not found." });
+    }
   } catch (err) {
     next(err);
   }
@@ -226,12 +216,8 @@ export const deleteAvatar = async (req, res, next) => {
 
     if (user.avatarUrl) {
       const oldFilename = user.avatarUrl.split("/").pop();
-      const oldPath = path.join(AVATAR_DIR, oldFilename);
-      try {
-        await fsp.unlink(oldPath);
-      } catch {
-        // ignore
-      }
+      const oldKey = `avatars/${oldFilename}`;
+      deleteFile(oldKey).catch(() => { /* ignore */ });
     }
 
     user.avatarUrl = "";

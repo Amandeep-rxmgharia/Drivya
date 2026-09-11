@@ -80,7 +80,7 @@ async function extractFileContent(file) {
     // PDF extraction
     if (mime === "application/pdf" || ext === ".pdf") {
         try {
-            const stream = getFileStream(file.storagePath);
+            const stream = await getFileStream(file.storagePath);
             const buffer = await streamToBuffer(stream);
             const parser = new PDFParse({ data: buffer });
             const data = await parser.getText();
@@ -99,7 +99,7 @@ async function extractFileContent(file) {
     // Text-based files
     if (isTextMime(mime) || TEXT_EXTENSIONS.has(ext)) {
         try {
-            const stream = getFileStream(file.storagePath);
+            const stream = await getFileStream(file.storagePath);
             const buffer = await streamToBuffer(stream);
             const text = buffer.toString("utf-8").trim();
             if (!text) {

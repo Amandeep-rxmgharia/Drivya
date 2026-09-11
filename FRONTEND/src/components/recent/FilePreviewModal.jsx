@@ -72,7 +72,18 @@ function PreviewPlaceholder({ file, kind }) {
 
   const fileId = file?.resourceId || file?.id;
   const previewType = fileId ? getPreviewType(file.name) : "unsupported";
-  const previewUrl = fileId ? getFilePreviewUrl(fileId) : "";
+  const [previewUrl, setPreviewUrl] = useState("");
+
+  // Fetch presigned preview URL from R2
+  useEffect(() => {
+    if (!fileId) return;
+    let active = true;
+    setPreviewUrl("");
+    getFilePreviewUrl(fileId)
+      .then((url) => { if (active) setPreviewUrl(url); })
+      .catch(() => { if (active) setPreviewUrl(""); });
+    return () => { active = false; };
+  }, [fileId]);
 
   useEffect(() => {
     if (previewType !== "text" || !previewUrl) return;
@@ -81,10 +92,11 @@ function PreviewPlaceholder({ file, kind }) {
     setTextLoading(true);
     setTextError(null);
 
-    api.get(previewUrl, { responseType: "text" })
-      .then((res) => {
+    // Fetch text content directly from R2 presigned URL
+    fetch(previewUrl)
+      .then((res) => res.text())
+      .then((text) => {
         if (!active) return;
-        const text = res.data;
         const truncated = text.length > 20_000
           ? text.slice(0, 20_000) + "\n\n... [truncated — file too large]"
           : text;
@@ -108,7 +120,7 @@ function PreviewPlaceholder({ file, kind }) {
         <img
           src={previewUrl}
           alt={file.name}
-          crossOrigin="use-credentials"
+          crossOrigin="anonymous"
           className="max-w-full max-h-full object-contain"
         />
       </div>
@@ -120,7 +132,7 @@ function PreviewPlaceholder({ file, kind }) {
       <div className="w-full h-56 sm:h-64 rounded-xl border border-border bg-black overflow-hidden flex items-center justify-center">
         <video
           src={previewUrl}
-          crossOrigin="use-credentials"
+          crossOrigin="anonymous"
           controls
           className="max-w-full max-h-full"
         />
@@ -134,7 +146,7 @@ function PreviewPlaceholder({ file, kind }) {
         <FileTypeIcon kind={kind} size="lg" />
         <audio
           src={previewUrl}
-          crossOrigin="use-credentials"
+          crossOrigin="anonymous"
           controls
           className="w-full max-w-xs"
         />

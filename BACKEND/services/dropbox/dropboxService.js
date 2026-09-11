@@ -1,7 +1,6 @@
-import fs from "node:fs";
-import fsp from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
+import { saveFile } from "../storageService.js";
 
 // Extensions for which Dropbox can generate thumbnails
 const THUMBNAIL_EXTENSIONS = new Set([
@@ -216,13 +215,12 @@ export async function getFileMetadata(tokens, filePath, userId = null) {
 }
 
 /**
- * Stream a file from Dropbox directly to disk.
- * Pipe-through architecture — zero RAM buffering.
- * Supports AbortSignal for cancellation.
+ * Stream a file from Dropbox and upload to R2.
+ * Collects into buffer then uploads — supports AbortSignal for cancellation.
  *
  * @param {object} tokens - { access_token, refresh_token }
  * @param {string} dropboxPath - Dropbox file path (path_lower)
- * @param {string} destPath - Absolute path on disk
+ * @param {string} storagePath - R2 object key (e.g. "userId/storageName")
  * @param {(bytesWritten: number) => void} [onProgress]
  * @param {string|null} userId
  * @param {AbortSignal} [abortSignal]
@@ -231,7 +229,7 @@ export async function getFileMetadata(tokens, filePath, userId = null) {
 export async function streamImportFile(
   tokens,
   dropboxPath,
-  destPath,
+  storagePath,
   onProgress,
   userId = null,
   abortSignal = null,
@@ -269,9 +267,7 @@ export async function streamImportFile(
             dropboxTokensAuthTag: encrypted.authTag,
           },
         );
-      } catch (err) {
-        console.error("Failed to save refreshed Dropbox tokens:", err.message);
-      }
+      } catch {}
     }
 
     res = await fetch("https://content.dropboxapi.com/2/files/download", {
@@ -299,12 +295,9 @@ export async function streamImportFile(
   const fileName = meta.name || path.basename(dropboxPath);
   const mimeType = guessDropboxMimeType(fileName, "file");
 
-  // Ensure destination directory exists
-  await fsp.mkdir(path.dirname(destPath), { recursive: true });
-
-  // Pipe response body → disk
+  // Collect stream into buffer and upload to R2
   return new Promise((resolve, reject) => {
-    const writer = fs.createWriteStream(destPath);
+    const chunks = [];
     let bytesWritten = 0;
 
     // Convert the web ReadableStream to a Node stream
@@ -314,7 +307,6 @@ export async function streamImportFile(
     if (abortSignal) {
       const onAbort = () => {
         nodeStream.destroy(new Error("Import cancelled"));
-        writer.destroy();
       };
       if (abortSignal.aborted) {
         onAbort();
@@ -324,31 +316,32 @@ export async function streamImportFile(
     }
 
     nodeStream.on("data", (chunk) => {
+      chunks.push(chunk);
       bytesWritten += chunk.length;
       if (onProgress) onProgress(bytesWritten);
     });
 
     nodeStream.on("error", (err) => {
-      writer.destroy();
-      fsp.unlink(destPath).catch(() => {});
       reject(err);
     });
 
-    writer.on("error", (err) => {
-      nodeStream.destroy();
-      fsp.unlink(destPath).catch(() => {});
-      reject(err);
-    });
+    nodeStream.on("end", async () => {
+      try {
+        const buffer = Buffer.concat(chunks);
+        const slashIndex = storagePath.indexOf("/");
+        const folder = storagePath.substring(0, slashIndex);
+        const fileKey = storagePath.substring(slashIndex + 1);
+        await saveFile(folder, fileKey, buffer, mimeType);
 
-    writer.on("finish", () => {
-      resolve({
-        bytesWritten,
-        mimeType,
-        fileName,
-      });
+        resolve({
+          bytesWritten,
+          mimeType,
+          fileName,
+        });
+      } catch (err) {
+        reject(err);
+      }
     });
-
-    nodeStream.pipe(writer);
   });
 }
 

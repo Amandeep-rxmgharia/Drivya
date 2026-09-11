@@ -1,7 +1,4 @@
 import { randomBytes } from "node:crypto";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import fsp from "node:fs/promises";
 import mongoose from "mongoose";
 import User from "../models/userModel.js";
 import File from "../models/fileModel.js";
@@ -27,9 +24,6 @@ import { ACTIVITY_ACTIONS } from "../constants/activityConstants.js";
 import { RESOURCE_TYPES } from "../constants/shareConstants.js";
 import { createNotification } from "../services/notificationService.js";
 import redis from "../config/redisClient.js";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const STORAGE_ROOT = path.resolve(__dirname, "..", "storage");
 
 // ─── OAuth CSRF state stored in Redis with auto-expiry ───
 const STATE_TTL_SECONDS = 600; // 10 minutes
@@ -403,7 +397,7 @@ export const importGoogleFiles = async (req, res, next) => {
 
       const meta = metadataList[i];
       const storageName = generateStorageName(meta.name);
-      const destPath = path.join(STORAGE_ROOT, userId, storageName);
+      const storagePath = `${userId}/${storageName}`;
 
       sendSSE("progress", {
         index: i,
@@ -419,7 +413,7 @@ export const importGoogleFiles = async (req, res, next) => {
         const result = await streamImportFile(
           tokens,
           meta.id,
-          destPath,
+          storagePath,
           (bytesWritten) => {
             const percent = estimatedSize
               ? Math.min(99, Math.round((bytesWritten / estimatedSize) * 100))
@@ -437,7 +431,6 @@ export const importGoogleFiles = async (req, res, next) => {
         );
 
         // Create file record in DB (with duplicate name handling)
-        const storagePath = `${userId}/${storageName}`;
         let finalName = result.fileName;
         let attempt = 0;
         let fileDoc = null;
@@ -511,7 +504,6 @@ export const importGoogleFiles = async (req, res, next) => {
       } catch (importErr) {
         if (abortController.signal.aborted) {
           cancelled = true;
-          await fsp.unlink(destPath).catch(() => {});
           break;
         }
 

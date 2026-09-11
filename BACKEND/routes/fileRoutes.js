@@ -1,6 +1,7 @@
 import express from "express";
 import {
-  uploadFiles,
+  presignUpload,
+  confirmUpload,
   downloadFile,
   previewFile,
   renameFile,
@@ -16,7 +17,6 @@ import {
 } from "../controllers/fileController.js";
 import { handleValidationErrors } from "../middlewares/validators.js";
 import { authenticate } from "../middlewares/authMiddleware.js";
-import { uploadFiles as uploadMiddleware } from "../middlewares/uploadMiddleware.js";
 
 const router = express.Router();
 
@@ -28,15 +28,20 @@ router.get("/download/:token", downloadFileByToken);
 // All remaining routes require authentication
 router.use(authenticate);
 
-// ─── File Routes ─────────────────────────────────────────────────
-router.post("/upload", uploadMiddleware, uploadFiles);
+// ─── Upload Flow (presigned URL) ─────────────────────────────────
+router.post("/presign-upload", presignUpload);
+router.post("/confirm-upload", confirmUpload);
+
+// ─── Download / Preview ──────────────────────────────────────────
 router.get("/:id/download", downloadFile);
 router.post("/:id/download-token", createDownloadToken);
 router.get("/:id/preview", previewFile);
+
+// ─── File Operations ─────────────────────────────────────────────
 router.patch("/:id/rename", renameFile);
 router.put("/:id/content", editFileContent);
 
-// Trash operations
+// ─── Trash Operations ────────────────────────────────────────────
 router.get("/trash", listTrash);
 router.delete("/trash/empty", emptyTrash);
 router.patch("/trash/restore", restoreAllFiles);
@@ -45,4 +50,3 @@ router.patch("/:id/restore", restoreFile);
 router.delete("/:id", permanentDeleteFile);
 
 export default router;
-

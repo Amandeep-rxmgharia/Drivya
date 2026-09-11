@@ -132,6 +132,7 @@ export default function StorageSection({ userProfile, setUserProfile }) {
     setOverviewError(null);
     try {
       const data = await getStorageOverview();
+      console.log(data);
       setOverview(data);
     } catch (err) {
       setOverviewError(

@@ -123,7 +123,7 @@ function ImagePreview({ url, fileName }) {
         <img
           src={url}
           alt={fileName}
-          crossOrigin="use-credentials"
+          crossOrigin="anonymous"
           className="max-w-full max-h-full object-contain transition-transform duration-200"
           style={{
             transform: `scale(${zoom}) translate(${offset.x / zoom}px, ${offset.y / zoom}px)`,
@@ -172,7 +172,7 @@ function VideoPreview({ url }) {
     <div className="relative flex flex-1 items-center justify-center bg-black rounded-xl overflow-hidden">
       <video
         src={url}
-        crossOrigin="use-credentials"
+        crossOrigin="anonymous"
         controls
         controlsList="nodownload"
         className="max-w-full max-h-full"
@@ -214,7 +214,7 @@ function AudioPreview({ url, kind }) {
       </div>
       <audio
         src={url}
-        crossOrigin="use-credentials"
+        crossOrigin="anonymous"
         controls
         controlsList="nodownload"
         className="w-full max-w-md"
@@ -257,15 +257,17 @@ function TextPreview({ url, fileId }) {
 
   useEffect(() => {
     let cancelled = false;
+    if (!url) return;
     setLoading(true);
     setError(null);
     setIsEditing(false);
     setSaveSuccess(false);
 
-    api.get(url, { responseType: "text" })
-      .then((res) => {
+    // Fetch text content directly from R2 presigned URL
+    fetch(url)
+      .then((res) => res.text())
+      .then((text) => {
         if (!cancelled) {
-          const text = res.data;
           // Limit to 50KB for display
           const truncated = text.length > 50_000
             ? text.slice(0, 50_000) + "\n\n... [truncated — file too large for preview]"
@@ -511,6 +513,18 @@ export function FilePreviewModal({
     };
   }, [file?.id]);
 
+  // Fetch presigned preview URL from R2
+  const [previewUrl, setPreviewUrl] = useState("");
+  useEffect(() => {
+    if (!file?.id || isAuthChecking || authError) return;
+    let active = true;
+    setPreviewUrl("");
+    getFilePreviewUrl(file.id)
+      .then((url) => { if (active) setPreviewUrl(url); })
+      .catch(() => { if (active) setPreviewUrl(""); });
+    return () => { active = false; };
+  }, [file?.id, isAuthChecking, authError]);
+
   // Compute current index for prev/next
   const currentIndex = useMemo(() => {
     if (!file || files.length === 0) return -1;
@@ -576,7 +590,6 @@ export function FilePreviewModal({
   const kind = detectFileKind(file.name, file.kind);
   const { label: kindLabel } = getFileTypeStyle(kind);
   const previewType = getPreviewType(file.name);
-  const previewUrl = getFilePreviewUrl(file.id);
   const sizeStr = typeof file.size === "string" ? file.size : formatSize(file.size || file.rawSize);
 
   return createPortal(

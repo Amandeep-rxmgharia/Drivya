@@ -7,7 +7,10 @@ import {
   isUserAuthorizedForShare,
   isShareAccessible,
 } from "../services/shareService.js";
-import { getFileStream, updateFileContent as updateDiskContent } from "../services/storageService.js";
+import {
+  generateDownloadUrl,
+  updateFileContent as updateR2Content,
+} from "../services/storageService.js";
 import {
   generateShareAccessToken,
   setShareAccessCookie,
@@ -25,44 +28,23 @@ import {
 } from "../services/cacheService.js";
 import User from "../models/userModel.js";
 
-// ─── Bandwidth Helpers ──────────────────────────────────────────
-import { Transform } from "stream";
-
-async function checkBandwidth(userId, expectedBytes, res) {
-  const user = await User.findById(userId).select("bandwidthUsed bandwidthLimit").lean();
-  if (user.bandwidthUsed + expectedBytes > user.bandwidthLimit) {
+// ─── Bandwidth Check & Increment Helper ─────────────────────────
+/**
+ * Check bandwidth limit and increment for the file owner.
+ * @returns {boolean} false if bandwidth exceeded (response already sent)
+ */
+async function checkAndIncrementOwnerBandwidth(ownerId, fileSize, res) {
+  const user = await User.findById(ownerId).select("bandwidthUsed bandwidthLimit").lean();
+  if (user.bandwidthUsed + fileSize > user.bandwidthLimit) {
     res.status(429).json({
       message: "The file owner's bandwidth limit has been exceeded. Please try again later.",
       code: "BANDWIDTH_EXCEEDED",
     });
     return false;
   }
+
+  await User.updateOne({ _id: ownerId }, { $inc: { bandwidthUsed: fileSize } });
   return true;
-}
-
-function createBandwidthTracker(userId) {
-  let totalBytes = 0;
-  let recorded = false;
-
-  const tracker = new Transform({
-    transform(chunk, encoding, callback) {
-      totalBytes += chunk.length;
-      this.push(chunk);
-      callback();
-    },
-  });
-
-  const record = () => {
-    if (recorded || totalBytes === 0) return;
-    recorded = true;
-    User.updateOne({ _id: userId }, { $inc: { bandwidthUsed: totalBytes } })
-      .catch((err) => console.error("[Bandwidth] Tracking error:", err.message));
-  };
-
-  tracker.on("end", record);
-  tracker.on("close", record);
-
-  return tracker;
 }
 
 function handlePublicShareError(err, res, next) {
@@ -177,7 +159,7 @@ export async function accessShare(req, res, next) {
   }
 }
 
-// ─── Preview Shared File ──────────────────────────────────────────
+// ─── Preview Shared File (returns presigned URL) ──────────────────
 export async function previewSharedFile(req, res, next) {
   try {
     const { token } = req.params;
@@ -189,58 +171,28 @@ export async function previewSharedFile(req, res, next) {
 
     const { file } = await resolveShareFileForPublicAccess(token);
 
-    // NOTE: View count is tracked in getShareMetadata (the metadata
-    // endpoint), NOT here. This endpoint streams the binary file and
-    // may be called many times per page load (Range requests for
-    // video/audio seeking, browser retries, etc.).
-
-    const fileSize = file.size;
-    const range = req.headers.range;
-
-    res.set({
-      "Content-Type": file.mimeType,
-      "Content-Disposition": `inline; filename="${encodeURIComponent(file.originalName)}"`,
-      "Accept-Ranges": "bytes",
-      "Cache-Control": "private, max-age=3600",
-      "Cross-Origin-Resource-Policy": "cross-origin",
+    // Generate presigned preview URL
+    const { url, expiresAt } = await generateDownloadUrl(file.storagePath, {
+      responseContentDisposition: `inline; filename="${encodeURIComponent(file.originalName)}"`,
+      responseContentType: file.mimeType,
     });
 
-    if (range) {
-      const parts = range.replace(/bytes=/, "").split("-");
-      const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+    // Check owner bandwidth limit and increment
+    const allowed = await checkAndIncrementOwnerBandwidth(file.userId, file.size, res);
+    if (!allowed) return;
 
-      if (start >= fileSize || end >= fileSize || start > end) {
-        res.status(416).set("Content-Range", `bytes */${fileSize}`);
-        return res.end();
-      }
-
-      const chunkSize = end - start + 1;
-
-      // Check bandwidth against file owner's quota
-      if (!(await checkBandwidth(file.userId, chunkSize, res))) return;
-
-      const stream = getFileStream(file.storagePath, { start, end });
-
-      res.status(206).set({
-        "Content-Range": `bytes ${start}-${end}/${fileSize}`,
-        "Content-Length": chunkSize,
-      });
-
-      stream.pipe(createBandwidthTracker(file.userId)).pipe(res);
-    } else {
-      // Check bandwidth against file owner's quota
-      if (!(await checkBandwidth(file.userId, fileSize, res))) return;
-
-      res.set("Content-Length", fileSize);
-      getFileStream(file.storagePath).pipe(createBandwidthTracker(file.userId)).pipe(res);
-    }
+    return res.json({
+      previewUrl: url,
+      fileName: file.originalName,
+      size: file.size,
+      mimeType: file.mimeType,
+    });
   } catch (err) {
     handlePublicShareError(err, res, next);
   }
 }
 
-// ─── Download Shared File ─────────────────────────────────────────
+// ─── Download Shared File (returns presigned URL) ─────────────────
 export async function downloadSharedFile(req, res, next) {
   try {
     const { token } = req.params;
@@ -252,8 +204,15 @@ export async function downloadSharedFile(req, res, next) {
 
     const { file } = await resolveShareFileForPublicAccess(token);
 
-    // Check bandwidth against file owner's quota
-    if (!(await checkBandwidth(file.userId, file.size, res))) return;
+    // Generate presigned download URL
+    const { url, expiresAt } = await generateDownloadUrl(file.storagePath, {
+      responseContentDisposition: `attachment; filename="${encodeURIComponent(file.originalName)}"`,
+      responseContentType: file.mimeType,
+    });
+
+    // Check owner bandwidth limit and increment
+    const allowed = await checkAndIncrementOwnerBandwidth(file.userId, file.size, res);
+    if (!allowed) return;
 
     // Simplify to cookie-only session tracking
     const downloadCookieName = `downloaded_${token}`;
@@ -268,13 +227,12 @@ export async function downloadSharedFile(req, res, next) {
       });
     }
 
-    res.set({
-      "Content-Type": file.mimeType,
-      "Content-Disposition": `attachment; filename="${encodeURIComponent(file.originalName)}"`,
-      "Content-Length": file.size,
+    return res.json({
+      downloadUrl: url,
+      fileName: file.originalName,
+      size: file.size,
+      mimeType: file.mimeType,
     });
-
-    getFileStream(file.storagePath).pipe(createBandwidthTracker(file.userId)).pipe(res);
   } catch (err) {
     handlePublicShareError(err, res, next);
   }
@@ -310,7 +268,7 @@ export async function createShareDownloadToken(req, res, next) {
   }
 }
 
-// ─── Download Shared File By Token ────────────────────────────────
+// ─── Download Shared File By Token (returns presigned URL) ────────
 export async function downloadSharedFileByToken(req, res, next) {
   try {
     const { token } = req.params; // download token
@@ -330,26 +288,22 @@ export async function downloadSharedFileByToken(req, res, next) {
 
     const { file } = await resolveShareFileForPublicAccess(decoded.shareToken);
 
-    // Check bandwidth against file owner's quota
-    if (!(await checkBandwidth(file.userId, file.size, res))) return;
-
-    res.set({
-      "Content-Type": file.mimeType,
-      "Content-Disposition": `attachment; filename="${encodeURIComponent(file.originalName)}"`,
-      "Content-Length": file.size,
+    // Generate presigned download URL
+    const { url, expiresAt } = await generateDownloadUrl(file.storagePath, {
+      responseContentDisposition: `attachment; filename="${encodeURIComponent(file.originalName)}"`,
+      responseContentType: file.mimeType,
     });
 
-    const stream = getFileStream(file.storagePath);
-    stream.on("error", (err) => {
-      console.error("Shared download token stream error:", err.message);
-      if (!res.headersSent) {
-        res.status(500).json({ message: "Error reading file from disk." });
-      } else {
-        res.destroy();
-      }
-    });
+    // Check owner bandwidth limit and increment
+    const allowed = await checkAndIncrementOwnerBandwidth(file.userId, file.size, res);
+    if (!allowed) return;
 
-    stream.pipe(createBandwidthTracker(file.userId)).pipe(res);
+    return res.json({
+      downloadUrl: url,
+      fileName: file.originalName,
+      size: file.size,
+      mimeType: file.mimeType,
+    });
   } catch (err) {
     handlePublicShareError(err, res, next);
   }
@@ -383,7 +337,7 @@ export async function editSharedFile(req, res, next) {
     }
 
     const { file } = await resolveShareFileForPublicAccess(token);
-    await updateDiskContent(file.storagePath, content);
+    await updateR2Content(file.storagePath, content);
 
     const newSize = Buffer.byteLength(content);
 
