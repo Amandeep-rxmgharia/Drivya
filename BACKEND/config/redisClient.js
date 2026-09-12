@@ -13,10 +13,10 @@ const clientConfig = REDIS_URL
   ? { url: REDIS_URL }
   : {
     username: REDIS_USERNAME || "default",
-    password: "Jus#0203*",
+    password: REDIS_PASSWORD,
     socket: {
-      host: "localhost",
-      // port: parseInt(REDIS_PORT, 10) || 6379,
+      host: REDIS_HOST,
+      port: parseInt(REDIS_PORT, 10) || 6379,
     },
   };
 

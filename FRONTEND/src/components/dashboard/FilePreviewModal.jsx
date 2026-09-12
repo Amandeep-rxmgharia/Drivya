@@ -108,7 +108,11 @@ function ImagePreview({ url, fileName }) {
 
   return (
     <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-black/5 dark:bg-white/5 rounded-xl">
-      {!loaded && <PreviewLoading />}
+      {!loaded && (
+        <div className="absolute inset-0 flex items-center justify-center z-10">
+          <PreviewLoading />
+        </div>
+      )}
       <div
         className={cn(
           "flex items-center justify-center w-full h-full",
@@ -708,7 +712,7 @@ export function FilePreviewModal({
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
                 transition={{ duration: 0.2, ease: easeSmooth }}
-                className="flex flex-1 min-h-0"
+                className="flex flex-1 min-h-0 w-full"
               >
                 {isAuthChecking ? (
                   <PreviewLoading />

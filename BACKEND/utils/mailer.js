@@ -7,6 +7,7 @@ const SMTP_HOST = process.env.SMTP_HOST;
 const SMTP_PORT = parseInt(process.env.SMTP_PORT) || 587;
 const SMTP_USER = process.env.SMTP_USER;
 const SMTP_PASS = process.env.SMTP_PASS;
+const SMTP_FROM = process.env.SMTP_FROM || SMTP_USER;
 
 let transporter = null;
 
@@ -24,7 +25,7 @@ if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
 
 export async function sendOTPEmail(email, otp) {
   const mailOptions = {
-    from: `"Drivya Security" <${SMTP_USER || "no-reply@drivya.com"}>`,
+    from: `"Drivya Security" <${SMTP_FROM || "no-reply@drivya.com"}>`,
     to: email,
     subject: "Your Drivya Verification Code",
     text: `Your verification code is: ${otp}. It is valid for 10 minutes.`,
@@ -39,9 +40,15 @@ export async function sendOTPEmail(email, otp) {
       </div>
     `,
   };
-
   if (transporter) {
-    await transporter.sendMail(mailOptions);
+    try {
+      console.log(`[MAILER] Sending OTP email to: ${email}, from: ${SMTP_FROM}`);
+      const info = await transporter.sendMail(mailOptions);
+      console.log(`[MAILER] ✅ OTP email sent! Response:`, info.response, `MessageId:`, info.messageId);
+    } catch (err) {
+      console.error(`[MAILER] ❌ Failed to send OTP email:`, err.message);
+      throw err;
+    }
   } else {
     console.log("==========================================");
     console.log(`[MAIL SIMULATION] OTP for ${email}: ${otp}`);
@@ -59,7 +66,7 @@ export async function sendRefundEmail(email, { userName, oldPlanName, newPlanNam
   const safeNewPlan = escapeHtml(newPlanName);
 
   const mailOptions = {
-    from: `"Drivya Billing" <${SMTP_USER || "billing@drivya.com"}>`,
+    from: `"Drivya Billing" <${SMTP_FROM || "billing@drivya.com"}>`,
     to: email,
     subject: `Refund of ₹${refundAmount.toFixed(2)} — Plan Upgrade`,
     text: `Hi ${userName},\n\nYour ${oldPlanName} plan has been upgraded to ${newPlanName}. A ${refundLabel.toLowerCase()} of ₹${refundAmount.toFixed(2)} has been initiated for the unused portion of your previous plan.\n\n${!isFullRefund ? `Prorated amount: ₹${grossAmount.toFixed(2)}\nGateway charges deducted: ₹${gatewayCharges.toFixed(2)}\nNet refund: ₹${refundAmount.toFixed(2)}` : `Refund amount: ₹${refundAmount.toFixed(2)}`}\n\nRefunds typically take 5–7 business days to reflect in your account.\n\nThank you for upgrading!\n— Team Drivya`,

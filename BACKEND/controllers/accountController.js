@@ -105,11 +105,7 @@ export const updateProfile = async (req, res, next) => {
 };
 
 // ─── Upload Avatar ───────────────────────────────────────────
-const ALLOWED_AVATAR_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-];
+const ALLOWED_AVATAR_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024; // 5 MB
 
 export const uploadAvatar = async (req, res, next) => {
@@ -145,7 +141,9 @@ export const uploadAvatar = async (req, res, next) => {
     if (user.avatarUrl) {
       const oldFilename = user.avatarUrl.split("/").pop();
       const oldKey = `avatars/${oldFilename}`;
-      deleteFile(oldKey).catch(() => { /* ignore */ });
+      deleteFile(oldKey).catch(() => {
+        /* ignore */
+      });
     }
 
     // Upload new avatar to R2
@@ -217,7 +215,9 @@ export const deleteAvatar = async (req, res, next) => {
     if (user.avatarUrl) {
       const oldFilename = user.avatarUrl.split("/").pop();
       const oldKey = `avatars/${oldFilename}`;
-      deleteFile(oldKey).catch(() => { /* ignore */ });
+      deleteFile(oldKey).catch(() => {
+        /* ignore */
+      });
     }
 
     user.avatarUrl = "";
@@ -276,7 +276,8 @@ export const changePassword = async (req, res, next) => {
     await createNotification(user._id, {
       type: "security",
       title: "Password updated successfully",
-      description: "Your account password was recently changed. If you did not make this change, please contact support immediately.",
+      description:
+        "Your account password was recently changed. If you did not make this change, please contact support immediately.",
       actionLabel: "Security Settings",
       actionPath: "/dashboard/settings/security",
     });
@@ -292,11 +293,15 @@ export const setPassword = async (req, res, next) => {
   const { newPassword } = req.body;
 
   if (!newPassword || newPassword.length < 8) {
-    return res.status(400).json({ message: "Password must be at least 8 characters." });
+    return res
+      .status(400)
+      .json({ message: "Password must be at least 8 characters." });
   }
 
   try {
-    const user = await User.findById(req.user.id).select("+password authProvider");
+    const user = await User.findById(req.user.id).select(
+      "+password authProvider",
+    );
 
     if (!user) {
       return res.status(404).json({ message: "User not found." });
@@ -317,12 +322,16 @@ export const setPassword = async (req, res, next) => {
     await createNotification(user._id, {
       type: "security",
       title: "Password created",
-      description: "A password was set for your account. You can now sign in with either Google or email/password.",
+      description:
+        "A password was set for your account. You can now sign in with either Google or email/password.",
       actionLabel: "Security Settings",
       actionPath: "/dashboard/settings/security",
     });
 
-    return res.json({ message: "Password set successfully. You can now log in with email and password." });
+    return res.json({
+      message:
+        "Password set successfully. You can now log in with email and password.",
+    });
   } catch (err) {
     next(err);
   }
@@ -374,12 +383,18 @@ export const updateSharingDefaults = async (req, res, next) => {
 
     // Map UI keys -> userSchema keys
     const mapped = {};
-    if (updates.defaultAccess !== undefined) mapped.defaultShareAccess = updates.defaultAccess;
-    if (updates.defaultExpiryDays !== undefined) mapped.defaultShareExpiryDays = updates.defaultExpiryDays;
-    if (updates.passwordDefault !== undefined) mapped.defaultSharePassword = updates.passwordDefault;
-    if (updates.downloadPermission !== undefined) mapped.defaultShareDownloadPermission = updates.downloadPermission;
-    if (updates.shareNotify !== undefined) mapped.defaultShareNotify = updates.shareNotify;
-    if (updates.publicProfile !== undefined) mapped.defaultSharePublicProfile = updates.publicProfile;
+    if (updates.defaultAccess !== undefined)
+      mapped.defaultShareAccess = updates.defaultAccess;
+    if (updates.defaultExpiryDays !== undefined)
+      mapped.defaultShareExpiryDays = updates.defaultExpiryDays;
+    if (updates.passwordDefault !== undefined)
+      mapped.defaultSharePassword = updates.passwordDefault;
+    if (updates.downloadPermission !== undefined)
+      mapped.defaultShareDownloadPermission = updates.downloadPermission;
+    if (updates.shareNotify !== undefined)
+      mapped.defaultShareNotify = updates.shareNotify;
+    if (updates.publicProfile !== undefined)
+      mapped.defaultSharePublicProfile = updates.publicProfile;
 
     if (Object.keys(mapped).length === 0) {
       return res.status(400).json({ message: "No valid fields to update." });
@@ -509,7 +524,7 @@ export const requestEmailChange = async (req, res, next) => {
 
     // Fetch user with select("+password") to verify
     const user = await User.findById(req.user.id).select(
-      "+password twoFAEnabled twoFASecretEnc twoFASecretIv twoFASecretAuthTag twoFABackupCodes"
+      "+password twoFAEnabled twoFASecretEnc twoFASecretIv twoFASecretAuthTag twoFABackupCodes",
     );
 
     if (!user) {
@@ -517,19 +532,27 @@ export const requestEmailChange = async (req, res, next) => {
     }
 
     if (normalizedNewEmail === user.email?.toLowerCase()) {
-      return res.status(400).json({ message: "New email must be different from current email." });
+      return res
+        .status(400)
+        .json({ message: "New email must be different from current email." });
     }
 
     // Check if new email is already in use
-    const emailExists = await User.findOne({ email: normalizedNewEmail }).lean();
+    const emailExists = await User.findOne({
+      email: normalizedNewEmail,
+    }).lean();
     if (emailExists) {
-      return res.status(400).json({ message: "Email is already in use by another account." });
+      return res
+        .status(400)
+        .json({ message: "Email is already in use by another account." });
     }
 
     // Verify Password if set
     if (user.password) {
       if (!password) {
-        return res.status(400).json({ message: "Password is required to request email change." });
+        return res
+          .status(400)
+          .json({ message: "Password is required to request email change." });
       }
       const isMatch = await user.comparePassword(password);
       if (!isMatch) {
@@ -542,8 +565,14 @@ export const requestEmailChange = async (req, res, next) => {
       if (!twoFACode) {
         return res.status(400).json({ message: "2FA code is required." });
       }
-      if (!user.twoFASecretEnc || !user.twoFASecretIv || !user.twoFASecretAuthTag) {
-        return res.status(400).json({ message: "2FA setup is incomplete on your account." });
+      if (
+        !user.twoFASecretEnc ||
+        !user.twoFASecretIv ||
+        !user.twoFASecretAuthTag
+      ) {
+        return res
+          .status(400)
+          .json({ message: "2FA setup is incomplete on your account." });
       }
 
       const secretBase32 = decryptStringAesGcm({
@@ -587,13 +616,16 @@ export const requestEmailChange = async (req, res, next) => {
     await OTP.findOneAndUpdate(
       { email: normalizedNewEmail },
       { otp, createdAt: new Date() },
-      { upsert: true, new: true }
+      { upsert: true, new: true },
     );
 
     // Send email to new email address
+    console.log("sending otp");
     await sendOTPEmail(normalizedNewEmail, otp);
 
-    return res.json({ message: "Verification OTP has been sent to your new email." });
+    return res.json({
+      message: "Verification OTP has been sent to your new email.",
+    });
   } catch (err) {
     next(err);
   }
@@ -611,15 +643,24 @@ export const confirmEmailChange = async (req, res, next) => {
     const normalizedOtp = String(otp).trim();
 
     // Verify OTP exists and is correct
-    const otpRecord = await OTP.findOne({ email: normalizedNewEmail, otp: normalizedOtp });
+    const otpRecord = await OTP.findOne({
+      email: normalizedNewEmail,
+      otp: normalizedOtp,
+    });
     if (!otpRecord) {
-      return res.status(400).json({ message: "Invalid or expired verification code." });
+      return res
+        .status(400)
+        .json({ message: "Invalid or expired verification code." });
     }
 
     // Verify new email is still available
-    const emailExists = await User.findOne({ email: normalizedNewEmail }).lean();
+    const emailExists = await User.findOne({
+      email: normalizedNewEmail,
+    }).lean();
     if (emailExists) {
-      return res.status(400).json({ message: "Email is already in use by another account." });
+      return res
+        .status(400)
+        .json({ message: "Email is already in use by another account." });
     }
 
     const user = await User.findById(req.user.id);
