@@ -12,6 +12,28 @@ import { r2Client, R2_BUCKET_NAME } from "../config/r2Client.js";
 const DEFAULT_UPLOAD_EXPIRY = 60 * 60;       // 1 hour
 const DEFAULT_DOWNLOAD_EXPIRY = 60 * 60;     // 1 hour
 
+// ─── Cache-Control for CDN caching (applied on upload) ───────────
+// Keys are UUID-based so content never changes at the same key —
+// aggressive caching is safe. This takes effect once a custom domain
+// (Cloudflare CDN) is connected to the R2 bucket.
+const DEFAULT_CACHE_CONTROL = "public, max-age=31536000, immutable";
+
+// ─── Presigned URL Cache ─────────────────────────────────────────
+// Avoids re-signing on every preview/download request.
+// Reuses a URL if it still has > 5 minutes of validity remaining.
+const _urlCache = new Map();
+const URL_REUSE_BUFFER_MS = 5 * 60 * 1000; // 5 min safety margin
+
+// Periodic cleanup of expired entries (every 10 min)
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of _urlCache) {
+    if (entry.expiresAt.getTime() <= now) {
+      _urlCache.delete(key);
+    }
+  }
+}, 10 * 60 * 1000).unref();
+
 /**
  * No-op — R2 bucket is provisioned externally.
  * Kept for API compatibility with app.js startup sequence.
@@ -34,6 +56,7 @@ export async function generateUploadUrl(key, contentType, expiresIn = DEFAULT_UP
     Bucket: R2_BUCKET_NAME,
     Key: key,
     ContentType: contentType,
+    CacheControl: DEFAULT_CACHE_CONTROL,
   });
 
   const url = await getSignedUrl(r2Client, command, { expiresIn });
@@ -58,6 +81,15 @@ export async function generateDownloadUrl(key, options = {}) {
     responseContentType,
   } = options;
 
+  // Build a deterministic cache key from the request parameters
+  const cacheKey = `${key}|${responseContentDisposition || ""}|${responseContentType || ""}`;
+
+  // Return cached URL if it still has enough validity remaining
+  const cached = _urlCache.get(cacheKey);
+  if (cached && cached.expiresAt.getTime() - Date.now() > URL_REUSE_BUFFER_MS) {
+    return { url: cached.url, expiresAt: cached.expiresAt };
+  }
+
   const commandInput = {
     Bucket: R2_BUCKET_NAME,
     Key: key,
@@ -73,6 +105,9 @@ export async function generateDownloadUrl(key, options = {}) {
   const command = new GetObjectCommand(commandInput);
   const url = await getSignedUrl(r2Client, command, { expiresIn });
   const expiresAt = new Date(Date.now() + expiresIn * 1000);
+
+  // Cache the signed URL for reuse
+  _urlCache.set(cacheKey, { url, expiresAt });
 
   return { url, expiresAt };
 }
@@ -96,6 +131,7 @@ export async function saveFile(userId, storageName, buffer, contentType) {
       Key: key,
       Body: buffer,
       ContentType: contentType || "application/octet-stream",
+      CacheControl: DEFAULT_CACHE_CONTROL,
     }),
   );
 
@@ -199,6 +235,14 @@ export async function updateFileContent(storagePath, content) {
       Bucket: R2_BUCKET_NAME,
       Key: storagePath,
       Body: content,
+      CacheControl: DEFAULT_CACHE_CONTROL,
     }),
   );
+
+  // Invalidate any cached download URLs for this key since content changed
+  for (const [cacheKey] of _urlCache) {
+    if (cacheKey.startsWith(`${storagePath}|`)) {
+      _urlCache.delete(cacheKey);
+    }
+  }
 }
