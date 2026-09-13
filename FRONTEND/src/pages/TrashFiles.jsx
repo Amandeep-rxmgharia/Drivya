@@ -244,7 +244,7 @@ function TrashHero({ files,AUTO_DELETE_DAYS }) {
 
 function UndoToast({ message, onUndo, onClose }) {
   useEffect(() => {
-    const timer = setTimeout(onClose, 5000);
+    const timer = setTimeout(onClose, 2000);
     return () => clearTimeout(timer);
   }, [onClose]);
 

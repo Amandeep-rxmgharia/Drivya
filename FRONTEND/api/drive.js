@@ -71,6 +71,101 @@ export const deleteDirectory = async (id) => {
  * @param {File[]} files - browser File objects
  * @param {(progressData: { index: number, fileIndex: number, fileProgress: number, overallProgress: number, loaded: number, total: number, file: File }) => void} [onProgress]
  */
+/**
+ * Upload a single file via presigned URL with real-time progress and abort support.
+ * @param {Object} options
+ * @param {File} options.file - Browser File object
+ * @param {string} [options.directoryId] - Target directory ID
+ * @param {(progress: { loaded: number, total: number, percent: number }) => void} [options.onProgress]
+ * @param {(xhr: XMLHttpRequest) => void} [options.onXhrCreated]
+ * @param {(stage: string) => void} [options.onStageChange]
+ * @returns {Promise<any>}
+ */
+export const uploadSingleFile = async ({
+  file,
+  directoryId,
+  onProgress,
+  onXhrCreated,
+  onStageChange,
+}) => {
+  // Step 1: Presign upload URL
+  if (onStageChange) onStageChange("presigning");
+  const fileMeta = [
+    {
+      name: file.name,
+      size: file.size,
+      mimeType: file.type || "application/octet-stream",
+    },
+  ];
+
+  const { data: presignData } = await api.post("/api/files/presign-upload", {
+    files: fileMeta,
+    directoryId: directoryId || undefined,
+  });
+
+  const upload = presignData.uploads?.[0];
+  if (!upload) {
+    throw new Error("No presigned upload URL generated.");
+  }
+
+  // Step 2: Upload to Cloudflare R2 via presigned PUT URL
+  if (onStageChange) onStageChange("uploading");
+  await new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    if (onXhrCreated) onXhrCreated(xhr);
+
+    xhr.open("PUT", upload.presignedUrl, true);
+    xhr.setRequestHeader("Content-Type", upload.mimeType);
+
+    xhr.upload.onprogress = (e) => {
+      if (onProgress) {
+        const percent =
+          e.lengthComputable && e.total > 0
+            ? Math.min(100, Math.round((e.loaded * 100) / e.total))
+            : 0;
+        onProgress({
+          loaded: e.loaded,
+          total: e.total,
+          percent,
+        });
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        if (onProgress) {
+          onProgress({ loaded: file.size, total: file.size, percent: 100 });
+        }
+        resolve();
+      } else {
+        reject(new Error(`Storage error (HTTP ${xhr.status})`));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error("Network error during file upload."));
+    xhr.onabort = () => reject(new Error("Upload cancelled."));
+    xhr.send(file);
+  });
+
+  // Step 3: Confirm upload with backend
+  if (onStageChange) onStageChange("confirming");
+  const confirmPayload = [
+    {
+      storageName: upload.storageName,
+      originalName: upload.originalName,
+      size: file.size,
+      mimeType: upload.mimeType,
+    },
+  ];
+
+  const { data: confirmData } = await api.post("/api/files/confirm-upload", {
+    files: confirmPayload,
+    directoryId: presignData.directoryId,
+  });
+
+  return confirmData;
+};
+
 export const uploadFiles = async (directoryId, files, onProgress) => {
   // Step 1: Get presigned upload URLs from backend
   const fileMeta = files.map((f) => ({

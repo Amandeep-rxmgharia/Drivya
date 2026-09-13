@@ -46,8 +46,9 @@ import { AiAssistantPanel } from "./AiAssistantPanel.jsx";
 import { DashboardLoader } from "./DashboardLoader.jsx";
 import { getCurrentUser, logoutUser } from "../../../api/auth.js";
 import { searchItems } from "../../../api/search.js";
-import { detectFileKind, getFileTypeStyle } from "@/lib/file-types.js";
 import { AuthProvider } from "@/lib/AuthContext";
+import { UploadProvider } from "../../context/UploadContext";
+import { UploadManagerWidget } from "./UploadManagerWidget.jsx";
 import {
   listNotifications,
   getUnreadCount,
@@ -1269,18 +1270,19 @@ export function DashboardLayout() {
 
               const toastPayload = isSharePassword
                 ? {
+                  ...n,
                   id: toastId,
                   type: n.type,
                   title: "Password delivered to inbox",
                   description: `Password for ${n.metadata?.resourceName || "your shared file"} is ready. Open notifications to copy (it will auto-delete shortly).`,
                 }
-                : { id: toastId, ...n };
+                : { ...n, id: toastId };
 
               setToasts((prev) => [...prev, toastPayload]);
 
               setTimeout(() => {
                 setToasts((prev) => prev.filter((t) => t.id !== toastId));
-              }, 6500);
+              }, 2000);
             }
           } catch (e) { }
         };
@@ -1526,9 +1528,35 @@ export function DashboardLayout() {
     return () => window.removeEventListener("open-drivya-ai", handleOpenAi);
   }, []);
 
+  useEffect(() => {
+    const handleAddToast = (e) => {
+      const detail = e.detail;
+      if (!detail) return;
+      const toastId = crypto.randomUUID();
+      const toastPayload = {
+        id: toastId,
+        type: detail.type || "system",
+        title: detail.title || "Notification",
+        description: detail.description || "",
+        actionLabel: detail.actionLabel,
+        actionPath: detail.actionPath,
+      };
+      setToasts((prev) => [...prev, toastPayload]);
+
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== toastId));
+      }, 2000);
+    };
+
+    window.addEventListener("add-drivya-notification", handleAddToast);
+    return () =>
+      window.removeEventListener("add-drivya-notification", handleAddToast);
+  }, []);
+
   return (
     <AuthProvider userProfile={userProfile} setUserProfile={setUserProfile}>
-      <div className="relative flex h-dvh w-full flex-col overflow-hidden text-foreground">
+      <UploadProvider>
+        <div className="relative flex h-dvh w-full flex-col overflow-hidden text-foreground">
         {/* ambient page glow */}
         <div
           className="pointer-events-none fixed inset-0 -z-10"
@@ -1592,6 +1620,7 @@ export function DashboardLayout() {
           </motion.div>
         </div>
         <FloatingActionButton />
+        <UploadManagerWidget />
         <AiAssistantPanel
           isOpen={aiAssistantOpen}
           onClose={() => setAiAssistantOpen(false)}
@@ -1651,6 +1680,7 @@ export function DashboardLayout() {
           </AnimatePresence>
         </div>
       </div>
+      </UploadProvider>
     </AuthProvider>
   );
 }
