@@ -44,6 +44,7 @@ import {
   cancelGoogleImport,
 } from "../../../api/googleDrive";
 import { listAllDirectories } from "../../../api/drive";
+import { useUpload } from "../../context/UploadContext";
 import api from "../../../api/auth";
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
@@ -326,6 +327,7 @@ export function GoogleDriveModal({
   onRefresh,
 }) {
   // ── Auth state ───────────────────────────────────────────────
+  const { enqueueGoogleImports, isCloudImporting } = useUpload();
   const [isConnected, setIsConnected] = useState(false);
   const [googleEmail, setGoogleEmail] = useState("");
   const [authLoading, setAuthLoading] = useState(true);
@@ -617,78 +619,43 @@ export function GoogleDriveModal({
     }
   };
 
-  const handleImport = async () => {
+  const handleImport = () => {
     if (selectedCount === 0) return;
     if (isOverQuota) {
       alert("Selected files exceed your available storage quota.");
       return;
     }
-    const fileIds = Object.keys(selectedFiles);
-    setIsImporting(true);
-    setImportSummary(null);
-    setFileProgress({});
-    setError(null);
-
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    const initialProgress = {};
-    fileIds.forEach((id) => {
-      initialProgress[id] = {
-        percent: 0,
-        status: "waiting",
-        name: selectedFiles[id].name,
-      };
-    });
-    setFileProgress(initialProgress);
-    try {
-      await importGoogleFiles(
-        fileIds,
-        targetDirId === "root" ? null : targetDirId,
-        {
-          onProgress: (data) => {
-            setFileProgress((prev) => ({
-              ...prev,
-              [data.fileId]: {
-                percent: data.percent,
-                status: data.status,
-                name: data.fileName,
-                error: data.error || null,
-              },
-            }));
-          },
-          onDone: (data) => {
-            setImportSummary(data);
-            abortControllerRef.current = null;
-            window.dispatchEvent(new CustomEvent("refresh-drive"));
-            if (onRefresh) onRefresh();
-          },
-          onCancelled: (data) => {
-            setImportSummary({
-              imported: data.imported || 0,
-              failed: data.failed || 0,
-              totalSize: data.totalSize || 0,
-              files: data.files || [],
-              errors: data.errors || [],
-              cancelled: true,
-            });
-            abortControllerRef.current = null;
-            window.dispatchEvent(new CustomEvent("refresh-drive"));
-            if (onRefresh) onRefresh();
-          },
-          onError: (data) => {
-            setError(data.error || "An error occurred during import.");
-            abortControllerRef.current = null;
-          },
-        },
-        controller.signal,
-      );
-    } catch (err) {
-      if (err.name !== "AbortError") {
-        setError(err.message || "Failed to import files.");
-      }
-      abortControllerRef.current = null;
+    if (isCloudImporting) {
+      alert("A cloud transfer is already in progress. Please wait for it to complete.");
+      return;
     }
+
+    const filesToImport = Object.values(selectedFiles).map((f) => ({
+      id: f.id,
+      name: f.name,
+      size: f.size || 1024 * 1024,
+      mimeType: f.mimeType,
+    }));
+
+    enqueueGoogleImports(
+      filesToImport,
+      targetDirId === "root" ? "" : targetDirId
+    );
+
+    window.dispatchEvent(
+      new CustomEvent("add-drivya-notification", {
+        detail: {
+          title: "Import Started",
+          description: `Started importing ${filesToImport.length} file${filesToImport.length > 1 ? "s" : ""} from Google Drive in background.`,
+          type: "google-drive",
+          actionLabel: "View in Manager",
+          actionPath: "/dashboard/drive",
+        },
+      })
+    );
+
+    setSelectedFiles({});
+    onClose();
   };
 
   const handleRetry = async (retryFileIds) => {
@@ -1432,19 +1399,28 @@ export function GoogleDriveModal({
             </div>
           )}
 
+          {isCloudImporting && (
+            <div className="flex items-center gap-1.5 text-xs text-amber-500 bg-amber-500/10 border border-amber-500/20 px-3 py-2 rounded-xl">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              <span>A transfer is currently in progress in the Upload Manager.</span>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={handleImport}
-            disabled={selectedCount === 0 || isOverQuota}
+            disabled={selectedCount === 0 || isOverQuota || isCloudImporting}
             id="gdrive-import-btn"
             className={cn(
               "w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-primary h-10 text-sm font-semibold text-primary-foreground shadow-glow hover:opacity-90 active:translate-y-px transition-all cursor-pointer",
-              (selectedCount === 0 || isOverQuota) &&
+              (selectedCount === 0 || isOverQuota || isCloudImporting) &&
                 "opacity-40 cursor-not-allowed active:translate-y-0 shadow-none hover:opacity-40",
             )}
           >
             <Import className="h-4 w-4" />
-            {selectedCount === 0
+            {isCloudImporting
+              ? "Transfer in progress…"
+              : selectedCount === 0
               ? "Select files to import"
               : `Import ${selectedCount} file${selectedCount !== 1 ? "s" : ""}`}
           </button>

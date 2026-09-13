@@ -16,7 +16,8 @@ import {
 } from "lucide-react";
 import { useUpload } from "../../context/UploadContext";
 import { detectFileKind, getFileTypeStyle } from "@/lib/file-types.js";
-import { easeSmooth } from "@/lib/motion-presets";
+import GDriveLogo from "../../../assets/images/Google_Drive_Logo.svg";
+import dropboxLogo from "../../../assets/images/Dropbox-Icon.svg";
 
 function formatBytes(bytes) {
   if (!bytes || bytes === 0) return "0 B";
@@ -48,15 +49,18 @@ export function UploadManagerWidget() {
   } = useUpload();
 
   const dragControls = useDragControls();
-  const [isHovered, setIsHovered] = useState(false);
+  const [, setIsHovered] = useState(false);
   const [autoDismissCountdown, setAutoDismissCountdown] = useState(null);
-  const dismissTimerRef = useRef(null);
 
-  // Calculate queued count
+  // Calculate queued count and in-progress count
   const queuedCount = tasks.filter((t) => t.status === "queued").length;
   const inProgressCount = tasks.filter((t) =>
     ["presigning", "uploading", "confirming"].includes(t.status)
   ).length;
+
+  const hasCloudTasks = tasks.some((t) =>
+    ["google-drive", "dropbox"].includes(t.source)
+  );
 
   // Auto-remove after all uploads successfully complete (2 seconds)
   const allCompletedSuccessfully =
@@ -134,7 +138,7 @@ export function UploadManagerWidget() {
           <div className="text-xs font-medium text-foreground pr-1">
             {isUploading ? (
               <span>
-                Uploading ({overallProgress}%)
+                {hasCloudTasks ? "Transferring" : "Uploading"} ({overallProgress}%)
                 {queuedCount > 0 && (
                   <span className="text-muted-foreground ml-1">
                     · {queuedCount} queued
@@ -147,7 +151,7 @@ export function UploadManagerWidget() {
               </span>
             ) : (
               <span className="text-emerald-500 font-medium">
-                All {completedCount} uploaded!
+                All {completedCount} saved to drive!
                 {autoDismissCountdown !== null && (
                   <span className="text-muted-foreground text-[10px] ml-1">
                     ({autoDismissCountdown}s)
@@ -229,17 +233,17 @@ export function UploadManagerWidget() {
             <h4 className="text-xs font-semibold text-foreground truncate flex items-center gap-1.5">
               {allCompletedSuccessfully ? (
                 <span className="text-emerald-500 flex items-center gap-1">
-                  Uploads Complete
+                  Transfers Complete
                   <Sparkles className="h-3 w-3 animate-pulse text-emerald-400" />
                 </span>
               ) : isUploading ? (
                 <span>
-                  Uploading {inProgressCount} item{inProgressCount > 1 ? "s" : ""}
+                  {hasCloudTasks ? "Transferring" : "Uploading"} {inProgressCount} item{inProgressCount > 1 ? "s" : ""}
                 </span>
               ) : failedCount > 0 ? (
                 <span>Completed with {failedCount} issue{failedCount > 1 ? "s" : ""}</span>
               ) : (
-                <span>Upload Manager</span>
+                <span>{hasCloudTasks ? "Transfer Manager" : "Upload Manager"}</span>
               )}
             </h4>
             <p className="text-[11px] text-muted-foreground">
@@ -283,7 +287,7 @@ export function UploadManagerWidget() {
               if (isUploading) {
                 if (
                   window.confirm(
-                    "Uploads are still in progress. Cancel active uploads and close?"
+                    "Transfers are still in progress. Cancel active items and close?"
                   )
                 ) {
                   cancelAll();
@@ -342,7 +346,7 @@ export function UploadManagerWidget() {
       {/* Queue & Task List */}
       <div className="max-h-60 overflow-y-auto px-3 py-2 space-y-2 scrollbar-thin">
         <AnimatePresence initial={false}>
-          {tasks.map((task, idx) => {
+          {tasks.map((task) => {
             const kind = detectFileKind(task.name, task.type);
             const style = getFileTypeStyle(kind);
             const isQueued = task.status === "queued";
@@ -351,6 +355,8 @@ export function UploadManagerWidget() {
             );
             const isCompleted = task.status === "completed";
             const isFailed = task.status === "error" || task.status === "aborted";
+            const isGoogle = task.source === "google-drive";
+            const isDropbox = task.source === "dropbox";
 
             return (
               <motion.div
@@ -369,18 +375,40 @@ export function UploadManagerWidget() {
                     : "border-border/40 bg-secondary/20"
                 }`}
               >
-                {/* File Icon */}
-                <div
-                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors ${style.bg} ${style.border} ${style.color}`}
-                >
-                  <File className="h-4 w-4" />
+                {/* File Icon with optional Cloud badge */}
+                <div className="relative shrink-0">
+                  <div
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors ${style.bg} ${style.border} ${style.color}`}
+                  >
+                    <File className="h-4 w-4" />
+                  </div>
+                  {isGoogle && (
+                    <div className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-background border border-border shadow-xs p-0.5">
+                      <img src={GDriveLogo} alt="Google Drive" className="h-full w-full object-contain" />
+                    </div>
+                  )}
+                  {isDropbox && (
+                    <div className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-background border border-border shadow-xs p-0.5">
+                      <img src={dropboxLogo} alt="Dropbox" className="h-full w-full object-contain" />
+                    </div>
+                  )}
                 </div>
 
                 {/* File Info & Progress */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-medium text-foreground truncate">
+                    <span className="text-xs font-medium text-foreground truncate flex items-center gap-1.5">
                       {task.name}
+                      {isGoogle && (
+                        <span className="text-[9px] font-semibold px-1 py-0.2 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20 shrink-0">
+                          Google
+                        </span>
+                      )}
+                      {isDropbox && (
+                        <span className="text-[9px] font-semibold px-1 py-0.2 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 shrink-0">
+                          Dropbox
+                        </span>
+                      )}
                     </span>
                     <span className="text-[10px] text-muted-foreground shrink-0 tabular-nums">
                       {formatBytes(task.size)}
@@ -436,8 +464,8 @@ export function UploadManagerWidget() {
                     <button
                       type="button"
                       onClick={() => cancelTask(task.id)}
-                      title="Cancel upload"
-                      aria-label="Cancel upload"
+                      title="Cancel item"
+                      aria-label="Cancel item"
                       className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
                     >
                       <X className="h-3.5 w-3.5" />
@@ -460,8 +488,8 @@ export function UploadManagerWidget() {
                       <button
                         type="button"
                         onClick={() => retryTask(task.id)}
-                        title="Retry upload"
-                        aria-label="Retry upload"
+                        title="Retry item"
+                        aria-label="Retry item"
                         className="flex h-6 w-6 items-center justify-center rounded-md text-primary hover:bg-primary/10 transition-colors"
                       >
                         <RotateCcw className="h-3.5 w-3.5" />
@@ -504,7 +532,7 @@ export function UploadManagerWidget() {
             {queuedCount > 0
               ? `${queuedCount} file${queuedCount > 1 ? "s" : ""} waiting in queue`
               : isUploading
-              ? "Uploading in background…"
+              ? "Transferring in background…"
               : "Ready"}
           </span>
         )}
