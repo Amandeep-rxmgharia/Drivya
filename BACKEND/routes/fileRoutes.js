@@ -11,6 +11,7 @@ import {
   emptyTrash,
   permanentDeleteFile,
   restoreAllFiles,
+  bulkTrash,
   editFileContent,
   createDownloadToken,
   downloadFileByToken,
@@ -45,6 +46,7 @@ router.put("/:id/content", editFileContent);
 router.get("/trash", listTrash);
 router.delete("/trash/empty", emptyTrash);
 router.patch("/trash/restore", restoreAllFiles);
+router.patch("/trash/bulk", bulkTrash);
 router.patch("/:id/trash", trashFile);
 router.patch("/:id/restore", restoreFile);
 router.delete("/:id", permanentDeleteFile);

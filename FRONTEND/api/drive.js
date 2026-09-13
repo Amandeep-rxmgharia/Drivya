@@ -69,7 +69,7 @@ export const deleteDirectory = async (id) => {
  *
  * @param {string} directoryId
  * @param {File[]} files - browser File objects
- * @param {(progress: number) => void} [onProgress] - 0-100
+ * @param {(progressData: { index: number, fileIndex: number, fileProgress: number, overallProgress: number, loaded: number, total: number, file: File }) => void} [onProgress]
  */
 export const uploadFiles = async (directoryId, files, onProgress) => {
   // Step 1: Get presigned upload URLs from backend
@@ -85,7 +85,7 @@ export const uploadFiles = async (directoryId, files, onProgress) => {
   });
 
   const { uploads } = presignData;
-  const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+  const totalSize = files.reduce((sum, f) => sum + (f.size || 0), 0);
   let uploadedBytes = 0;
 
   // Step 2: Upload each file directly to R2 via presigned PUT URL
@@ -93,21 +93,73 @@ export const uploadFiles = async (directoryId, files, onProgress) => {
     const file = files[i];
     const upload = uploads[i];
 
+    // Emit 0% start for this specific file
+    if (onProgress) {
+      const overallPercent =
+        totalSize > 0
+          ? Math.min(100, Math.round((uploadedBytes * 100) / totalSize))
+          : 0;
+
+      onProgress({
+        index: i,
+        fileIndex: i,
+        fileProgress: 0,
+        overallProgress: overallPercent,
+        loaded: 0,
+        total: file.size,
+        file,
+      });
+    }
+
     await new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open("PUT", upload.presignedUrl, true);
       xhr.setRequestHeader("Content-Type", upload.mimeType);
 
       xhr.upload.onprogress = (e) => {
-        if (onProgress && e.lengthComputable) {
-          const fileDone = uploadedBytes + e.loaded;
-          onProgress(Math.round((fileDone * 100) / totalSize));
+        if (onProgress) {
+          const filePercent =
+            e.lengthComputable && e.total > 0
+              ? Math.min(100, Math.round((e.loaded * 100) / e.total))
+              : 0;
+          const currentTotalDone =
+            uploadedBytes + (e.lengthComputable ? e.loaded : 0);
+          const overallPercent =
+            totalSize > 0
+              ? Math.min(100, Math.round((currentTotalDone * 100) / totalSize))
+              : filePercent;
+
+          onProgress({
+            index: i,
+            fileIndex: i,
+            fileProgress: filePercent,
+            overallProgress: overallPercent,
+            loaded: e.loaded,
+            total: e.total,
+            file,
+          });
         }
       };
 
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) {
           uploadedBytes += file.size;
+          if (onProgress) {
+            const overallPercent =
+              totalSize > 0
+                ? Math.min(100, Math.round((uploadedBytes * 100) / totalSize))
+                : 100;
+
+            onProgress({
+              index: i,
+              fileIndex: i,
+              fileProgress: 100,
+              overallProgress: overallPercent,
+              loaded: file.size,
+              total: file.size,
+              file,
+            });
+          }
           resolve();
         } else {
           reject(new Error(`Upload failed for "${file.name}" (HTTP ${xhr.status})`));
@@ -120,6 +172,15 @@ export const uploadFiles = async (directoryId, files, onProgress) => {
   }
 
   // Step 3: Confirm uploads with backend (creates DB records)
+  if (onProgress) {
+    onProgress({
+      stage: "confirming",
+      overallProgress: 100,
+      fileProgress: 100,
+      message: "Verifying files & saving to drive…",
+    });
+  }
+
   const confirmPayload = uploads.map((u, i) => ({
     storageName: u.storageName,
     originalName: u.originalName,
@@ -184,6 +245,18 @@ export const renameFile = async (fileId, name) => {
  */
 export const trashFile = async (fileId) => {
   const response = await api.patch(`/api/files/${fileId}/trash`);
+  return response.data;
+};
+
+/**
+ * Bulk move files and directories to trash.
+ * @param {{ fileIds?: string[], directoryIds?: string[] }} payload
+ */
+export const bulkTrash = async ({ fileIds = [], directoryIds = [] }) => {
+  const response = await api.patch("/api/files/trash/bulk", {
+    fileIds,
+    directoryIds,
+  });
   return response.data;
 };
 

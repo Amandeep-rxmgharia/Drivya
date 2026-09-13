@@ -154,6 +154,61 @@ export const presignUpload = async (req, res, next) => {
   }
 };
 
+// ─── Unique File Name Helper ────────────────────────────────────
+/**
+ * Resolves a non-colliding file name in the specified directory for a user.
+ * Avoids E11000 duplicate key write errors that cause MongoDB to immediately
+ * abort multi-document transactions.
+ *
+ * @param {string} userId
+ * @param {string} directoryId
+ * @param {string} originalName
+ * @param {Set<string>} takenNamesInBatch - Lowercased file names already allocated in this batch
+ * @param {mongoose.ClientSession} session - Mongoose session for transaction read isolation
+ * @returns {Promise<string>} Non-colliding file name
+ */
+async function getUniqueFileName(
+  userId,
+  directoryId,
+  originalName,
+  takenNamesInBatch,
+  session,
+) {
+  const ext = originalName.includes(".")
+    ? `.${originalName.split(".").pop()}`
+    : "";
+  const baseName = originalName.includes(".")
+    ? originalName.slice(0, originalName.lastIndexOf("."))
+    : originalName;
+
+  const match = baseName.match(/\((\d+)\)$/);
+  const cleanBase = baseName.replace(/\s*\(\d+\)$/, "");
+  let attempt = match ? parseInt(match[1], 10) : 0;
+  let candidateName = originalName;
+
+  while (true) {
+    const lowerCandidate = candidateName.toLowerCase();
+    if (!takenNamesInBatch.has(lowerCandidate)) {
+      const existing = await File.findOne({
+        userId,
+        directoryId,
+        originalName: candidateName,
+      })
+        .select("_id")
+        .session(session)
+        .lean();
+
+      if (!existing) {
+        takenNamesInBatch.add(lowerCandidate);
+        return candidateName;
+      }
+    }
+
+    attempt++;
+    candidateName = `${cleanBase} (${attempt})${ext}`;
+  }
+}
+
 // ─── Confirm Upload ──────────────────────────────────────────────
 export const confirmUpload = async (req, res, next) => {
   const session = await mongoose.startSession();
@@ -180,7 +235,7 @@ export const confirmUpload = async (req, res, next) => {
     if (!dir) {
       return res.status(404).json({ message: "Target directory not found." });
     }
-
+    console.log('verifing');
     // Validate each file exists in R2 before creating DB records
     const verifiedFiles = [];
     for (const f of files) {
@@ -221,50 +276,36 @@ export const confirmUpload = async (req, res, next) => {
     const savedFiles = [];
 
     await session.withTransaction(async () => {
+      savedFiles.length = 0;
+      const takenNamesInBatch = new Set();
+
       for (const vf of verifiedFiles) {
         const storagePath = vf.key;
         const fileSize = vf.actualSize || vf.size;
 
-        // Handle duplicate file names: append (n) suffix
-        let finalName = vf.originalName;
-        let attempt = 0;
-        let created = false;
+        const finalName = await getUniqueFileName(
+          userId,
+          directoryId,
+          vf.originalName,
+          takenNamesInBatch,
+          session,
+        );
 
-        while (!created) {
-          try {
-            const [fileDoc] = await File.create(
-              [
-                {
-                  originalName: finalName,
-                  storageName: vf.storageName,
-                  mimeType: vf.actualContentType || vf.mimeType,
-                  size: fileSize,
-                  userId,
-                  directoryId,
-                  storagePath,
-                },
-              ],
-              { session },
-            );
-            savedFiles.push(fileDoc);
-            created = true;
-          } catch (err) {
-            if (err?.code === 11000) {
-              attempt++;
-              const ext = finalName.includes(".")
-                ? `.${finalName.split(".").pop()}`
-                : "";
-              const baseName = finalName.includes(".")
-                ? finalName.slice(0, finalName.lastIndexOf("."))
-                : finalName;
-              // Remove previous (n) suffix before adding new one
-              const cleanBase = baseName.replace(/\s*\(\d+\)$/, "");
-              finalName = `${cleanBase} (${attempt})${ext}`;
-            } else {
-              throw err;
-            }
-          }
-        }
+        const [fileDoc] = await File.create(
+          [
+            {
+              originalName: finalName,
+              storageName: vf.storageName,
+              mimeType: vf.actualContentType || vf.mimeType,
+              size: fileSize,
+              userId,
+              directoryId,
+              storagePath,
+            },
+          ],
+          { session },
+        );
+        savedFiles.push(fileDoc);
       }
 
       // Update user storage used
@@ -630,6 +671,160 @@ export const trashFile = async (req, res, next) => {
     next(err);
   }
 };
+
+// ─── Bulk Move to Trash ──────────────────────────────────────────
+export const bulkTrash = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { fileIds = [], directoryIds = [] } = req.body;
+
+    if (
+      (!Array.isArray(fileIds) || fileIds.length === 0) &&
+      (!Array.isArray(directoryIds) || directoryIds.length === 0)
+    ) {
+      return res.status(400).json({ message: "No files or directories provided." });
+    }
+
+    const validFileIds = Array.isArray(fileIds)
+      ? fileIds.filter((id) => mongoose.Types.ObjectId.isValid(id))
+      : [];
+    const validDirIds = Array.isArray(directoryIds)
+      ? directoryIds.filter((id) => mongoose.Types.ObjectId.isValid(id))
+      : [];
+
+    let trashedFilesCount = 0;
+    let deletedDirsCount = 0;
+
+    // 1. Process files
+    if (validFileIds.length > 0) {
+      const filesToTrash = await File.find({
+        _id: { $in: validFileIds },
+        userId,
+        isTrashed: false,
+      })
+        .select("_id originalName mimeType size directoryId")
+        .lean();
+
+      if (filesToTrash.length > 0) {
+        const ids = filesToTrash.map((f) => f._id);
+        await File.updateMany(
+          { _id: { $in: ids } },
+          { isTrashed: true, trashedAt: new Date() },
+        );
+
+        trashedFilesCount = filesToTrash.length;
+
+        // Record activity for each trashed file
+        for (const f of filesToTrash) {
+          recordActivity({
+            userId,
+            action: ACTIVITY_ACTIONS.TRASHED,
+            resourceType: RESOURCE_TYPES.FILE,
+            resourceId: f._id,
+            resourceSnapshot: {
+              name: f.originalName,
+              mimeType: f.mimeType,
+              size: f.size,
+            },
+            parentDirId: f.directoryId,
+          }).catch((err) =>
+            console.error("Activity[bulk-trash-file]:", err.message),
+          );
+        }
+      }
+    }
+
+    // 2. Process directories (recursive delete & trash files inside)
+    if (validDirIds.length > 0) {
+      // Find directories that belong to user and are not root
+      const dirs = await Directory.find({
+        _id: { $in: validDirIds },
+        userId,
+        parentDirId: { $ne: null },
+      })
+        .select("_id name")
+        .lean();
+
+      if (dirs.length > 0) {
+        const rootTargetDirIds = dirs.map((d) => d._id);
+
+        // Find all descendants
+        const descendantDirs = await Directory.find({
+          userId,
+          path: { $in: rootTargetDirIds },
+        })
+          .select("_id")
+          .lean();
+
+        const allDirIds = [
+          ...rootTargetDirIds,
+          ...descendantDirs.map((d) => d._id),
+        ];
+
+        // Find all non-trashed files in these directories
+        const dirFilesToTrash = await File.find({
+          userId,
+          directoryId: { $in: allDirIds },
+          isTrashed: false,
+        })
+          .select("_id originalName mimeType size directoryId")
+          .lean();
+
+        if (dirFilesToTrash.length > 0) {
+          const dirFileIds = dirFilesToTrash.map((f) => f._id);
+          await File.updateMany(
+            { _id: { $in: dirFileIds } },
+            { isTrashed: true, trashedAt: new Date() },
+          );
+
+          trashedFilesCount += dirFilesToTrash.length;
+
+          for (const f of dirFilesToTrash) {
+            recordActivity({
+              userId,
+              action: ACTIVITY_ACTIONS.TRASHED,
+              resourceType: RESOURCE_TYPES.FILE,
+              resourceId: f._id,
+              resourceSnapshot: {
+                name: f.originalName,
+                mimeType: f.mimeType,
+                size: f.size,
+              },
+              parentDirId: f.directoryId,
+            }).catch((err) =>
+              console.error("Activity[bulk-trash-dir-file]:", err.message),
+            );
+          }
+        }
+
+        await Directory.deleteMany({ _id: { $in: allDirIds } });
+        await deleteActivitiesForResources(allDirIds, userId);
+        deletedDirsCount = dirs.length;
+      }
+    }
+
+    const totalCount = trashedFilesCount + deletedDirsCount;
+    if (totalCount > 0) {
+      createNotification(userId, {
+        type: "system",
+        title: `Moved ${totalCount} item${totalCount !== 1 ? "s" : ""} to trash`,
+        description: "Files can be restored from trash.",
+        actionLabel: "View trash",
+        actionPath: "/dashboard/trash",
+      }).catch((err) => console.error("Notification[bulk-trash]:", err));
+    }
+
+    return res.json({
+      message: `Successfully moved ${totalCount} item${totalCount !== 1 ? "s" : ""} to trash.`,
+      trashedFilesCount,
+      deletedDirsCount,
+      totalCount,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 
 // ─── Restore from Trash ─────────────────────────────────────────
 export const restoreFile = async (req, res, next) => {

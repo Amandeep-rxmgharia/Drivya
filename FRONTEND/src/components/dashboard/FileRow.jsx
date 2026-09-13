@@ -59,8 +59,10 @@ export function FileRow({
   viewType = "list",
   selected = false,
   active = false,
+  selectMode = false,
   index = 0,
   onSelect,
+  onToggleSelect,
   onStar,
   onShare,
   onDownload,
@@ -137,7 +139,14 @@ export function FileRow({
     >
       <button
         type="button"
-        onClick={() => !isRenaming && onSelect?.(file.id)}
+        onClick={(e) => {
+          if (isRenaming) return;
+          if (selectMode) {
+            onToggleSelect?.(file.id, e);
+          } else {
+            onSelect?.(file.id, e);
+          }
+        }}
         className={cn(
           "relative w-full text-left rounded-xl border outline-none",
           "bg-card border-border shadow-sm dark:bg-card/50 dark:backdrop-blur-sm dark:shadow-none",
@@ -149,8 +158,8 @@ export function FileRow({
               "shadow-sm dark:shadow-[0_8px_24px_-12px_rgba(59,130,246,0.2)]",
             ],
           selected && [
-            "border-primary/40 bg-primary/5",
-            "ring-1 ring-primary/20 shadow-sm",
+            "border-primary/50 bg-primary/10 dark:bg-primary/[0.08]",
+            "ring-1 ring-primary/30 shadow-sm",
           ],
           active && !selected && "bg-secondary/70",
           "focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
@@ -165,6 +174,8 @@ export function FileRow({
             isUploading={isUploading}
             hovered={hovered}
             selected={selected}
+            selectMode={selectMode}
+            onToggleSelect={onToggleSelect}
             isRenaming={isRenaming}
             onStartRename={handleStartRename}
             onFinishRename={handleFinishRename}
@@ -183,6 +194,8 @@ export function FileRow({
             isUploading={isUploading}
             hovered={hovered}
             selected={selected}
+            selectMode={selectMode}
+            onToggleSelect={onToggleSelect}
             isRenaming={isRenaming}
             onStartRename={handleStartRename}
             onFinishRename={handleFinishRename}
@@ -219,6 +232,44 @@ export function FileRow({
   );
 }
 
+/* ───────────────────────── Selection Checkbox ───────────────────────── */
+
+function SelectCheckbox({ selected, visible, onToggle }) {
+  if (!visible) return null;
+  return (
+    <span
+      role="checkbox"
+      aria-checked={selected}
+      tabIndex={0}
+      onClick={(e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        onToggle?.(e);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === " " || e.key === "Enter") {
+          e.stopPropagation();
+          e.preventDefault();
+          onToggle?.(e);
+        }
+      }}
+      className={cn(
+        "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-xs transition-all duration-150 cursor-pointer select-none",
+        selected
+          ? "border-primary bg-primary text-primary-foreground shadow-md scale-105 ring-2 ring-primary/30"
+          : "border-muted-foreground/40 bg-background/90 hover:border-primary hover:bg-secondary shadow-sm",
+      )}
+    >
+      <Check
+        className={cn(
+          "h-3.5 w-3.5 transition-transform duration-150",
+          selected ? "scale-100 stroke-[3]" : "scale-0",
+        )}
+      />
+    </span>
+  );
+}
+
 /* ───────────────────────── Grid Layout ───────────────────────── */
 
 function GridLayout({
@@ -227,6 +278,8 @@ function GridLayout({
   isUploading,
   hovered,
   selected,
+  selectMode,
+  onToggleSelect,
   isRenaming,
   onStartRename,
   onFinishRename,
@@ -259,7 +312,7 @@ function GridLayout({
         />
       </div>
 
-      <div className="mt-3 min-w-0 flex-1 space-y-1">
+      <div className={cn("mt-3 min-w-0 flex-1 space-y-1", selectMode && "pr-8")}>
         {isRenaming ? (
           <InlineRenameInput
             currentName={file.name}
@@ -287,6 +340,17 @@ function GridLayout({
         )}
         {isUploading && <UploadProgress percent={file.uploadProgress} />}
       </div>
+
+      {/* Checkbox at bottom right in grid */}
+      {selectMode && (
+        <div className="absolute bottom-3.5 right-3.5 z-10">
+          <SelectCheckbox
+            selected={selected}
+            visible={true}
+            onToggle={(e) => onToggleSelect?.(file.id, e)}
+          />
+        </div>
+      )}
     </>
   );
 }
@@ -299,6 +363,8 @@ function ListLayout({
   isUploading,
   hovered,
   selected,
+  selectMode,
+  onToggleSelect,
   isRenaming,
   onStartRename,
   onFinishRename,
@@ -314,6 +380,13 @@ function ListLayout({
     <div className="flex flex-col gap-3 md:grid md:grid-cols-[1fr_auto] md:items-center md:gap-6">
       <div className="flex min-w-0 items-start gap-3 sm:items-center md:grid md:grid-cols-[minmax(0,1fr)_6rem_4.5rem] md:gap-8 lg:gap-11">
         <div className="flex min-w-0 items-center gap-3">
+          {selectMode && (
+            <SelectCheckbox
+              selected={selected}
+              visible={true}
+              onToggle={(e) => onToggleSelect?.(file.id, e)}
+            />
+          )}
           <FileTypeIcon kind={kind} />
           <div className="min-w-0 flex-1 space-y-1">
             <div className="flex flex-wrap items-center gap-2">

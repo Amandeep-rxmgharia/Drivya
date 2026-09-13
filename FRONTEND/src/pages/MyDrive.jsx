@@ -5,6 +5,7 @@ import {
   getBreadcrumb,
   downloadFile,
   trashFile,
+  bulkTrash,
   deleteDirectory as deleteDirApi,
   renameDirectory as renameDirApi,
   renameFile as renameFileApi,
@@ -100,6 +101,20 @@ export default function MyDrive() {
     [fetchContents],
   );
 
+  // Bulk trash files & directories
+  const handleBulkTrash = useCallback(
+    async ({ fileIds, directoryIds }) => {
+      try {
+        await bulkTrash({ fileIds, directoryIds });
+        await fetchContents();
+      } catch (err) {
+        console.error("Bulk trash failed:", err);
+        throw err;
+      }
+    },
+    [fetchContents],
+  );
+
   // Delete a directory
   const handleDeleteDir = useCallback(
     async (dirId) => {
@@ -159,6 +174,7 @@ export default function MyDrive() {
       onRefresh={fetchContents}
       onDownload={handleDownload}
       onTrashFile={handleTrashFile}
+      onBulkTrash={handleBulkTrash}
       onDeleteDir={handleDeleteDir}
       onRenameDir={handleRenameDir}
       onRenameFile={handleRenameFile}

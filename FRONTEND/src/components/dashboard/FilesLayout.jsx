@@ -14,17 +14,24 @@ import {
   UploadCloud,
   AlertCircle,
   Loader2,
+  Trash2,
+  Check,
+  CheckSquare,
+  Minus,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { easeSmooth } from "@/lib/motion-presets";
 import { FileRow } from "./FileRow";
 import { ShareModal } from "./ShareModal";
 import { FilePreviewModal } from "./FilePreviewModal";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import {
   fetchShareMap,
   createShare,
 } from "../../../api/shares.js";
 import { toggleStar as toggleStarApi } from "../../../api/starred.js";
+import { bulkTrash as bulkTrashApi } from "../../../api/drive.js";
 
 const card = "rounded-2xl glass shadow-elegant";
 
@@ -117,6 +124,7 @@ export function FilesLayout({
   onRefresh,
   onDownload,
   onTrashFile,
+  onBulkTrash,
   onDeleteDir,
   onRenameDir,
   onRenameFile,
@@ -129,6 +137,12 @@ export function FilesLayout({
 
   const [selectedId, setSelectedId] = useState(null);
   const [activeId, setActiveId] = useState(null);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [lastSelectedId, setLastSelectedId] = useState(null);
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [isTrashingBulk, setIsTrashingBulk] = useState(false);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+
   const [starred, setStarred] = useState({});
   const [shareMap, setShareMap] = useState({});
   const [sharingFile, setSharingFile] = useState(null);
@@ -149,10 +163,13 @@ export function FilesLayout({
     if (selectId) {
       setSelectedId(selectId);
       setActiveId(selectId);
+      setSelectedIds(new Set([selectId]));
       scrolledRef.current = false; // reset so we scroll again
     } else {
       setSelectedId(null);
       setActiveId(null);
+      setSelectedIds(new Set());
+      setIsSelectMode(false);
     }
   }, [currentDirId, selectId]);
 
@@ -216,17 +233,126 @@ export function FilesLayout({
     return list;
   }, [allItems, filter, sortBy]);
 
-  const handleItemClick = useCallback(
-    (id) => {
-      const item = allItems.find((f) => f.id === id);
-      if (item?.isDirectory && onNavigate) {
-        onNavigate(id);
-      } else {
-        setSelectedId(id);
-        setActiveId(id);
+  const allVisibleSelected = useMemo(
+    () =>
+      visibleFiles.length > 0 &&
+      visibleFiles.every((f) => selectedIds.has(f.id)),
+    [visibleFiles, selectedIds],
+  );
+
+  const isIndeterminate = useMemo(
+    () =>
+      selectedIds.size > 0 &&
+      visibleFiles.some((f) => selectedIds.has(f.id)) &&
+      !allVisibleSelected,
+    [selectedIds, visibleFiles, allVisibleSelected],
+  );
+
+  const toggleSelectMode = useCallback(() => {
+    setIsSelectMode((prev) => {
+      const next = !prev;
+      if (!next) {
+        setSelectedIds(new Set());
+        setSelectedId(null);
+        setActiveId(null);
+        setLastSelectedId(null);
       }
+      return next;
+    });
+  }, []);
+
+  const handleToggleSelect = useCallback((id, e) => {
+    e?.stopPropagation?.();
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+    setLastSelectedId(id);
+    setActiveId(id);
+    setSelectedId(id);
+  }, []);
+
+  const handleToggleSelectAll = useCallback(() => {
+    setSelectedIds((prev) => {
+      const allVisible =
+        visibleFiles.length > 0 &&
+        visibleFiles.every((f) => prev.has(f.id));
+      if (allVisible) {
+        return new Set();
+      } else {
+        return new Set(visibleFiles.map((f) => f.id));
+      }
+    });
+  }, [visibleFiles]);
+
+  const handleClearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+    setSelectedId(null);
+    setActiveId(null);
+    setLastSelectedId(null);
+    setIsSelectMode(false);
+  }, []);
+
+  const handleItemClick = useCallback(
+    (id, e) => {
+      const item = allItems.find((f) => f.id === id);
+      if (!item) return;
+
+      // In select mode, clicking anywhere on item toggles its selection
+      if (isSelectMode) {
+        handleToggleSelect(id, e);
+        return;
+      }
+
+      // Shift + click: range selection
+      if (e?.shiftKey && lastSelectedId) {
+        const lastIdx = visibleFiles.findIndex((f) => f.id === lastSelectedId);
+        const currIdx = visibleFiles.findIndex((f) => f.id === id);
+        if (lastIdx !== -1 && currIdx !== -1) {
+          const start = Math.min(lastIdx, currIdx);
+          const end = Math.max(lastIdx, currIdx);
+          const rangeIds = visibleFiles.slice(start, end + 1).map((f) => f.id);
+          setIsSelectMode(true);
+          setSelectedIds((prev) => {
+            const next = new Set(prev);
+            rangeIds.forEach((rid) => next.add(rid));
+            return next;
+          });
+          setActiveId(id);
+          return;
+        }
+      }
+
+      // Ctrl / Cmd + click: toggle individual selection
+      if (e?.ctrlKey || e?.metaKey) {
+        setIsSelectMode(true);
+        handleToggleSelect(id, e);
+        return;
+      }
+
+      // Normal click on folder -> navigate
+      if (item.isDirectory && onNavigate) {
+        onNavigate(id);
+        setSelectedIds(new Set());
+        setSelectedId(null);
+        setActiveId(null);
+        setLastSelectedId(null);
+        setIsSelectMode(false);
+        return;
+      }
+
+      // Normal click on file -> select it
+      setSelectedId(id);
+      setActiveId(id);
+      setSelectedIds(new Set([id]));
+      setLastSelectedId(id);
     },
-    [allItems, onNavigate],
+    [allItems, visibleFiles, lastSelectedId, onNavigate, handleToggleSelect, isSelectMode],
   );
 
   const handleDownload = useCallback(
@@ -253,10 +379,58 @@ export function FilesLayout({
         setToastMessage(`"${item.name}" moved to Trash.`);
       }
 
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+
       if (selectedId === id) setSelectedId(null);
+      if (activeId === id) setActiveId(null);
     },
-    [allItems, onDeleteDir, onTrashFile, selectedId],
+    [allItems, onDeleteDir, onTrashFile, selectedId, activeId],
   );
+
+  const handleExecuteBulkTrash = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+
+    const fileIds = [];
+    const directoryIds = [];
+
+    for (const id of selectedIds) {
+      const item = allItems.find((f) => f.id === id);
+      if (item?.isDirectory) {
+        directoryIds.push(id);
+      } else if (item) {
+        fileIds.push(id);
+      }
+    }
+
+    setIsTrashingBulk(true);
+    try {
+      if (onBulkTrash) {
+        await onBulkTrash({ fileIds, directoryIds });
+      } else {
+        await bulkTrashApi({ fileIds, directoryIds });
+        await onRefresh?.();
+      }
+
+      const count = selectedIds.size;
+      setToastMessage(`Moved ${count} item${count !== 1 ? "s" : ""} to trash.`);
+      setSelectedIds(new Set());
+      setSelectedId(null);
+      setActiveId(null);
+      setLastSelectedId(null);
+      setIsSelectMode(false);
+      setConfirmBulkDelete(false);
+      window.dispatchEvent(new CustomEvent("refresh-drive"));
+    } catch (err) {
+      console.error("Bulk trash failed:", err);
+      setToastMessage(err.response?.data?.message || "Failed to move items to trash.");
+    } finally {
+      setIsTrashingBulk(false);
+    }
+  }, [selectedIds, allItems, onBulkTrash, onRefresh]);
 
   const handleCopyLink = useCallback(
     async (id) => {
@@ -384,8 +558,32 @@ export function FilesLayout({
         return;
       }
 
+      if ((e.ctrlKey || e.metaKey) && key === "a") {
+        if (visibleFiles.length > 0) {
+          e.preventDefault();
+          setIsSelectMode(true);
+          setSelectedIds(new Set(visibleFiles.map((f) => f.id)));
+        }
+        return;
+      }
+
+      if (e.key === "Escape") {
+        if (isSelectMode || selectedIds.size > 0) {
+          e.preventDefault();
+          handleClearSelection();
+        }
+        return;
+      }
+
       if (e.key === "Delete" || e.key === "Backspace") {
-        if (selectedId) {
+        if (selectedIds.size > 1) {
+          e.preventDefault();
+          setConfirmBulkDelete(true);
+        } else if (selectedIds.size === 1) {
+          e.preventDefault();
+          const singleId = Array.from(selectedIds)[0];
+          handleDelete(singleId);
+        } else if (selectedId) {
           e.preventDefault();
           handleDelete(selectedId);
         }
@@ -404,7 +602,16 @@ export function FilesLayout({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedId, handleDownload, handleCopyLink, handleDelete, handleRename]);
+  }, [
+    selectedId,
+    selectedIds,
+    visibleFiles,
+    handleDownload,
+    handleCopyLink,
+    handleDelete,
+    handleRename,
+    handleClearSelection,
+  ]);
 
   const isGrid = view === "grid";
 
@@ -579,15 +786,58 @@ export function FilesLayout({
                 <LayoutGrid className="h-4 w-4" />
               </button>
             </div>
+
+            {/* Select mode button */}
+            <button
+              type="button"
+              onClick={toggleSelectMode}
+              className={cn(
+                "inline-flex h-9 items-center gap-1.5 rounded-xl border px-3 text-xs font-medium transition-all cursor-pointer",
+                isSelectMode
+                  ? "border-primary/50 bg-primary/10 text-primary shadow-sm ring-1 ring-primary/20"
+                  : "border-border bg-secondary/40 text-foreground hover:bg-secondary",
+              )}
+              aria-pressed={isSelectMode}
+              title={isSelectMode ? "Exit selection mode" : "Select items"}
+            >
+              <CheckSquare className="h-3.5 w-3.5" />
+              <span>{isSelectMode ? "Cancel" : "Select"}</span>
+            </button>
+
+            {/* Bulk trash action button in header */}
+            {isSelectMode && selectedIds.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setConfirmBulkDelete(true)}
+                disabled={isTrashingBulk}
+                className="inline-flex h-8 sm:h-9 items-center gap-1.5 rounded-xl border border-destructive/30 bg-destructive/10 px-2.5 sm:px-3 text-xs font-semibold text-destructive hover:bg-destructive hover:text-white transition-all cursor-pointer shadow-sm disabled:opacity-50 animate-fade-in"
+              >
+                {isTrashingBulk ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="h-3.5 w-3.5" />
+                )}
+                <span>Delete ({selectedIds.size})</span>
+              </button>
+            )}
           </div>
         </div>
       </header>
 
       {/* List header (list view only) */}
       {!isGrid && !isLoading && visibleFiles.length > 0 && (
-        <div className="hidden md:grid md:grid-cols-[1fr_auto] gap-10 border-b border-border/60 px-5 py-2 sm:px-6">
-          <div className="grid grid-cols-[minmax(0,1fr)_6rem_4.5rem] gap-8 lg:gap-11 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            <span className="pl-5">Name</span>
+        <div className="hidden md:grid md:grid-cols-[1fr_auto] gap-10 border-b border-border/60 px-5 py-2.5 sm:px-6">
+          <div className="grid grid-cols-[minmax(0,1fr)_6rem_4.5rem] gap-8 lg:gap-11 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground items-center">
+            <div className="flex items-center gap-3">
+              {isSelectMode && (
+                <MasterCheckbox
+                  checked={allVisibleSelected}
+                  indeterminate={isIndeterminate}
+                  onToggle={handleToggleSelectAll}
+                />
+              )}
+              <span className={cn(!isSelectMode && "pl-5")}>Name</span>
+            </div>
             <span>Modified</span>
             <span>Size</span>
           </div>
@@ -626,9 +876,11 @@ export function FilesLayout({
                 ),
               }}
               index={i}
-              selected={selectedId === file.id}
+              selected={selectedIds.has(file.id)}
               active={activeId === file.id}
+              selectMode={isSelectMode}
               onSelect={handleItemClick}
+              onToggleSelect={handleToggleSelect}
               onStar={toggleStar}
               onShare={handleShare}
               onDownload={handleDownload}
@@ -665,6 +917,33 @@ export function FilesLayout({
         )}
       </AnimatePresence>
 
+      {/* Confirm Bulk Delete Modal */}
+      <AnimatePresence>
+        {confirmBulkDelete && (
+          <ConfirmModal
+            title={`Move ${selectedIds.size} item${selectedIds.size !== 1 ? "s" : ""} to trash?`}
+            description="Files will be moved to Trash and can be restored anytime. Folders will be removed and their contents moved to Trash."
+            confirmLabel={isTrashingBulk ? "Moving..." : "Move to trash"}
+            onConfirm={handleExecuteBulkTrash}
+            onCancel={() => !isTrashingBulk && setConfirmBulkDelete(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Floating Bulk Action Bar */}
+      <AnimatePresence>
+        {isSelectMode && selectedIds.size > 0 && (
+          <FloatingBulkBar
+            selectedCount={selectedIds.size}
+            allSelected={allVisibleSelected}
+            isTrashing={isTrashingBulk}
+            onToggleSelectAll={handleToggleSelectAll}
+            onMoveToTrash={() => setConfirmBulkDelete(true)}
+            onClear={handleClearSelection}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Toast */}
       <AnimatePresence>
         {toastMessage && (
@@ -680,6 +959,96 @@ export function FilesLayout({
         <DropZone currentDirId={currentDirId} onRefresh={onRefresh} />
       </footer>
     </section>
+  );
+}
+
+/* ───────────────────────── Master Checkbox ───────────────────────── */
+
+function MasterCheckbox({ checked, indeterminate, onToggle }) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={indeterminate ? "mixed" : checked}
+      onClick={onToggle}
+      className={cn(
+        "inline-flex h-4.5 w-4.5 sm:h-5 sm:w-5 shrink-0 items-center justify-center rounded-md border text-xs transition-all duration-150 cursor-pointer select-none",
+        checked || indeterminate
+          ? "border-primary bg-primary text-primary-foreground shadow-sm ring-2 ring-primary/20"
+          : "border-muted-foreground/40 bg-background/80 hover:border-primary hover:bg-secondary/70",
+      )}
+      title={checked ? "Deselect all" : "Select all"}
+    >
+      {checked ? (
+        <Check className="h-3 w-3 sm:h-3.5 sm:w-3.5 stroke-[3]" />
+      ) : indeterminate ? (
+        <Minus className="h-3 w-3 sm:h-3.5 sm:w-3.5 stroke-[3]" />
+      ) : null}
+    </button>
+  );
+}
+
+/* ───────────────────────── Floating Bulk Actions Bar ───────────────────────── */
+
+function FloatingBulkBar({
+  selectedCount,
+  allSelected,
+  isTrashing,
+  onToggleSelectAll,
+  onMoveToTrash,
+  onClear,
+}) {
+  return createPortal(
+    <motion.div
+      initial={{ opacity: 0, y: 30, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 30, scale: 0.95 }}
+      transition={{ type: "spring", stiffness: 400, damping: 28 }}
+      className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 sm:gap-3 px-3.5 sm:px-5 py-2.5 sm:py-3 rounded-2xl shadow-2xl border border-border/80 bg-background/95 dark:bg-card/95 backdrop-blur-xl pointer-events-auto"
+    >
+      <div className="flex items-center gap-2">
+        <span className="inline-flex items-center justify-center rounded-lg bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+          {selectedCount}
+        </span>
+        <span className="text-xs sm:text-sm font-medium text-foreground whitespace-nowrap">
+          {selectedCount === 1 ? "item selected" : "items selected"}
+        </span>
+      </div>
+
+      <div className="h-4 w-px bg-border/80" />
+
+      <button
+        type="button"
+        onClick={onToggleSelectAll}
+        className="text-xs font-medium text-muted-foreground hover:text-foreground hover:underline transition-colors cursor-pointer px-1 whitespace-nowrap"
+      >
+        {allSelected ? "Deselect all" : "Select all"}
+      </button>
+
+      <button
+        type="button"
+        onClick={onMoveToTrash}
+        disabled={isTrashing}
+        className="inline-flex items-center gap-1.5 rounded-xl border border-destructive/30 bg-destructive/10 px-3 sm:px-3.5 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive hover:text-destructive-foreground transition-all cursor-pointer shadow-sm disabled:opacity-50 whitespace-nowrap"
+      >
+        {isTrashing ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <Trash2 className="h-3.5 w-3.5" />
+        )}
+        <span>Move to trash</span>
+      </button>
+
+      <button
+        type="button"
+        onClick={onClear}
+        className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/70 transition-colors cursor-pointer"
+        title="Clear selection"
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </motion.div>,
+    document.body,
   );
 }
 

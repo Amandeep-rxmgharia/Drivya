@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { motion } from "motion/react";
 import { AlertTriangle } from "lucide-react";
 
@@ -18,16 +19,16 @@ export function ConfirmModal({
     return () => document.removeEventListener("keydown", handler);
   }, [onCancel]);
 
-  return (
+  return createPortal(
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+      className="fixed inset-0 z-[200] flex items-center justify-center p-4"
     >
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-background/60 backdrop-blur-sm"
+        className="fixed inset-0 bg-background/80 dark:bg-background/80 backdrop-blur-sm"
         onClick={onCancel}
       />
 
@@ -37,7 +38,7 @@ export function ConfirmModal({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 10 }}
         transition={{ type: "spring", stiffness: 400, damping: 30 }}
-        className="relative z-10 w-full max-w-md rounded-2xl border border-border bg-card shadow-elegant p-6"
+        className="relative z-10 w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl p-6"
       >
         <div className="flex items-start gap-4">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-destructive/20 bg-destructive/10">
@@ -70,6 +71,7 @@ export function ConfirmModal({
           </button>
         </div>
       </motion.div>
-    </motion.div>
+    </motion.div>,
+    document.body,
   );
 }

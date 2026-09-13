@@ -10,6 +10,8 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
+  Check,
+  Database,
 } from "lucide-react";
 import { easeSmooth } from "@/lib/motion-presets";
 import { createDirectory, uploadFiles } from "../../../api/drive.js";
@@ -200,7 +202,11 @@ function UploadFilesModal({ onClose, initialFiles = [] }) {
   });
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({});
+  const [overallProgress, setOverallProgress] = useState(0);
+  const [currentUploadIndex, setCurrentUploadIndex] = useState(-1);
   const [errorMessage, setErrorMessage] = useState("");
   const fileInputRef = useRef(null);
   const [searchParams] = useSearchParams();
@@ -239,22 +245,67 @@ function UploadFilesModal({ onClose, initialFiles = [] }) {
   const handleUpload = async () => {
     if (files.length === 0) return;
     setUploading(true);
+    setIsConfirming(false);
+    setIsSuccess(false);
     setErrorMessage("");
+
+    // Initialize all files at 0%
+    const initialProgress = {};
+    files.forEach((f) => {
+      initialProgress[f.id] = 0;
+    });
+    setUploadProgress(initialProgress);
+    setOverallProgress(0);
+    setCurrentUploadIndex(0);
 
     try {
       const isDrivePage = location.pathname.startsWith("/dashboard/drive");
       const parentDirId = isDrivePage ? (searchParams.get("dir") || "") : "";
       const fileObjects = files.map((f) => f.file);
 
-      // Single call to uploadFiles API with progress reporting
-      await uploadFiles(parentDirId, fileObjects, (progress) => {
-        const updatedProgress = {};
-        files.forEach((f) => {
-          updatedProgress[f.id] = progress;
-        });
-        setUploadProgress(updatedProgress);
+      // Call uploadFiles API with per-file progress and stage reporting
+      await uploadFiles(parentDirId, fileObjects, (progressInfo) => {
+        if (!progressInfo) return;
+
+        // Stage change: confirming in backend after 100% upload
+        if (progressInfo.stage === "confirming") {
+          setIsConfirming(true);
+          return;
+        }
+
+        // Fallback if ever called with a single number
+        if (typeof progressInfo === "number") {
+          setOverallProgress(progressInfo);
+          return;
+        }
+
+        const targetIndex = progressInfo.index ?? progressInfo.fileIndex;
+        const targetFile = files[targetIndex];
+
+        if (targetFile) {
+          setUploadProgress((prev) => ({
+            ...prev,
+            [targetFile.id]: progressInfo.fileProgress,
+          }));
+        }
+
+        if (typeof progressInfo.overallProgress === "number") {
+          setOverallProgress(progressInfo.overallProgress);
+        }
+        if (typeof targetIndex === "number") {
+          setCurrentUploadIndex(targetIndex);
+        }
       });
 
+      // Complete all files to 100% on success
+      const completedProgress = {};
+      files.forEach((f) => {
+        completedProgress[f.id] = 100;
+      });
+      setUploadProgress(completedProgress);
+      setOverallProgress(100);
+      setIsConfirming(false);
+      setIsSuccess(true);
       setUploading(false);
 
       const totalSize = files.reduce((acc, f) => acc + f.size, 0);
@@ -282,18 +333,14 @@ function UploadFilesModal({ onClose, initialFiles = [] }) {
       setTimeout(() => onClose(), 800);
     } catch (err) {
       console.error("Upload failed:", err);
+      setIsConfirming(false);
       setUploading(false);
-      setUploadProgress({});
+      setIsSuccess(false);
       setErrorMessage(
-        err.response?.data?.message || "Upload failed. Please ensure file sizes and storage quota are within your plan limits."
+        err.response?.data?.message || err.message || "Upload failed. Please ensure file sizes and storage quota are within your plan limits."
       );
     }
   };
-
-  const allDone =
-    uploading &&
-    files.length > 0 &&
-    files.every((f) => (uploadProgress[f.id] || 0) >= 100);
 
   return (
     <motion.div
@@ -306,7 +353,7 @@ function UploadFilesModal({ onClose, initialFiles = [] }) {
       {/* Backdrop */}
       <motion.div
         className="absolute inset-0 bg-background/60 backdrop-blur-sm"
-        onClick={!uploading ? onClose : undefined}
+        onClick={!uploading && !isSuccess ? onClose : undefined}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -334,57 +381,154 @@ function UploadFilesModal({ onClose, initialFiles = [] }) {
                 Upload Files
               </h3>
               <p className="text-sm text-muted-foreground">
-                Drag & drop or browse to upload
+                {isConfirming
+                  ? "Finalizing & saving to your drive…"
+                  : uploading
+                  ? `Uploading ${Math.min(currentUploadIndex + 1, files.length)} of ${files.length} file${files.length > 1 ? "s" : ""} (${overallProgress}%)`
+                  : isSuccess
+                  ? "All files uploaded!"
+                  : "Drag & drop or browse to upload"}
               </p>
             </div>
           </div>
 
-          {/* Drop zone */}
-          <div
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragOver(true);
-            }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={handleDrop}
-            onClick={() => !uploading && fileInputRef.current?.click()}
-            className={[
-              "flex flex-col items-center justify-center rounded-xl border-2 border-dashed px-4 py-8 text-center transition-all cursor-pointer",
-              dragOver
-                ? "border-primary/60 bg-primary/10 scale-[1.01]"
-                : "border-border bg-secondary/20 hover:bg-secondary/40 hover:border-primary/30",
-              uploading ? "pointer-events-none opacity-60" : "",
-            ].join(" ")}
-          >
-            <motion.div
-              animate={dragOver ? { scale: 1.1, y: -4 } : { scale: 1, y: 0 }}
-              transition={{ type: "spring", stiffness: 300, damping: 20 }}
-            >
-              <UploadCloud
-                className={[
-                  "h-10 w-10 mx-auto",
-                  dragOver ? "text-primary" : "text-muted-foreground/60",
-                ].join(" ")}
-              />
-            </motion.div>
-            <p className="mt-3 text-sm font-medium text-foreground">
-              Drop files here or{" "}
-              <span className="text-primary font-semibold">browse</span>
-            </p>
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              Any file type · Encrypted in transit
-            </p>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                if (e.target.files.length > 0) handleFiles(e.target.files);
-                e.target.value = "";
+          {/* Drop zone OR Active Upload & Confirmation Hub */}
+          {!uploading && !isSuccess ? (
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOver(true);
               }}
-            />
-          </div>
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className={[
+                "flex h-36 flex-col items-center justify-center rounded-xl border-2 border-dashed px-4 py-6 text-center transition-all cursor-pointer",
+                dragOver
+                  ? "border-primary/60 bg-primary/10 scale-[1.01]"
+                  : "border-border bg-secondary/20 hover:bg-secondary/40 hover:border-primary/30",
+              ].join(" ")}
+            >
+              <motion.div
+                animate={dragOver ? { scale: 1.1, y: -4 } : { scale: 1, y: 0 }}
+                transition={{ type: "spring", stiffness: 300, damping: 20 }}
+              >
+                <UploadCloud
+                  className={[
+                    "h-9 w-9 mx-auto",
+                    dragOver ? "text-primary" : "text-muted-foreground/60",
+                  ].join(" ")}
+                />
+              </motion.div>
+              <p className="mt-2.5 text-sm font-medium text-foreground">
+                Drop files here or{" "}
+                <span className="text-primary font-semibold">browse</span>
+              </p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                Any file type · Encrypted in transit
+              </p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files.length > 0) handleFiles(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+            </div>
+          ) : (
+            <div className="relative flex h-36 flex-col justify-between rounded-xl border border-primary/20 bg-secondary/30 p-4 overflow-hidden backdrop-blur-md">
+              {/* Background ambient glow */}
+              <div className="absolute -right-8 -bottom-8 h-28 w-28 rounded-full bg-primary/15 blur-2xl pointer-events-none" />
+
+              {isConfirming ? (
+                <div className="flex h-full flex-col justify-between">
+                  {/* Step status tags */}
+                  <div className="flex items-center justify-between">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/15 text-emerald-500 border border-emerald-500/25">
+                      <Check className="h-3 w-3" /> Storage 100%
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-primary/15 text-primary border border-primary/30">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Verifying Records
+                    </span>
+                  </div>
+
+                  {/* Center content */}
+                  <div className="flex items-center gap-3 my-auto">
+                    <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-primary shadow-glow text-primary-foreground">
+                      <Database className="h-5 w-5" />
+                      <span className="absolute -bottom-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-background border border-border shadow-sm">
+                        <Loader2 className="h-2 w-2 animate-spin text-primary" />
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                        Finalizing & Saving to Drive
+                      </h4>
+                      <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed line-clamp-2">
+                        Upload reached 100%. Verifying storage integrity and confirming records in your drive.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Shimmer progress bar */}
+                  <div className="relative h-1.5 w-full rounded-full bg-primary/15 overflow-hidden">
+                    <motion.div
+                      className="absolute inset-y-0 w-1/3 rounded-full bg-gradient-to-r from-primary via-emerald-400 to-primary shadow-glow"
+                      animate={{ x: ["-100%", "350%"] }}
+                      transition={{ repeat: Infinity, duration: 1.4, ease: "easeInOut" }}
+                    />
+                  </div>
+                </div>
+              ) : isSuccess ? (
+                <div className="flex h-full flex-col items-center justify-center text-center">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/15 border border-emerald-500/25 text-emerald-500 shadow-glow mb-2">
+                    <CheckCircle2 className="h-5 w-5" />
+                  </div>
+                  <h4 className="text-sm font-semibold text-foreground">
+                    All files uploaded & confirmed!
+                  </h4>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Your files are safely stored and ready in your drive.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex h-full flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-primary/15 text-primary border border-primary/25">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Uploading to Storage
+                    </span>
+                    <span className="text-xs font-semibold tabular-nums text-foreground">
+                      {overallProgress}%
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-3 my-auto">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20">
+                      <UploadCloud className="h-5 w-5 animate-pulse" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-sm font-semibold text-foreground">
+                        Uploading {currentUploadIndex + 1} of {files.length} {files.length > 1 ? "files" : "file"}
+                      </h4>
+                      <p className="text-xs text-muted-foreground truncate mt-0.5">
+                        {files[currentUploadIndex]?.name || "Transferring files…"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="h-1.5 w-full rounded-full bg-secondary/60 overflow-hidden">
+                    <motion.div
+                      className="h-full rounded-full bg-gradient-primary shadow-glow transition-all duration-200"
+                      style={{ width: `${overallProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* File list */}
           <AnimatePresence>
@@ -393,11 +537,12 @@ function UploadFilesModal({ onClose, initialFiles = [] }) {
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
-                className="mt-4 max-h-48 overflow-y-auto space-y-2 scrollbar-thin"
+                className="mt-4 max-h-44 overflow-y-auto space-y-2 scrollbar-thin"
               >
-                {files.map((f) => {
+                {files.map((f, idx) => {
                   const progress = uploadProgress[f.id] || 0;
                   const done = progress >= 100;
+                  const isCurrent = uploading && !isConfirming && idx === currentUploadIndex;
                   return (
                     <motion.div
                       key={f.id}
@@ -409,39 +554,76 @@ function UploadFilesModal({ onClose, initialFiles = [] }) {
                         duration: 0.25,
                         ease: easeSmooth,
                       }}
-                      className="flex items-center gap-3 rounded-xl border border-border bg-secondary/30 px-3 py-2.5"
+                      className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors ${
+                        isConfirming
+                          ? "border-primary/40 bg-primary/5"
+                          : isCurrent
+                          ? "border-primary/50 bg-primary/5"
+                          : done
+                          ? "border-emerald-500/30 bg-emerald-500/5"
+                          : "border-border bg-secondary/30"
+                      }`}
                     >
-                      <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-secondary/50 text-primary">
-                        <FileUp className="h-4 w-4" />
+                      <span
+                        className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors ${
+                          isConfirming
+                            ? "border-primary/30 bg-primary/10 text-primary"
+                            : done
+                            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-500"
+                            : isCurrent
+                            ? "border-primary/40 bg-primary/10 text-primary"
+                            : "border-border bg-secondary/50 text-muted-foreground"
+                        }`}
+                      >
+                        {isConfirming ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : done ? (
+                          <CheckCircle2 className="h-4 w-4" />
+                        ) : (
+                          <FileUp className="h-4 w-4" />
+                        )}
                       </span>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
                           <span className="text-sm font-medium text-foreground truncate pr-2">
                             {f.name}
                           </span>
-                          <span className="text-[11px] text-muted-foreground shrink-0">
-                            {formatSize(f.size)}
+                          <span className="text-[11px] text-muted-foreground shrink-0 tabular-nums">
+                            {isConfirming ? (
+                              <span className="inline-flex items-center gap-1 font-medium text-primary">
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                Saving…
+                              </span>
+                            ) : (uploading || isSuccess) ? (
+                              done ? "100%" : `${progress}%`
+                            ) : (
+                              formatSize(f.size)
+                            )}
                           </span>
                         </div>
-                        {uploading && (
-                          <div className="mt-1.5 h-1 w-full rounded-full bg-secondary/60 overflow-hidden">
+                        {(uploading || isSuccess) && (
+                          <div className="mt-1.5 h-1.5 w-full rounded-full bg-secondary/60 overflow-hidden">
                             <motion.div
                               className={[
                                 "h-full rounded-full transition-colors",
-                                done ? "bg-primary" : "bg-gradient-primary",
+                                isConfirming
+                                  ? "bg-gradient-to-r from-primary via-emerald-400 to-primary animate-pulse"
+                                  : done
+                                  ? "bg-emerald-500"
+                                  : "bg-gradient-primary",
                               ].join(" ")}
                               initial={{ width: 0 }}
                               animate={{ width: `${progress}%` }}
                               transition={{
                                 type: "tween",
-                                duration: 0.3,
+                                duration: 0.2,
                                 ease: easeSmooth,
                               }}
                             />
                           </div>
                         )}
                       </div>
-                      {!uploading && (
+                      {!uploading && !isSuccess && (
                         <button
                           type="button"
                           onClick={(e) => {
@@ -453,9 +635,11 @@ function UploadFilesModal({ onClose, initialFiles = [] }) {
                           <X className="h-3.5 w-3.5" />
                         </button>
                       )}
-                      {uploading && done && (
-                        <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
-                      )}
+                      {isConfirming ? (
+                        <Loader2 className="h-4 w-4 shrink-0 text-primary animate-spin" />
+                      ) : (uploading || isSuccess) && done ? (
+                        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+                      ) : null}
                     </motion.div>
                   );
                 })}
@@ -463,23 +647,13 @@ function UploadFilesModal({ onClose, initialFiles = [] }) {
             )}
           </AnimatePresence>
 
-          {/* Messages */}
+          {/* Error Message only (zero extra height during normal confirmation) */}
           <AnimatePresence>
-            {allDone && (
-              <motion.div
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mt-4 flex items-center gap-2 text-sm font-medium text-primary"
-              >
-                <CheckCircle2 className="h-4 w-4" />
-                All files uploaded successfully!
-              </motion.div>
-            )}
             {errorMessage && (
               <motion.div
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="mt-4 flex items-start gap-2 text-sm font-medium text-destructive"
+                className="mt-3 flex items-start gap-2 text-sm font-medium text-destructive"
               >
                 <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                 <span>{errorMessage}</span>
@@ -489,16 +663,31 @@ function UploadFilesModal({ onClose, initialFiles = [] }) {
 
           {/* Actions */}
           <div className="mt-6 flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">
-              {files.length > 0
-                ? `${files.length} file${files.length > 1 ? "s" : ""} selected`
-                : "No files selected"}
-            </span>
+            <div className="text-xs text-muted-foreground">
+              {isConfirming ? (
+                <span className="inline-flex items-center gap-1.5 font-medium text-primary">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Updating drive database…
+                </span>
+              ) : uploading ? (
+                <span>
+                  {files.length} file{files.length > 1 ? "s" : ""} · {overallProgress}%
+                </span>
+              ) : isSuccess ? (
+                <span className="text-emerald-500 font-medium">Completed</span>
+              ) : (
+                <span>
+                  {files.length > 0
+                    ? `${files.length} file${files.length > 1 ? "s" : ""} selected`
+                    : "No files selected"}
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={onClose}
-                disabled={uploading}
+                disabled={uploading || isSuccess}
                 className="inline-flex items-center gap-2 rounded-xl border border-border bg-secondary/40 px-4 h-10 text-sm font-medium text-foreground/80 hover:text-foreground hover:bg-secondary/70 transition-colors disabled:opacity-50"
               >
                 Cancel
@@ -506,13 +695,23 @@ function UploadFilesModal({ onClose, initialFiles = [] }) {
               <button
                 type="button"
                 onClick={handleUpload}
-                disabled={files.length === 0 || uploading}
+                disabled={files.length === 0 || uploading || isSuccess}
                 className="inline-flex items-center gap-2 rounded-xl bg-gradient-primary px-5 h-10 text-sm font-medium text-primary-foreground shadow-glow hover:opacity-90 active:translate-y-px transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {uploading ? (
+                {isConfirming ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Uploading…
+                    Finalizing…
+                  </>
+                ) : uploading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Uploading ({overallProgress}%)…
+                  </>
+                ) : isSuccess ? (
+                  <>
+                    <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+                    Uploaded!
                   </>
                 ) : (
                   <>
