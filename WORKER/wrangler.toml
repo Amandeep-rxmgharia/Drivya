@@ -1,0 +1,19 @@
+name = "drivya-files-worker"
+main = "src/index.js"
+compatibility_date = "2024-09-01"
+
+# Route worker to handle all requests on files.drivya.cloud
+[[routes]]
+pattern = "files.drivya.cloud/*"
+zone_name = "drivya.cloud"
+
+# R2 Bucket binding (direct zero-latency access in the same Cloudflare data center)
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "drivya-bucket"
+
+[vars]
+ENVIRONMENT = "production"
+
+# Note: Set your JWT secret securely via Wrangler CLI:
+# npx wrangler secret put JWT_SECRET

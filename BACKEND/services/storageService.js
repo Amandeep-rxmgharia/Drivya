@@ -7,6 +7,9 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { r2Client, R2_BUCKET_NAME } from "../config/r2Client.js";
+import { generateFileWorkerToken } from "../config/tokenUtils.js";
+
+const FILES_BASE_URL = (process.env.FILES_BASE_URL || "https://files.drivya.cloud").replace(/\/+$/, "");
 
 // ─── Default signed-URL expiry (seconds) ─────────────────────────
 const DEFAULT_UPLOAD_EXPIRY = 60 * 60;       // 1 hour
@@ -88,6 +91,28 @@ export async function generateDownloadUrl(key, options = {}) {
   const cached = _urlCache.get(cacheKey);
   if (cached && cached.expiresAt.getTime() - Date.now() > URL_REUSE_BUFFER_MS) {
     return { url: cached.url, expiresAt: cached.expiresAt };
+  }
+
+  // If CDN files worker is enabled, generate edge-cached CDN token URL
+  if (FILES_BASE_URL && FILES_BASE_URL !== "false" && FILES_BASE_URL !== "disabled") {
+    const token = generateFileWorkerToken(key, {
+      expiresIn,
+      disposition: responseContentDisposition,
+      contentType: responseContentType,
+    });
+
+    // Preserve key path segments while encoding each segment safely
+    const encodedKey = key
+      .split("/")
+      .map(encodeURIComponent)
+      .join("/");
+
+    const url = `${FILES_BASE_URL}/${encodedKey}?token=${token}`;
+    const expiresAt = new Date(Date.now() + expiresIn * 1000);
+
+    // Cache the URL for reuse
+    _urlCache.set(cacheKey, { url, expiresAt });
+    return { url, expiresAt };
   }
 
   const commandInput = {

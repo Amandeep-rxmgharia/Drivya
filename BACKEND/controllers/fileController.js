@@ -235,7 +235,7 @@ export const confirmUpload = async (req, res, next) => {
     if (!dir) {
       return res.status(404).json({ message: "Target directory not found." });
     }
-    console.log('verifing');
+    
     // Validate each file exists in R2 before creating DB records
     const verifiedFiles = [];
     for (const f of files) {

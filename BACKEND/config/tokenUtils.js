@@ -4,6 +4,7 @@ const {
   JWT_ACCESS_SECRET,
   JWT_REFRESH_SECRET,
   JWT_SHARE_SECRET,
+  FILE_WORKER_JWT_SECRET,
   ACCESS_TOKEN_EXPIRY = "15m",
   REFRESH_TOKEN_EXPIRY = "7d",
   SHARE_ACCESS_TOKEN_EXPIRY = "1h",
@@ -11,6 +12,7 @@ const {
 } = process.env;
 
 const SHARE_SECRET = JWT_SHARE_SECRET || JWT_ACCESS_SECRET;
+const FILE_WORKER_SECRET = FILE_WORKER_JWT_SECRET || JWT_ACCESS_SECRET;
 
 /**
  * Generate a short-lived access token.
@@ -72,6 +74,7 @@ export function setTokenCookies(res, accessToken, refreshToken, rememberMe = fal
     httpOnly: true,
     secure: isProduction,
     sameSite: isProduction ? "strict" : "lax",
+     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     path: "/",
   };
 
@@ -226,6 +229,48 @@ export function verifyDeactivatedToken(token) {
   const decoded = jwt.verify(token, JWT_ACCESS_SECRET);
   if (decoded.type !== "deactivated_action") {
     throw new Error("Invalid deactivated action token.");
+  }
+  return decoded;
+}
+
+/**
+ * Generate a short-lived token for Cloudflare Worker R2 file access.
+ * @param {string} key - R2 storage key (e.g. "{userId}/{storageName}")
+ * @param {object} [options]
+ * @param {number} [options.expiresIn] - Expiry in seconds (default: 3600 = 1 hour)
+ * @param {string} [options.disposition] - Content-Disposition (e.g. 'inline; filename="..."')
+ * @param {string} [options.contentType] - MIME type override
+ * @returns {string} Signed JWT
+ */
+export function generateFileWorkerToken(key, options = {}) {
+  const {
+    expiresIn = 3600,
+    disposition,
+    contentType,
+  } = options;
+
+  const payload = {
+    key,
+    type: "file_worker",
+  };
+
+  if (disposition) payload.disposition = disposition;
+  if (contentType) payload.contentType = contentType;
+
+  return jwt.sign(payload, FILE_WORKER_SECRET, {
+    expiresIn,
+  });
+}
+
+/**
+ * Verify a file worker token.
+ * @param {string} token
+ * @returns {{ key: string, type: string, disposition?: string, contentType?: string }}
+ */
+export function verifyFileWorkerToken(token) {
+  const decoded = jwt.verify(token, FILE_WORKER_SECRET);
+  if (decoded.type !== "file_worker") {
+    throw new Error("Invalid file worker token.");
   }
   return decoded;
 }

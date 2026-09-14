@@ -1,0 +1,14 @@
+{
+  "name": "drivya-files-worker",
+  "version": "1.0.0",
+  "description": "High-performance edge CDN file proxy for Drivya with Cloudflare R2 binding and JWT auth",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^3.114.17"
+  }
+}
