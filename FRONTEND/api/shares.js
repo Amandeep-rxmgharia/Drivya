@@ -56,6 +56,13 @@ export function normalizeShare(share) {
   };
 }
 
+const API_BASE = api.defaults?.baseURL || "http://localhost:3000";
+
+const resolveAvatarUrl = (url) => {
+  if (!url) return null;
+  return url.startsWith("http") ? url : `${API_BASE}${url}`;
+};
+
 export function normalizeCollaborators(owner, collaborators = []) {
   const users = [];
 
@@ -65,6 +72,7 @@ export function normalizeCollaborators(owner, collaborators = []) {
       email: owner.email,
       role: "Owner",
       name: owner.name,
+      avatarUrl: resolveAvatarUrl(owner.avatarUrl),
     });
   }
 
@@ -75,6 +83,7 @@ export function normalizeCollaborators(owner, collaborators = []) {
       role: "Collaborator",
       name: c.name || c.email.split("@")[0],
       status: c.status,
+      avatarUrl: resolveAvatarUrl(c.avatarUrl),
     });
   }
 

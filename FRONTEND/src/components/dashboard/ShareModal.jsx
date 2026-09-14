@@ -513,12 +513,26 @@ export function ShareModal({ file, onClose, onShareUpdated }) {
                                     >
                                       {/* User info row */}
                                       <div className="flex items-center gap-3 min-w-0">
-                                        {/* Custom Vibrant Initials-based Avatar */}
+                                        {/* User Avatar: Image if available, otherwise Vibrant Initials Avatar */}
+                                        {user.avatarUrl ? (
+                                          <img
+                                            src={user.avatarUrl}
+                                            alt={user.name}
+                                            className="h-9 w-9 rounded-xl object-cover shrink-0 shadow-sm border border-border/40"
+                                            onError={(e) => {
+                                              e.currentTarget.style.display = "none";
+                                              if (e.currentTarget.nextElementSibling) {
+                                                e.currentTarget.nextElementSibling.style.display = "flex";
+                                              }
+                                            }}
+                                          />
+                                        ) : null}
                                         <div
                                           className={cn(
                                             "h-9 w-9 rounded-xl font-display font-bold text-xs flex items-center justify-center shrink-0 shadow-sm border bg-gradient-to-br",
                                             getAvatarGradient(user.name),
                                           )}
+                                          style={{ display: user.avatarUrl ? "none" : "flex" }}
                                         >
                                           {user.name.slice(0, 2).toUpperCase()}
                                         </div>

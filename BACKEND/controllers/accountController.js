@@ -676,6 +676,7 @@ export const confirmEmailChange = async (req, res, next) => {
 
     const oldEmail = user.email;
     user.email = normalizedNewEmail;
+    user.googleId = null
     await user.save();
 
     // Delete OTP record

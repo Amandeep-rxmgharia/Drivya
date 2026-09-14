@@ -353,17 +353,47 @@ export async function getShareById(ownerId, shareId) {
   const collaborators = await ShareCollaborator.find({
     shareId,
   })
+    .populate("userId", "name email avatarUrl")
     .sort({ createdAt: 1 })
     .lean();
 
-  const owner = await User.findById(ownerId).select("name email").lean();
+  // If some collaborators don't have userId populated (e.g. they registered later), look up their email
+  const missingEmails = collaborators
+    .filter((c) => !c.userId)
+    .map((c) => c.email);
+
+  let userMap = {};
+  if (missingEmails.length > 0) {
+    const foundUsers = await User.find({ email: { $in: missingEmails } })
+      .select("_id name email avatarUrl")
+      .lean();
+    for (const u of foundUsers) {
+      userMap[u.email] = u;
+    }
+  }
+
+  const owner = await User.findById(ownerId).select("name email avatarUrl").lean();
 
   return {
     share: formatShareResponse(share),
     owner: owner
-      ? { name: owner.name, email: owner.email, role: "owner" }
+      ? {
+          name: owner.name,
+          email: owner.email,
+          avatarUrl: owner.avatarUrl || null,
+          role: "owner",
+        }
       : null,
-    collaborators: collaborators.map(formatCollaboratorResponse),
+    collaborators: collaborators.map((c) => {
+      const user =
+        c.userId && typeof c.userId === "object"
+          ? c.userId
+          : userMap[c.email] || null;
+      return formatCollaboratorResponse({
+        ...c,
+        userId: user,
+      });
+    }),
   };
 }
 
@@ -470,7 +500,7 @@ export async function inviteCollaborator(ownerId, shareId, { email }) {
   }
 
   const existingUser = await User.findOne({ email: normalizedEmail })
-    .select("_id name")
+    .select("_id name avatarUrl")
     .lean();
 
   const existingInvite = await ShareCollaborator.findOne({
@@ -513,7 +543,10 @@ export async function inviteCollaborator(ownerId, shareId, { email }) {
     }).catch((err) => console.error("Notification error:", err));
   }
 
-  return formatCollaboratorResponse(collaborator.toObject());
+  return formatCollaboratorResponse({
+    ...collaborator.toObject(),
+    userId: existingUser || null,
+  });
 }
 
 export async function deleteCollaborator(ownerId, shareId, collaboratorId) {
@@ -748,10 +781,15 @@ function formatShareResponse(share, extras = {}) {
 }
 
 function formatCollaboratorResponse(collaborator) {
+  const user =
+    collaborator.userId && typeof collaborator.userId === "object"
+      ? collaborator.userId
+      : null;
   return {
     id: collaborator._id,
     email: collaborator.email,
-    name: collaborator.displayName || collaborator.email.split("@")[0],
+    name: collaborator.displayName || user?.name || collaborator.email.split("@")[0],
+    avatarUrl: user?.avatarUrl || null,
     role: "Collaborator",
     status: collaborator.status,
     invitedAt: collaborator.invitedAt,
