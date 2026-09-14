@@ -6,7 +6,6 @@ import {
   updateShare,
   deleteShare as deleteShareService,
   inviteCollaborator,
-  updateCollaboratorRole,
   deleteCollaborator as deleteCollaboratorService,
 } from "../services/shareService.js";
 import { AppError } from "../utils/errors.js";
@@ -114,33 +113,14 @@ export async function addCollaborator(req, res, next) {
   try {
     const ownerId = req.user.id;
     const { id } = req.params;
-    const { email, role } = req.body;
+    const { email } = req.body;
 
-    const collaborator = await inviteCollaborator(ownerId, id, { email, role });
+    const collaborator = await inviteCollaborator(ownerId, id, { email });
 
     return res.status(201).json({
       message: "Collaborator invited.",
       collaborator,
     });
-  } catch (err) {
-    handleShareError(err, res, next);
-  }
-}
-
-export async function patchCollaborator(req, res, next) {
-  try {
-    const ownerId = req.user.id;
-    const { id, collaboratorId } = req.params;
-    const { role } = req.body;
-
-    const collaborator = await updateCollaboratorRole(
-      ownerId,
-      id,
-      collaboratorId,
-      role,
-    );
-
-    return res.json({ message: "Collaborator updated.", collaborator });
   } catch (err) {
     handleShareError(err, res, next);
   }

@@ -12,7 +12,6 @@ import {
   permanentDeleteFile,
   restoreAllFiles,
   bulkTrash,
-  editFileContent,
   createDownloadToken,
   downloadFileByToken,
 } from "../controllers/fileController.js";
@@ -40,7 +39,6 @@ router.get("/:id/preview", previewFile);
 
 // ─── File Operations ─────────────────────────────────────────────
 router.patch("/:id/rename", renameFile);
-router.put("/:id/content", editFileContent);
 
 // ─── Trash Operations ────────────────────────────────────────────
 router.get("/trash", listTrash);

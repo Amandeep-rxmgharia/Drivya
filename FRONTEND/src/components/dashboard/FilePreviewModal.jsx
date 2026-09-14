@@ -16,15 +16,12 @@ import {
   ZoomIn,
   ZoomOut,
   Check,
-  Edit,
-  Save,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { easeSmooth } from "@/lib/motion-presets";
 import { detectFileKind, getFileTypeStyle } from "@/lib/file-types";
 import { FileTypeIcon } from "./FileTypeIcon";
 import { getFilePreviewUrl } from "../../../api/drive.js";
-import api, { getCurrentUser } from "../../../api/auth.js";
 
 /* ─── Helpers ────────────────────────────────────────────────────── */
 
@@ -249,23 +246,16 @@ function PdfPreview({ url }) {
   );
 }
 
-function TextPreview({ url, fileId }) {
+function TextPreview({ url }) {
   const [content, setContent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  const [isEditing, setIsEditing] = useState(false);
-  const [editValue, setEditValue] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     if (!url) return;
     setLoading(true);
     setError(null);
-    setIsEditing(false);
-    setSaveSuccess(false);
 
     // Fetch text content directly from R2 presigned URL
     fetch(url)
@@ -273,11 +263,11 @@ function TextPreview({ url, fileId }) {
       .then((text) => {
         if (!cancelled) {
           // Limit to 50KB for display
-          const truncated = text.length > 50_000
-            ? text.slice(0, 50_000) + "\n\n... [truncated — file too large for preview]"
-            : text;
+          const truncated =
+            text.length > 50_000
+              ? text.slice(0, 50_000) + "\n\n... [truncated — file too large for preview]"
+              : text;
           setContent(truncated);
-          setEditValue(text);
           setLoading(false);
         }
       })
@@ -288,94 +278,18 @@ function TextPreview({ url, fileId }) {
         }
       });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [url]);
-
-  const handleSaveChanges = async () => {
-    setSaving(true);
-    setSaveSuccess(false);
-    try {
-      await api.put(`/api/files/${fileId}/content`, { content: editValue });
-      setContent(editValue);
-      setIsEditing(false);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
-      window.dispatchEvent(new CustomEvent("refresh-drive"));
-    } catch (err) {
-      alert(err.response?.data?.message || "Failed to save edits.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.altKey && e.key === "s") {
-      e.preventDefault();
-      handleSaveChanges();
-    }
-  };
 
   if (loading) return <PreviewLoading />;
   if (error) return <PreviewError message={`Failed to load file: ${error}`} />;
 
-  const displayContent = isEditing ? editValue : content;
-  const lines = displayContent?.split("\n") || [];
+  const lines = content?.split("\n") || [];
 
   return (
     <div className="flex flex-1 flex-col">
-      {saveSuccess && (
-        <div className="mb-3 flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 rounded-xl px-3 py-2 shrink-0 animate-fade-in">
-          <Check className="h-4 w-4 shrink-0" />
-          <span>Changes saved successfully!</span>
-        </div>
-      )}
-
-      {fileId && (
-        <div className="flex items-center justify-between mb-3 bg-secondary/10 p-2 rounded-xl border border-border/40 shrink-0">
-          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
-            {isEditing ? "Editing Mode (Alt+S to Save)" : "View Mode"}
-          </span>
-          <div className="flex gap-2">
-            {isEditing ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditValue(content);
-                    setIsEditing(false);
-                  }}
-                  className="h-7 px-2.5 rounded-lg text-xs font-semibold hover:bg-secondary border border-border/60 text-muted-foreground cursor-pointer transition-colors"
-                >
-                  Discard
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveChanges}
-                  disabled={saving}
-                  className="h-7 px-2.5 rounded-lg text-xs font-semibold bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 cursor-pointer flex items-center gap-1 transition-colors"
-                >
-                  {saving ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Save className="h-3.5 w-3.5" />
-                  )}
-                  Save
-                </button>
-              </>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setIsEditing(true)}
-                className="h-7 px-2.5 rounded-lg text-xs font-semibold hover:bg-secondary border border-border/60 text-foreground/80 cursor-pointer flex items-center gap-1 transition-colors"
-              >
-                <Edit className="h-3.5 w-3.5" />
-                Edit
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
       <div className="flex flex-1 overflow-auto rounded-xl border border-border bg-card/50 min-h-[300px]">
         <div className="flex min-w-0 w-full">
           {/* Line numbers */}
@@ -385,19 +299,9 @@ function TextPreview({ url, fileId }) {
             ))}
           </div>
           {/* Content panel */}
-          {isEditing ? (
-            <textarea
-              value={editValue}
-              onChange={(e) => setEditValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              className="flex-1 p-4 font-mono text-[12px] leading-[1.7] text-foreground/90 whitespace-pre bg-transparent outline-none resize-none"
-              spellCheck={false}
-            />
-          ) : (
-            <pre className="flex-1 overflow-x-auto p-4 font-mono text-[12px] leading-[1.7] text-foreground/90 whitespace-pre">
-              {content || "[Empty file]"}
-            </pre>
-          )}
+          <pre className="flex-1 overflow-x-auto p-4 font-mono text-[12px] leading-[1.7] text-foreground/90 whitespace-pre">
+            {content || "[Empty file]"}
+          </pre>
         </div>
       </div>
     </div>
@@ -488,27 +392,34 @@ export function FilePreviewModal({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const modalRef = useRef(null);
 
-  const [isAuthChecking, setIsAuthChecking] = useState(true);
-  const [authError, setAuthError] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [previewLoading, setPreviewLoading] = useState(true);
+  const [previewError, setPreviewError] = useState(null);
 
-  // Perform auth check before loading the preview URLs natively
+  // Fetch presigned preview URL from R2 directly
   useEffect(() => {
-    if (!file) return;
+    if (!file?.id) {
+      setPreviewUrl("");
+      setPreviewLoading(false);
+      return;
+    }
 
     let active = true;
-    setIsAuthChecking(true);
-    setAuthError(null);
+    setPreviewLoading(true);
+    setPreviewError(null);
+    setPreviewUrl("");
 
-    getCurrentUser()
-      .then(() => {
+    getFilePreviewUrl(file.id)
+      .then((url) => {
         if (active) {
-          setIsAuthChecking(false);
+          setPreviewUrl(url);
+          setPreviewLoading(false);
         }
       })
       .catch((err) => {
         if (active) {
-          setAuthError(err);
-          setIsAuthChecking(false);
+          setPreviewError(err);
+          setPreviewLoading(false);
         }
       });
 
@@ -516,18 +427,6 @@ export function FilePreviewModal({
       active = false;
     };
   }, [file?.id]);
-
-  // Fetch presigned preview URL from R2
-  const [previewUrl, setPreviewUrl] = useState("");
-  useEffect(() => {
-    if (!file?.id || isAuthChecking || authError) return;
-    let active = true;
-    setPreviewUrl("");
-    getFilePreviewUrl(file.id)
-      .then((url) => { if (active) setPreviewUrl(url); })
-      .catch(() => { if (active) setPreviewUrl(""); });
-    return () => { active = false; };
-  }, [file?.id, isAuthChecking, authError]);
 
   // Compute current index for prev/next
   const currentIndex = useMemo(() => {
@@ -714,10 +613,10 @@ export function FilePreviewModal({
                 transition={{ duration: 0.2, ease: easeSmooth }}
                 className="flex flex-1 min-h-0 w-full"
               >
-                {isAuthChecking ? (
+                {previewLoading && previewType !== "unsupported" ? (
                   <PreviewLoading />
-                ) : authError ? (
-                  <PreviewError message="Authentication expired. Redirecting..." />
+                ) : previewError ? (
+                  <PreviewError message={previewError?.response?.data?.message || "Failed to load preview."} />
                 ) : (
                   <>
                     {previewType === "image" && (
@@ -733,7 +632,7 @@ export function FilePreviewModal({
                       <PdfPreview url={previewUrl} />
                     )}
                     {previewType === "text" && (
-                      <TextPreview url={previewUrl} fileId={file.id} />
+                      <TextPreview url={previewUrl} />
                     )}
                     {previewType === "unsupported" && (
                       <UnsupportedPreview

@@ -7,7 +7,6 @@ import {
   patchShare,
   deleteShare,
   addCollaborator,
-  patchCollaborator,
   deleteCollaborator,
 } from "../controllers/shareController.js";
 import { authenticate } from "../middlewares/authMiddleware.js";
@@ -16,7 +15,6 @@ import {
   validateCreateShare,
   validateUpdateShare,
   validateInviteCollaborator,
-  validateCollaboratorRole,
 } from "../middlewares/validators.js";
 
 const router = express.Router();
@@ -37,12 +35,6 @@ router.post(
   validateInviteCollaborator,
   handleValidationErrors,
   addCollaborator,
-);
-router.patch(
-  "/:id/collaborators/:collaboratorId",
-  validateCollaboratorRole,
-  handleValidationErrors,
-  patchCollaborator,
 );
 router.delete("/:id/collaborators/:collaboratorId", deleteCollaborator);
 

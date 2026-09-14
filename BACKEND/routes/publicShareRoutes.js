@@ -5,7 +5,6 @@ import {
   previewSharedFile,
   downloadSharedFile,
   checkShareAccess,
-  editSharedFile,
   createShareDownloadToken,
   downloadSharedFileByToken,
 } from "../controllers/publicShareController.js";
@@ -71,12 +70,5 @@ router.post(
   createShareDownloadToken,
 );
 
-router.put(
-  "/:token/edit",
-  softAuthenticate,
-  resolvePublicShare,
-  requireShareAccess,
-  editSharedFile,
-);
 
 export default router;

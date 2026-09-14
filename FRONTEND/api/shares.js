@@ -56,15 +56,6 @@ export function normalizeShare(share) {
   };
 }
 
-function toApiRole(role) {
-  return role?.toLowerCase() === "editor" ? "editor" : "viewer";
-}
-
-function toUiRole(role) {
-  if (!role) return "Viewer";
-  return role.charAt(0).toUpperCase() + role.slice(1).toLowerCase();
-}
-
 export function normalizeCollaborators(owner, collaborators = []) {
   const users = [];
 
@@ -81,7 +72,7 @@ export function normalizeCollaborators(owner, collaborators = []) {
     users.push({
       id: c.id,
       email: c.email,
-      role: toUiRole(c.role),
+      role: "Collaborator",
       name: c.name || c.email.split("@")[0],
       status: c.status,
     });
@@ -164,29 +155,10 @@ export const revokeShare = async (shareId) => {
   return response.data;
 };
 
-/**
- * Invite a collaborator by email.
- */
-export const inviteCollaborator = async (shareId, { email, role }) => {
+export const inviteCollaborator = async (shareId, { email }) => {
   const response = await api.post(`/api/shares/${shareId}/collaborators`, {
     email,
-    role: toApiRole(role),
   });
-  return response.data;
-};
-
-/**
- * Update collaborator role.
- */
-export const updateCollaboratorRole = async (
-  shareId,
-  collaboratorId,
-  role,
-) => {
-  const response = await api.patch(
-    `/api/shares/${shareId}/collaborators/${collaboratorId}`,
-    { role: toApiRole(role) },
-  );
   return response.data;
 };
 

@@ -51,7 +51,6 @@ import {
   updateShare,
   revokeShare,
   inviteCollaborator,
-  updateCollaboratorRole,
   revokeCollaborator,
 } from "../../api/shares.js";
 import { downloadFile } from "../../api/drive.js";
@@ -883,12 +882,7 @@ function LinkDetailModal({
   const [allowDownload, setAllowDownload] = useState(
     file.permissions?.allowDownload ?? true,
   );
-  const [allowEdit, setAllowEdit] = useState(
-    file.permissions?.allowEdit ?? false,
-  );
-
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState("Viewer");
   const [isInviting, setIsInviting] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [sharedUsers, setSharedUsers] = useState([]);
@@ -949,7 +943,6 @@ function LinkDetailModal({
       if (share.expiresAt) setExpiration(share.expiresAt);
       if (share.permissions) {
         setAllowDownload(share.permissions.allowDownload ?? true);
-        setAllowEdit(share.permissions.allowEdit ?? false);
       }
       onRefresh?.();
       return share;
@@ -985,13 +978,6 @@ function LinkDetailModal({
     }
   };
 
-  const handleToggleEdit = async () => {
-    const nextVal = !allowEdit;
-    const share = await syncShare({ permissions: { allowEdit: nextVal } });
-    if (share) {
-      addToast(nextVal ? "Editing enabled" : "Editing disabled");
-    }
-  };
 
   const handleSendInvite = async (e) => {
     e.preventDefault();
@@ -1007,33 +993,15 @@ function LinkDetailModal({
     try {
       await inviteCollaborator(shareId, {
         email: inviteEmail.trim(),
-        role: inviteRole,
       });
       const detail = await getShare(shareId);
       setSharedUsers(detail.sharedUsers);
-      addToast(`Invited ${inviteEmail.trim()} as ${inviteRole}`);
+      addToast(`Invited ${inviteEmail.trim()}`);
       setInviteEmail("");
     } catch (err) {
       addToast(err.response?.data?.message || "Failed to send invite.");
     } finally {
       setIsInviting(false);
-    }
-  };
-
-  const handleUpdateUserRole = async (email, newRole) => {
-    const collaborator = sharedUsers.find((u) => u.email === email);
-    if (!collaborator?.id || collaborator.role === "Owner") return;
-
-    try {
-      await updateCollaboratorRole(shareId, collaborator.id, newRole);
-      setSharedUsers((prev) =>
-        prev.map((user) =>
-          user.email === email ? { ...user, role: newRole } : user,
-        ),
-      );
-      addToast(`Role updated to ${newRole} for ${email}`);
-    } catch (err) {
-      addToast(err.response?.data?.message || "Failed to update role.");
     }
   };
 
@@ -1218,27 +1186,8 @@ function LinkDetailModal({
                           value={inviteEmail}
                           onChange={(e) => setInviteEmail(e.target.value)}
                           placeholder="Invite by email..."
-                          className="h-11 w-full rounded-2xl border border-border/60 bg-secondary/15 pl-4 pr-32 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary/60 focus:ring-4 focus:ring-primary/10 transition-all font-medium"
+                          className="h-11 w-full rounded-2xl border border-border/60 bg-secondary/15 px-4 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary/60 focus:ring-4 focus:ring-primary/10 transition-all font-medium"
                         />
-
-                        {/* Segmented Viewer/Editor CSS selector */}
-                        <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex bg-secondary/50 border border-border/40 p-0.5 rounded-xl select-none">
-                          {["Viewer", "Editor"].map((role) => (
-                            <button
-                              key={role}
-                              type="button"
-                              onClick={() => setInviteRole(role)}
-                              className={cn(
-                                "rounded-lg px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-wider cursor-pointer transition-all duration-150",
-                                inviteRole === role
-                                  ? "bg-primary text-primary-foreground shadow-sm"
-                                  : "text-muted-foreground hover:text-foreground",
-                              )}
-                            >
-                              {role}
-                            </button>
-                          ))}
-                        </div>
                       </div>
                       <button
                         type="submit"
@@ -1314,26 +1263,9 @@ function LinkDetailModal({
                                 </span>
                               ) : (
                                 <>
-                                  {/* Dynamic User Role Selector Switcher */}
-                                  <div className="flex bg-secondary/55 border border-border/45 p-0.5 rounded-xl select-none">
-                                    {["Viewer", "Editor"].map((r) => (
-                                      <button
-                                        key={r}
-                                        type="button"
-                                        onClick={() =>
-                                          handleUpdateUserRole(user.email, r)
-                                        }
-                                        className={cn(
-                                          "rounded-lg px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-wider cursor-pointer transition-all duration-150",
-                                          user.role === r
-                                            ? "bg-primary text-primary-foreground shadow-sm"
-                                            : "text-muted-foreground hover:text-foreground",
-                                        )}
-                                      >
-                                        {r}
-                                      </button>
-                                    ))}
-                                  </div>
+                                  <span className="text-[9px] font-extrabold text-muted-foreground/80 bg-secondary/50 border border-border/40 px-3 py-1 rounded-xl uppercase tracking-wider">
+                                    Collaborator
+                                  </span>
 
                                   {/* Revoke button */}
                                   <button
@@ -1634,30 +1566,6 @@ function LinkDetailModal({
                           </button>
                         </div>
 
-                        {kind === "text" && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-foreground font-medium">
-                              Allow Public Editing
-                            </span>
-                            <button
-                              type="button"
-                              onClick={handleToggleEdit}
-                              className={cn(
-                                "relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-300 focus:outline-none cursor-pointer border border-transparent",
-                                allowEdit
-                                  ? "bg-primary border-primary/20"
-                                  : "bg-secondary border-border/60",
-                              )}
-                            >
-                              <span
-                                className={cn(
-                                  "inline-block h-3 w-3 transform rounded-full bg-white transition-transform shadow-sm",
-                                  allowEdit ? "translate-x-5" : "translate-x-1",
-                                )}
-                              />
-                            </button>
-                          </div>
-                        )}
                       </div>
                     </div>
 

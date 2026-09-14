@@ -249,25 +249,3 @@ export async function deleteFiles(storagePaths) {
   }
 }
 
-/**
- * Update (overwrite) file contents in R2.
- * @param {string} storagePath - R2 object key "{userId}/{storageName}"
- * @param {Buffer|string} content
- */
-export async function updateFileContent(storagePath, content) {
-  await r2Client.send(
-    new PutObjectCommand({
-      Bucket: R2_BUCKET_NAME,
-      Key: storagePath,
-      Body: content,
-      CacheControl: DEFAULT_CACHE_CONTROL,
-    }),
-  );
-
-  // Invalidate any cached download URLs for this key since content changed
-  for (const [cacheKey] of _urlCache) {
-    if (cacheKey.startsWith(`${storagePath}|`)) {
-      _urlCache.delete(cacheKey);
-    }
-  }
-}

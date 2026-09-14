@@ -9,7 +9,6 @@ import {
 } from "../services/shareService.js";
 import {
   generateDownloadUrl,
-  updateFileContent as updateR2Content,
 } from "../services/storageService.js";
 import {
   generateShareAccessToken,
@@ -20,12 +19,6 @@ import {
 } from "../config/tokenUtils.js";
 import { AppError } from "../utils/errors.js";
 import { VISIBILITY } from "../constants/shareConstants.js";
-import File from "../models/fileModel.js";
-import Share from "../models/shareModel.js";
-import {
-  invalidateShareTokenCache,
-  invalidateOwnerShareCache,
-} from "../services/cacheService.js";
 import User from "../models/userModel.js";
 
 // ─── Bandwidth Check & Increment Helper ─────────────────────────
@@ -321,44 +314,3 @@ export async function checkShareAccess(req, res) {
   });
 }
 
-// ─── Edit Shared File Content ─────────────────────────────────────
-export async function editSharedFile(req, res, next) {
-  try {
-    const { token } = req.params;
-    const share = req.share;
-    const { content } = req.body;
-
-    if (content === undefined) {
-      return res.status(400).json({ message: "Content is required." });
-    }
-
-    if (!share.permissions?.allowEdit) {
-      return res.status(403).json({ message: "Editing is not permitted." });
-    }
-
-    const { file } = await resolveShareFileForPublicAccess(token);
-    await updateR2Content(file.storagePath, content);
-
-    const newSize = Buffer.byteLength(content);
-
-    // Update File size
-    await File.updateOne({ _id: file._id }, { size: newSize });
-
-    // Update Share snapshot size
-    await Share.updateOne(
-      { _id: share._id },
-      { "resourceSnapshot.size": newSize }
-    );
-
-    // Invalidate caches
-    await invalidateShareTokenCache(token);
-    await invalidateOwnerShareCache(share.ownerId.toString());
-
-    return res.json({
-      message: "Shared file updated successfully.",
-      size: newSize,
-    });
-  } catch (err) {
-    handlePublicShareError(err, res, next);
-  }
-}

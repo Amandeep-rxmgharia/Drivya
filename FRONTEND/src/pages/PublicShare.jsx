@@ -10,10 +10,7 @@ import {
   AlertCircle,
   Eye,
   EyeOff,
-  Edit,
-  Save,
   X,
-  Check,
   Share2,
   HardDrive,
   KeyRound,
@@ -115,7 +112,11 @@ function ImagePreview({ url }) {
 
   return (
     <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-black/5 dark:bg-white/5 rounded-2xl border border-border/50 min-h-[400px]">
-      {!loaded && <PreviewLoading />}
+      {!loaded && (
+        <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+          <PreviewLoading />
+        </div>
+      )}
       <div
         className={cn(
           "flex items-center justify-center w-full h-full p-4",
@@ -248,8 +249,8 @@ function PdfPreview({ url }) {
 
 function PreviewLoading() {
   return (
-    <div className="flex flex-1 items-center justify-center p-16">
-      <div className="flex flex-col items-center gap-4">
+    <div className="flex flex-1 items-center justify-center p-12 w-full h-full">
+      <div className="flex flex-col items-center gap-4 text-center">
         <div className="relative">
           <Loader2 className="h-10 w-10 text-primary animate-spin" />
           <div className="absolute inset-0 h-10 w-10 rounded-full bg-primary/10 animate-ping" />
@@ -335,15 +336,11 @@ export default function PublicShare() {
   const [unlocking, setUnlocking] = useState(false);
   const [accessToken, setAccessToken] = useState("");
 
-  // Text file preview & edit state
+  // Text file preview state
   const [textContent, setTextContent] = useState("");
   const [textLoading, setTextLoading] = useState(false);
   const [textError, setTextError] = useState(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editValue, setEditValue] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
-  const [signedAccount, setSignedAccount] = useState(null)
+  const [signedAccount, setSignedAccount] = useState(null);
   // Fetch metadata on mount or when token/accessToken changes
   const fetchMetadata = useCallback(async () => {
     setLoading(true);
@@ -403,7 +400,6 @@ export default function PublicShare() {
       const textRes = await fetch(presignedUrl);
       const text = await textRes.text();
       setTextContent(text);
-      setEditValue(text);
     } catch (err) {
       setTextError(err.response?.data?.message || "Failed to load file text.");
       setSignedAccount(JSON.parse(err.response?.data)?.signedAccount)
@@ -472,43 +468,6 @@ export default function PublicShare() {
     }
   };
 
-  // Save changes to text file content
-  const handleSaveChanges = async () => {
-    setSaving(true);
-    setSaveSuccess(false);
-    try {
-      const headers = {};
-      if (accessToken) {
-        headers.Authorization = `Bearer ${accessToken}`;
-      }
-      await api.put(
-        `/public/shares/${token}/edit`,
-        { content: editValue },
-        { headers }
-      );
-      setTextContent(editValue);
-      setIsEditing(false);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
-
-      // Re-fetch metadata to update size dynamically
-      const metaRes = await api.get(`/public/shares/${token}`, { headers });
-      setMetadata(metaRes.data.share);
-    } catch (err) {
-      alert(err.response?.data?.message || "Failed to save edits.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // Keyboard shortcut Alt+S inside editor
-  const handleEditorKeyDown = (e) => {
-    if (e.altKey && e.key === "s") {
-      e.preventDefault();
-      handleSaveChanges();
-    }
-  };
-
   const kind = metadata ? detectFileKind(metadata.name, metadata.mimeType) : "file";
   const previewType = metadata ? getPreviewType(metadata.name) : "unsupported";
   const sizeStr = metadata ? formatSize(metadata.size) : "";
@@ -531,8 +490,6 @@ export default function PublicShare() {
 
     return () => { active = false; };
   }, [token, metadata, accessToken]);
-
-  const textLines = editValue.split("\n");
 
   return (
     <div className="min-h-screen bg-background relative flex flex-col items-center justify-center p-4 sm:p-8 overflow-y-auto">
@@ -808,143 +765,48 @@ export default function PublicShare() {
 
             {/* Content Area */}
             <div className="p-4 sm:p-6 flex flex-col flex-1 min-h-[400px]">
-              <AnimatePresence mode="wait">
-                {isEditing ? (
-                  /* ── Text Editor Mode ── */
-                  <motion.div
-                    key="editor"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="flex flex-col flex-1"
-                  >
-                    <div className="flex items-center justify-between mb-3 bg-secondary/20 p-2.5 rounded-xl border border-border/40">
-                      <span className="text-xs font-bold text-muted-foreground flex items-center gap-1.5 uppercase tracking-wide">
-                        <Edit className="h-3.5 w-3.5 text-primary" /> Edit Mode
-                      </span>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditValue(textContent);
-                            setIsEditing(false);
-                          }}
-                          className="h-8 px-3 rounded-lg text-xs font-semibold hover:bg-secondary border border-border/60 text-muted-foreground cursor-pointer transition-colors"
-                        >
-                          Discard
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleSaveChanges}
-                          disabled={saving}
-                          className="h-8 px-3 rounded-lg text-xs font-semibold bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 cursor-pointer active:scale-95 transition-all flex items-center gap-1"
-                        >
-                          {saving ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          ) : (
-                            <Save className="h-3 w-3" />
-                          )}
-                          Save Edits
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-1 overflow-auto rounded-xl border border-border bg-card/50 min-h-[300px]">
-                      <div className="flex min-w-0 w-full font-mono text-[12px] leading-[1.7]">
-                        {/* Line numbers */}
-                        <div className="shrink-0 select-none border-r border-border bg-secondary/20 px-3 py-4 text-right text-muted-foreground/40">
-                          {textLines.map((_, i) => (
-                            <div key={i}>{i + 1}</div>
-                          ))}
-                        </div>
-                        {/* Interactive Textarea */}
-                        <textarea
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          onKeyDown={handleEditorKeyDown}
-                          placeholder="Write text/code here..."
-                          className="flex-1 resize-none p-4 bg-transparent outline-none text-foreground/90 whitespace-pre scrollbar-none min-h-[300px]"
-                          spellCheck={false}
-                        />
-                      </div>
-                    </div>
-                  </motion.div>
-                ) : (
-                  /* ── Normal View Mode ── */
-                  <motion.div
-                    key="preview"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="flex flex-col flex-1"
-                  >
-                    {/* Floating Save success message */}
-                    {saveSuccess && (
-                      <div className="mb-4 flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 rounded-xl px-3.5 py-2.5">
-                        <Check className="h-4 w-4 shrink-0" />
-                        <span>Changes saved successfully!</span>
-                      </div>
-                    )}
-
-                    {previewType === "text" && metadata.permissions?.allowEdit && (
-                      <div className="flex items-center justify-end mb-3">
-                        <button
-                          type="button"
-                          onClick={() => setIsEditing(true)}
-                          className="inline-flex h-8 px-3 items-center justify-center gap-1 rounded-lg border border-border bg-secondary/40 hover:bg-secondary text-xs font-semibold text-foreground/80 cursor-pointer transition-colors"
-                        >
-                          <Edit className="h-3.5 w-3.5" />
-                          Edit Document
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Previews mapping */}
-                    <div className="flex flex-1 min-h-0">
-                      {previewType === "image" && (
-                        <ImagePreview url={filePreviewUrl} />
-                      )}
-                      {previewType === "video" && (
-                        <VideoPreview url={filePreviewUrl} />
-                      )}
-                      {previewType === "audio" && (
-                        <AudioPreview url={filePreviewUrl} kind={kind} />
-                      )}
-                      {previewType === "pdf" && (
-                        <PdfPreview url={filePreviewUrl} />
-                      )}
-                      {previewType === "text" && (
-                        <>
-                          {textLoading ? (
-                            <PreviewLoading />
-                          ) : textError ? (
-                            <PreviewError message={textError} />
-                          ) : (
-                            <div className="flex flex-1 overflow-auto rounded-xl border border-border bg-card/50 min-h-[300px]">
-                              <div className="flex min-w-0 w-full">
-                                <div className="sticky left-0 shrink-0 select-none border-r border-border bg-secondary/30 px-3 py-4 text-right font-mono text-[11px] leading-[1.7] text-muted-foreground/50">
-                                  {textContent.split("\n").map((_, i) => (
-                                    <div key={i}>{i + 1}</div>
-                                  ))}
-                                </div>
-                                <pre className="flex-1 overflow-x-auto p-4 font-mono text-[12px] leading-[1.7] text-foreground/90 whitespace-pre">
-                                  {textContent || "[Empty file]"}
-                                </pre>
-                              </div>
-                            </div>
-                          )}
-                        </>
-                      )}
-                      {previewType === "unsupported" && (
-                        <UnsupportedPreview
-                          kind={kind}
-                          onDownload={metadata.permissions?.allowDownload ? handleDownload : null}
-                        />
-                      )}
-                    </div>
-                  </motion.div>
+              <div className="flex flex-1 min-h-0">
+                {previewType === "image" && (
+                  <ImagePreview url={filePreviewUrl} />
                 )}
-              </AnimatePresence>
+                {previewType === "video" && (
+                  <VideoPreview url={filePreviewUrl} />
+                )}
+                {previewType === "audio" && (
+                  <AudioPreview url={filePreviewUrl} kind={kind} />
+                )}
+                {previewType === "pdf" && (
+                  <PdfPreview url={filePreviewUrl} />
+                )}
+                {previewType === "text" && (
+                  <>
+                    {textLoading ? (
+                      <PreviewLoading />
+                    ) : textError ? (
+                      <PreviewError message={textError} />
+                    ) : (
+                      <div className="flex flex-1 overflow-auto rounded-xl border border-border bg-card/50 min-h-[300px]">
+                        <div className="flex min-w-0 w-full">
+                          <div className="sticky left-0 shrink-0 select-none border-r border-border bg-secondary/30 px-3 py-4 text-right font-mono text-[11px] leading-[1.7] text-muted-foreground/50">
+                            {textContent.split("\n").map((_, i) => (
+                              <div key={i}>{i + 1}</div>
+                            ))}
+                          </div>
+                          <pre className="flex-1 overflow-x-auto p-4 font-mono text-[12px] leading-[1.7] text-foreground/90 whitespace-pre">
+                            {textContent || "[Empty file]"}
+                          </pre>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+                {previewType === "unsupported" && (
+                  <UnsupportedPreview
+                    kind={kind}
+                    onDownload={metadata.permissions?.allowDownload ? handleDownload : null}
+                  />
+                )}
+              </div>
             </div>
 
             {/* Footer */}

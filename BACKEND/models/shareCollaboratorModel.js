@@ -1,6 +1,5 @@
 import { model, Schema } from "mongoose";
 import {
-  COLLABORATOR_ROLES,
   COLLABORATOR_STATUS,
 } from "../constants/shareConstants.js";
 
@@ -35,8 +34,7 @@ const shareCollaboratorSchema = new Schema(
     },
     role: {
       type: String,
-      enum: Object.values(COLLABORATOR_ROLES),
-      default: COLLABORATOR_ROLES.VIEWER,
+      default: "collaborator",
     },
     status: {
       type: String,

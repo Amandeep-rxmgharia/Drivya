@@ -10,12 +10,6 @@ export const VISIBILITY = Object.freeze({
   RESTRICTED: "restricted",
 });
 
-/** Collaborator roles (owner is implicit on the share record). */
-export const COLLABORATOR_ROLES = Object.freeze({
-  VIEWER: "viewer",
-  EDITOR: "editor",
-});
-
 /** Collaborator invitation lifecycle. */
 export const COLLABORATOR_STATUS = Object.freeze({
   PENDING: "pending",
@@ -34,7 +28,6 @@ export const EXPIRATION_PRESETS = Object.freeze({
 export const DEFAULT_PERMISSIONS = Object.freeze({
   allowView: true,
   allowDownload: true,
-  allowEdit: false,
 });
 
 /** Cache key prefixes (Redis-ready naming). */

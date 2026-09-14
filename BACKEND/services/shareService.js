@@ -8,7 +8,6 @@ import User from "../models/userModel.js";
 import {
   RESOURCE_TYPES,
   VISIBILITY,
-  COLLABORATOR_ROLES,
   COLLABORATOR_STATUS,
   CACHE_KEYS,
   CACHE_TTL,
@@ -128,7 +127,6 @@ export async function createOrGetShare(ownerId, { resourceType, resourceId }) {
     permissions: {
       allowView: true,
       allowDownload: defaultAccess === "view-download" ? true : allowDownload,
-      allowEdit: false,
     },
     isPasswordProtected: passwordShouldBeRequired,
     passwordHash: null,
@@ -456,7 +454,7 @@ export async function deleteShare(ownerId, shareId) {
 
 // ─── Collaborators ───────────────────────────────────────────────
 
-export async function inviteCollaborator(ownerId, shareId, { email, role }) {
+export async function inviteCollaborator(ownerId, shareId, { email }) {
   const share = await Share.findOne({
     _id: shareId,
     ownerId,
@@ -490,7 +488,7 @@ export async function inviteCollaborator(ownerId, shareId, { email, role }) {
     email: normalizedEmail,
     userId: existingUser?._id || null,
     displayName: existingUser?.name || normalizedEmail.split("@")[0],
-    role: role || COLLABORATOR_ROLES.VIEWER,
+    role: "collaborator",
     status: existingUser
       ? COLLABORATOR_STATUS.ACCEPTED
       : COLLABORATOR_STATUS.PENDING,
@@ -516,29 +514,6 @@ export async function inviteCollaborator(ownerId, shareId, { email, role }) {
   }
 
   return formatCollaboratorResponse(collaborator.toObject());
-}
-
-export async function updateCollaboratorRole(
-  ownerId,
-  shareId,
-  collaboratorId,
-  role,
-) {
-  const share = await Share.findOne({ _id: shareId, ownerId });
-  if (!share) throw notFound("Share not found.");
-
-  const collaborator = await ShareCollaborator.findOneAndUpdate(
-    {
-      _id: collaboratorId,
-      shareId,
-    },
-    { role },
-    { new: true },
-  ).lean();
-
-  if (!collaborator) throw notFound("Collaborator not found.");
-
-  return formatCollaboratorResponse(collaborator);
 }
 
 export async function deleteCollaborator(ownerId, shareId, collaboratorId) {
@@ -777,7 +752,7 @@ function formatCollaboratorResponse(collaborator) {
     id: collaborator._id,
     email: collaborator.email,
     name: collaborator.displayName || collaborator.email.split("@")[0],
-    role: collaborator.role,
+    role: "Collaborator",
     status: collaborator.status,
     invitedAt: collaborator.invitedAt,
     acceptedAt: collaborator.acceptedAt,

@@ -26,7 +26,6 @@ import {
   getShare,
   updateShare,
   inviteCollaborator,
-  updateCollaboratorRole,
   revokeCollaborator,
 } from "../../../api/shares.js";
 
@@ -85,10 +84,8 @@ export function ShareModal({ file, onClose, onShareUpdated }) {
 
   const [expiration, setExpiration] = useState("Never");
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState("Viewer");
   const [isInviting, setIsInviting] = useState(false);
   const [allowDownload, setAllowDownload] = useState(true);
-  const [allowEdit, setAllowEdit] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [showExpirationDropdown, setShowExpirationDropdown] = useState(false);
   const [sharedUsers, setSharedUsers] = useState([]);
@@ -112,7 +109,6 @@ export function ShareModal({ file, onClose, onShareUpdated }) {
       setPasswordEnabled(share.password);
       setVisibility(share.visibility);
       setAllowDownload(share.permissions?.allowDownload ?? true);
-      setAllowEdit(share.permissions?.allowEdit ?? false);
 
       // Auto-generated password (plaintext) is now delivered via notification inbox.
 
@@ -163,7 +159,6 @@ export function ShareModal({ file, onClose, onShareUpdated }) {
       if (share.expiresAt) setExpiration(share.expiresAt);
       if (share.permissions) {
         setAllowDownload(share.permissions.allowDownload ?? true);
-        setAllowEdit(share.permissions.allowEdit ?? false);
       }
       onShareUpdated?.(file.id, share);
       return share;
@@ -184,14 +179,6 @@ export function ShareModal({ file, onClose, onShareUpdated }) {
     }
   };
 
-  const handleToggleEdit = async () => {
-    const nextVal = !allowEdit;
-    const share = await syncShare({ permissions: { allowEdit: nextVal } });
-    if (share) {
-      setAllowEdit(nextVal);
-      addToast(nextVal ? "Editing enabled" : "Editing disabled");
-    }
-  };
 
   const handleCopyLink = async () => {
     const url = shareLinkUrl || `http://localhost:5173/${file.id}`;
@@ -233,11 +220,10 @@ export function ShareModal({ file, onClose, onShareUpdated }) {
     try {
       await inviteCollaborator(shareId, {
         email: inviteEmail.trim(),
-        role: inviteRole,
       });
       const detail = await getShare(shareId);
       setSharedUsers(detail.sharedUsers);
-      addToast(`Invited ${inviteEmail.trim()} as ${inviteRole}`);
+      addToast(`Invited ${inviteEmail.trim()}`);
       setInviteEmail("");
 
       if (!linkActive) {
@@ -248,23 +234,6 @@ export function ShareModal({ file, onClose, onShareUpdated }) {
       addToast(err.response?.data?.message || "Failed to send invite.");
     } finally {
       setIsInviting(false);
-    }
-  };
-
-  const handleUpdateUserRole = async (email, newRole) => {
-    const collaborator = sharedUsers.find((u) => u.email === email);
-    if (!collaborator?.id || collaborator.role === "Owner" || !shareId) return;
-
-    try {
-      await updateCollaboratorRole(shareId, collaborator.id, newRole);
-      setSharedUsers((prev) =>
-        prev.map((user) =>
-          user.email === email ? { ...user, role: newRole } : user,
-        ),
-      );
-      addToast(`Role updated to ${newRole} for ${email}`);
-    } catch (err) {
-      addToast(err.response?.data?.message || "Failed to update role.");
     }
   };
 
@@ -483,10 +452,9 @@ export function ShareModal({ file, onClose, onShareUpdated }) {
                                 Invite Collaborators
                               </label>
 
-                              {/* Mobile: stacked layout / Desktop: inline layout */}
                               <form
                                 onSubmit={handleSendInvite}
-                                className="flex flex-col sm:flex-row gap-2"
+                                className="flex gap-2"
                               >
                                 <div className="relative flex-1">
                                   <input
@@ -494,75 +462,16 @@ export function ShareModal({ file, onClose, onShareUpdated }) {
                                     value={inviteEmail}
                                     onChange={(e) => setInviteEmail(e.target.value)}
                                     placeholder="Add email address..."
-                                    className="h-12 sm:h-11 w-full rounded-2xl border border-border/60 bg-secondary/15 pl-4 pr-4 sm:pr-32 text-sm sm:text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary/60 focus:ring-4 focus:ring-primary/10 transition-all font-medium"
+                                    className="h-11 w-full rounded-2xl border border-border/60 bg-secondary/15 px-4 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary/60 focus:ring-4 focus:ring-primary/10 transition-all font-medium"
                                   />
-
-                                  {/* Segmented Viewer/Editor CSS selector — hidden on mobile, shown inside input on sm+ */}
-                                  <div className="hidden sm:flex absolute right-1.5 top-1/2 -translate-y-1/2 bg-secondary/50 border border-border/40 p-0.5 rounded-xl select-none">
-                                    {["Viewer", "Editor"].map((role) => (
-                                      <button
-                                        key={role}
-                                        type="button"
-                                        onClick={() => setInviteRole(role)}
-                                        className={cn(
-                                          "rounded-lg px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-wider cursor-pointer transition-all duration-150",
-                                          inviteRole === role
-                                            ? "bg-primary text-primary-foreground shadow-sm"
-                                            : "text-muted-foreground hover:text-foreground",
-                                        )}
-                                      >
-                                        {role}
-                                      </button>
-                                    ))}
-                                  </div>
                                 </div>
 
-                                {/* Mobile-only: role selector + invite button row */}
-                                <div className="flex sm:hidden gap-2">
-                                  <div className="flex bg-secondary/50 border border-border/40 p-0.5 rounded-xl select-none flex-1">
-                                    {["Viewer", "Editor"].map((role) => (
-                                      <button
-                                        key={role}
-                                        type="button"
-                                        onClick={() => setInviteRole(role)}
-                                        className={cn(
-                                          "rounded-lg flex-1 py-2 text-[10px] font-extrabold uppercase tracking-wider cursor-pointer transition-all duration-150 text-center",
-                                          inviteRole === role
-                                            ? "bg-primary text-primary-foreground shadow-sm"
-                                            : "text-muted-foreground hover:text-foreground",
-                                        )}
-                                      >
-                                        {role}
-                                      </button>
-                                    ))}
-                                  </div>
-
-                                  <button
-                                    type="submit"
-                                    disabled={isInviting || !inviteEmail.trim()}
-                                    className={cn(
-                                      primaryBtn,
-                                      "h-11 px-5 shadow-glow rounded-2xl text-xs gap-1.5 font-bold shrink-0 cursor-pointer disabled:opacity-50 disabled:pointer-events-none active:scale-95 transition-all",
-                                    )}
-                                  >
-                                    {isInviting ? (
-                                      <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                      <>
-                                        <Plus className="h-4 w-4" />
-                                        Invite
-                                      </>
-                                    )}
-                                  </button>
-                                </div>
-
-                                {/* Desktop-only invite button */}
                                 <button
                                   type="submit"
                                   disabled={isInviting || !inviteEmail.trim()}
                                   className={cn(
                                     primaryBtn,
-                                    "hidden sm:inline-flex h-11 px-4.5 shadow-glow rounded-2xl text-xs gap-1.5 font-bold shrink-0 cursor-pointer disabled:opacity-50 disabled:pointer-events-none active:scale-95 transition-all",
+                                    "h-11 px-4.5 shadow-glow rounded-2xl text-xs gap-1.5 font-bold shrink-0 cursor-pointer disabled:opacity-50 disabled:pointer-events-none active:scale-95 transition-all",
                                   )}
                                 >
                                   {isInviting ? (
@@ -636,29 +545,9 @@ export function ShareModal({ file, onClose, onShareUpdated }) {
                                           </span>
                                         ) : (
                                           <>
-                                            {/* Dynamic User Role Selector Switcher (Lightweight CSS-based switch) */}
-                                            <div className="flex bg-secondary/55 border border-border/45 p-0.5 rounded-xl select-none">
-                                              {["Viewer", "Editor"].map((r) => (
-                                                <button
-                                                  key={r}
-                                                  type="button"
-                                                  onClick={() =>
-                                                    handleUpdateUserRole(
-                                                      user.email,
-                                                      r,
-                                                    )
-                                                  }
-                                                  className={cn(
-                                                    "rounded-lg px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-wider cursor-pointer transition-all duration-150",
-                                                    user.role === r
-                                                      ? "bg-primary text-primary-foreground shadow-sm"
-                                                      : "text-muted-foreground hover:text-foreground",
-                                                  )}
-                                                >
-                                                  {r}
-                                                </button>
-                                              ))}
-                                            </div>
+                                            <span className="text-[9px] font-extrabold text-muted-foreground/80 bg-secondary/50 border border-border/40 px-3 py-1 rounded-xl uppercase tracking-wider">
+                                              Collaborator
+                                            </span>
 
                                             {/* Access Revocation Button */}
                                             <button
@@ -914,33 +803,6 @@ export function ShareModal({ file, onClose, onShareUpdated }) {
                                       />
                                     </button>
                                   </div>
-
-                                  {kind === "text" && (
-                                    <div className="flex items-center justify-between">
-                                      <span className="text-xs text-foreground font-medium">
-                                        Allow Public Editing
-                                      </span>
-                                      <button
-                                        type="button"
-                                        onClick={handleToggleEdit}
-                                        className={cn(
-                                          "relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-300 focus:outline-none cursor-pointer border border-transparent",
-                                          allowEdit
-                                            ? "bg-primary border-primary/20"
-                                            : "bg-secondary border-border/60",
-                                        )}
-                                      >
-                                        <span
-                                          className={cn(
-                                            "inline-block h-3 w-3 transform rounded-full bg-white transition-transform shadow-sm",
-                                            allowEdit
-                                              ? "translate-x-5"
-                                              : "translate-x-1",
-                                          )}
-                                        />
-                                      </button>
-                                    </div>
-                                  )}
                                 </div>
                               </div>
 

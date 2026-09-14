@@ -140,21 +140,7 @@ export const validateInviteCollaborator = [
     .notEmpty()
     .withMessage("Email is required.")
     .isEmail()
-    .withMessage("Please enter a valid email.")
-    ,
-
-  body("role")
-    .optional()
-    .isIn(["viewer", "editor"])
-    .withMessage("role must be 'viewer' or 'editor'."),
-];
-
-export const validateCollaboratorRole = [
-  body("role")
-    .notEmpty()
-    .withMessage("role is required.")
-    .isIn(["viewer", "editor"])
-    .withMessage("role must be 'viewer' or 'editor'."),
+    .withMessage("Please enter a valid email."),
 ];
 
 export const validateSharePassword = [

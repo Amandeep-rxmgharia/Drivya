@@ -10,7 +10,6 @@ import {
   headObject,
   deleteFile as deleteFromR2,
   deleteFiles as deleteFilesFromR2,
-  updateFileContent as updateR2Content,
 } from "../services/storageService.js";
 import { deleteSharesForResource } from "../services/shareService.js";
 import { RESOURCE_TYPES } from "../constants/shareConstants.js";
@@ -540,6 +539,8 @@ export const previewFile = async (req, res, next) => {
     // Check bandwidth limit and increment
     const allowed = await checkAndIncrementBandwidth(userId, file.size, res);
     if (!allowed) return;
+
+    res.set("Cache-Control", "private, max-age=300");
 
     return res.json({
       previewUrl: url,
@@ -1137,50 +1138,3 @@ export const restoreAllFiles = async (req, res, next) => {
   }
 };
 
-// ─── Edit File Content ───────────────────────────────────────────
-export const editFileContent = async (req, res, next) => {
-  try {
-    const userId = req.user.id;
-    const { id } = req.params;
-    const { content } = req.body;
-
-    if (content === undefined) {
-      return res.status(400).json({ message: "Content is required." });
-    }
-
-    const file = await File.findOne({ _id: id, userId, isTrashed: false });
-    if (!file) {
-      return res.status(404).json({ message: "File not found." });
-    }
-
-    await updateR2Content(file.storagePath, content);
-
-    const newSize = Buffer.byteLength(content);
-    file.size = newSize;
-    await file.save();
-
-    // Sync any active share snapshots
-    await Share.updateMany(
-      { resourceId: file._id, resourceType: RESOURCE_TYPES.FILE },
-      { "resourceSnapshot.size": newSize },
-    );
-
-    // Record edit activity (fire-and-forget)
-    recordActivity({
-      userId,
-      action: ACTIVITY_ACTIONS.EDITED,
-      resourceType: RESOURCE_TYPES.FILE,
-      resourceId: file._id,
-      resourceSnapshot: {
-        name: file.originalName,
-        mimeType: file.mimeType,
-        size: newSize,
-      },
-      parentDirId: file.directoryId,
-    }).catch((err) => console.error("Activity[edit]:", err.message));
-
-    return res.json({ message: "File content updated successfully.", file });
-  } catch (err) {
-    next(err);
-  }
-};
