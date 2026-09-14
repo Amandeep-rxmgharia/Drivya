@@ -1,4 +1,8 @@
 import Session from "../models/sessionModel.js";
+import {
+  deleteSessionFromRedis,
+  deleteUserSessionsFromRedis,
+} from "../services/sessionRedisService.js";
 
 /**
  * List all active sessions for the current authenticated user.
@@ -43,6 +47,9 @@ export const revokeSession = async (req, res, next) => {
       return res.status(404).json({ message: "Session not found." });
     }
 
+    // Immediately evict session from Redis
+    await deleteSessionFromRedis(id, req.user.id);
+
     return res.json({ message: "Session revoked successfully." });
   } catch (err) {
     next(err);
@@ -63,6 +70,9 @@ export const revokeOtherSessions = async (req, res, next) => {
       userId: req.user.id,
       _id: { $ne: currentSessionId },
     });
+
+    // Immediately evict other sessions from Redis
+    await deleteUserSessionsFromRedis(req.user.id, currentSessionId);
 
     return res.json({
       message: "All other sessions revoked successfully.",

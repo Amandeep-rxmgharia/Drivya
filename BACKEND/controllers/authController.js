@@ -6,12 +6,10 @@ import OTP from "../models/otpModel.js";
 import { parseUserAgent, parseIpAndLocation } from "../utils/uaParser.js";
 import bcrypt from "bcrypt";
 import {
-  generateAccessToken,
-  generateRefreshToken,
-  setTokenCookies,
+  generateSessionToken,
+  verifySessionToken,
+  setSessionCookie,
   clearTokenCookies,
-  verifyRefreshToken,
-  verifyAccessToken,
   generatePasswordResetToken,
   verifyPasswordResetToken,
   generateDeactivatedToken,
@@ -26,6 +24,11 @@ import {
   buildOtpauthUrl,
   verifyTotpCode,
 } from "../utils/totpUtils.js";
+import {
+  saveSessionToRedis,
+  deleteSessionFromRedis,
+  updateSessionTwoFAInRedis,
+} from "../services/sessionRedisService.js";
 
 // ─── Register ────────────────────────────────────────────────
 export const register = async (req, res, next) => {
@@ -83,10 +86,14 @@ export const register = async (req, res, next) => {
         { session },
       );
 
-      // Generate tokens
-      const accessToken = generateAccessToken(user._id.toString(), sessionDoc._id.toString(), user.role);
-      const refreshToken = generateRefreshToken(user._id.toString(), sessionDoc._id.toString());
-      setTokenCookies(res, accessToken, refreshToken);
+      // Generate session token and store in Redis
+      const sessionToken = generateSessionToken(user._id.toString(), sessionDoc._id.toString(), user.role);
+      setSessionCookie(res, sessionToken);
+      await saveSessionToRedis(sessionDoc._id.toString(), {
+        userId: user._id,
+        role: user.role,
+        twoFAVerifiedAt: sessionDoc.twoFAVerifiedAt,
+      });
 
       return res.status(201).json({
         message: "Registration successful!",
@@ -165,9 +172,13 @@ export const login = async (req, res, next) => {
       twoFAVerifiedAt: null,
     });
 
-    const accessToken = generateAccessToken(user._id.toString(), sessionDoc._id.toString(), user.role);
-    const refreshToken = generateRefreshToken(user._id.toString(), sessionDoc._id.toString(), !!rememberMe);
-    setTokenCookies(res, accessToken, refreshToken, !!rememberMe);
+    const sessionToken = generateSessionToken(user._id.toString(), sessionDoc._id.toString(), user.role, !!rememberMe);
+    setSessionCookie(res, sessionToken, !!rememberMe);
+    await saveSessionToRedis(sessionDoc._id.toString(), {
+      userId: user._id,
+      role: user.role,
+      twoFAVerifiedAt: sessionDoc.twoFAVerifiedAt,
+    }, !!rememberMe);
 
     if (user.loginAlerts !== false) {
       createNotification(user._id, {
@@ -195,69 +206,26 @@ export const login = async (req, res, next) => {
 };
 
 // ─── Refresh Token ───────────────────────────────────────────
-export const refresh = async (req, res, next) => {
-  const token = req.cookies?.refreshToken;
-
-  if (!token) {
-    return res.status(401).json({ message: "Refresh token required." });
-  }
-
-  try {
-    const decoded = verifyRefreshToken(token);
-    // Verify user still exists
-    const user = await User.findById(decoded.id).select("role isActive").lean();
-    if (!user) {
-      return res.status(401).json({ message: "User no longer exists." });
-    }
-    if (!user.isActive) {
-      return res.status(403).json({ message: "Account suspended.", code: "ACCOUNT_SUSPENDED" });
-    }
-
-    // Verify session still exists
-    if (decoded.sid) {
-      const sessionExists = await Session.exists({ _id: decoded.sid, userId: decoded.id });
-      if (!sessionExists) {
-        return res.status(401).json({ message: "Session expired or revoked.", code: "SESSION_REVOKED" });
-      }
-      // Update session last active time
-      await Session.findByIdAndUpdate(decoded.sid, { lastActive: new Date() });
-    }
-
-    // Issue new access token (token rotation)
-    const newAccessToken = generateAccessToken(decoded.id, decoded.sid, user.role);
-    const newRefreshToken = generateRefreshToken(decoded.id, decoded.sid, !!decoded.rememberMe);
-    setTokenCookies(res, newAccessToken, newRefreshToken, !!decoded.rememberMe);
-
-    return res.json({ message: "Token refreshed." });
-  } catch (err) {
-    if (err.name === "JsonWebTokenError" || err.name === "TokenExpiredError") {
-      return res.status(401).json({ message: "Invalid refresh token." });
-    }
-    next(err);
-  }
+export const refresh = async (req, res) => {
+  // With single session token architecture, refresh endpoint is kept for compatibility
+  return res.json({ message: "Session is active." });
 };
 
 // ─── Logout ──────────────────────────────────────────────────
-export const logout = async (req, res, next) => {
-  const token = req.cookies?.accessToken || req.headers.authorization?.replace("Bearer ", "");
+export const logout = async (req, res) => {
+  const token =
+    req.cookies?.sessionToken ||
+    req.cookies?.accessToken ||
+    req.headers.authorization?.replace("Bearer ", "");
+
   if (token) {
     try {
-      const decoded = verifyAccessToken(token);
+      const decoded = verifySessionToken(token);
       if (decoded.sid) {
         await Session.findByIdAndDelete(decoded.sid);
+        await deleteSessionFromRedis(decoded.sid, decoded.id);
       }
-    } catch {
-      // Fallback to refresh token if access token is expired
-      const refreshTokenCookie = req.cookies?.refreshToken;
-      if (refreshTokenCookie) {
-        try {
-          const decoded = verifyRefreshToken(refreshTokenCookie);
-          if (decoded.sid) {
-            await Session.findByIdAndDelete(decoded.sid);
-          }
-        } catch { }
-      }
-    }
+    } catch { }
   }
   clearTokenCookies(res);
   return res.json({ message: "Logged out successfully." });
@@ -379,9 +347,10 @@ export const verify2FA = async (req, res, next) => {
     user.twoFABackupCodes = hashed;
     await user.save();
 
-    // Mark current session verified
+    // Mark current session verified in MongoDB and Redis
     if (req.user.sessionId) {
       await Session.findByIdAndUpdate(req.user.sessionId, { twoFAVerifiedAt: new Date() });
+      await updateSessionTwoFAInRedis(req.user.sessionId, new Date());
     }
 
     return res.json({
@@ -467,6 +436,7 @@ export const disable2FA = async (req, res, next) => {
 
     if (req.user.sessionId) {
       await Session.findByIdAndUpdate(req.user.sessionId, { twoFAVerifiedAt: null });
+      await updateSessionTwoFAInRedis(req.user.sessionId, null);
     }
 
     return res.json({ message: "2FA disabled successfully." });
@@ -527,9 +497,10 @@ export const loginVerify2FA = async (req, res, next) => {
       return res.status(401).json({ message: "Invalid 2FA code." });
     }
 
-    // Mark session as 2FA-verified
+    // Mark session as 2FA-verified in MongoDB and Redis
     if (req.user.sessionId) {
       await Session.findByIdAndUpdate(req.user.sessionId, { twoFAVerifiedAt: new Date() });
+      await updateSessionTwoFAInRedis(req.user.sessionId, new Date());
     }
 
     return res.json({
@@ -723,9 +694,13 @@ export const resetPassword = async (req, res, next) => {
       twoFAVerifiedAt: user.twoFAEnabled ? new Date() : null,
     });
 
-    const accessToken = generateAccessToken(user._id.toString(), sessionDoc._id.toString(), user.role);
-    const refreshToken = generateRefreshToken(user._id.toString(), sessionDoc._id.toString());
-    setTokenCookies(res, accessToken, refreshToken);
+    const sessionToken = generateSessionToken(user._id.toString(), sessionDoc._id.toString(), user.role);
+    setSessionCookie(res, sessionToken);
+    await saveSessionToRedis(sessionDoc._id.toString(), {
+      userId: user._id,
+      role: user.role,
+      twoFAVerifiedAt: sessionDoc.twoFAVerifiedAt,
+    });
 
     if (user.loginAlerts !== false) {
       createNotification(user._id, {
@@ -840,9 +815,13 @@ export const verifyDeactivatedOtp = async (req, res, next) => {
       twoFAVerifiedAt: null,
     });
 
-    const accessToken = generateAccessToken(user._id.toString(), sessionDoc._id.toString(), user.role || "user");
-    const refreshToken = generateRefreshToken(user._id.toString(), sessionDoc._id.toString());
-    setTokenCookies(res, accessToken, refreshToken);
+    const sessionToken = generateSessionToken(user._id.toString(), sessionDoc._id.toString(), user.role || "user");
+    setSessionCookie(res, sessionToken);
+    await saveSessionToRedis(sessionDoc._id.toString(), {
+      userId: user._id,
+      role: user.role || "user",
+      twoFAVerifiedAt: sessionDoc.twoFAVerifiedAt,
+    });
 
     return res.json({
       message: "Account reactivated successfully!",
@@ -934,9 +913,13 @@ export const verifyDeactivated2FA = async (req, res, next) => {
       twoFAVerifiedAt: new Date(),
     });
 
-    const accessToken = generateAccessToken(user._id.toString(), sessionDoc._id.toString(), user.role || "user");
-    const refreshToken = generateRefreshToken(user._id.toString(), sessionDoc._id.toString());
-    setTokenCookies(res, accessToken, refreshToken);
+    const sessionToken = generateSessionToken(user._id.toString(), sessionDoc._id.toString(), user.role || "user");
+    setSessionCookie(res, sessionToken);
+    await saveSessionToRedis(sessionDoc._id.toString(), {
+      userId: user._id,
+      role: user.role || "user",
+      twoFAVerifiedAt: sessionDoc.twoFAVerifiedAt,
+    });
 
     return res.json({
       message: "Account reactivated and logged in successfully!",

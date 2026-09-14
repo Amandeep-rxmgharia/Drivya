@@ -31,6 +31,13 @@ export async function requireTwoFA(req, res, next) {
             });
         }
 
+        // Check Redis first
+        const { getSessionFromRedis, updateSessionTwoFAInRedis } = await import("../services/sessionRedisService.js");
+        const redisSession = await getSessionFromRedis(sessionId);
+        if (redisSession?.twoFAVerifiedAt) {
+            return next();
+        }
+
         const session = await Session.findById(sessionId).select("twoFAVerifiedAt").lean();
         if (!session || !session.twoFAVerifiedAt) {
             return res.status(403).json({
@@ -38,6 +45,9 @@ export async function requireTwoFA(req, res, next) {
                 code: "TWOFA_REQUIRED",
             });
         }
+
+        // Sync Redis if verified in MongoDB
+        updateSessionTwoFAInRedis(sessionId, session.twoFAVerifiedAt);
 
         next();
     } catch (err) {

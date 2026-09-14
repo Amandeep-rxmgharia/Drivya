@@ -5,11 +5,11 @@ import Session from "../models/sessionModel.js";
 import Directory from "../models/directoryModel.js";
 import { parseUserAgent, parseIpAndLocation } from "../utils/uaParser.js";
 import {
-  generateAccessToken,
-  generateRefreshToken,
-  setTokenCookies,
+  generateSessionToken,
+  setSessionCookie,
   generateDeactivatedToken,
 } from "../config/tokenUtils.js";
+import { saveSessionToRedis } from "../services/sessionRedisService.js";
 import { createNotification } from "../services/notificationService.js";
 import { saveFile } from "../services/storageService.js";
 
@@ -155,16 +155,17 @@ async function createSessionAndSetCookies(user, req, res) {
     twoFAVerifiedAt: null,
   });
 
-  const accessToken = generateAccessToken(
+  const sessionToken = generateSessionToken(
     user._id.toString(),
     sessionDoc._id.toString(),
     user.role,
   );
-  const refreshToken = generateRefreshToken(
-    user._id.toString(),
-    sessionDoc._id.toString(),
-  );
-  setTokenCookies(res, accessToken, refreshToken);
+  setSessionCookie(res, sessionToken);
+  await saveSessionToRedis(sessionDoc._id.toString(), {
+    userId: user._id,
+    role: user.role,
+    twoFAVerifiedAt: sessionDoc.twoFAVerifiedAt,
+  });
 
   if (user.loginAlerts !== false) {
     createNotification(user._id, {

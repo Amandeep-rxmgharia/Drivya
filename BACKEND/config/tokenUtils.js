@@ -1,94 +1,92 @@
 import jwt from "jsonwebtoken";
 
 const {
+  JWT_SESSION_SECRET,
   JWT_ACCESS_SECRET,
   JWT_REFRESH_SECRET,
   JWT_SHARE_SECRET,
   FILE_WORKER_JWT_SECRET,
+  SESSION_TOKEN_EXPIRY = "7d",
   ACCESS_TOKEN_EXPIRY = "15m",
   REFRESH_TOKEN_EXPIRY = "7d",
   SHARE_ACCESS_TOKEN_EXPIRY = "1h",
   NODE_ENV,
 } = process.env;
 
+const SESSION_SECRET = JWT_SESSION_SECRET || JWT_ACCESS_SECRET;
 const SHARE_SECRET = JWT_SHARE_SECRET || JWT_ACCESS_SECRET;
 const FILE_WORKER_SECRET = FILE_WORKER_JWT_SECRET || JWT_ACCESS_SECRET;
 
 /**
- * Generate a short-lived access token.
- * @param {string} userId
- * @returns {string}
- */
-export function generateAccessToken(userId, sessionId, role = "user") {
-  return jwt.sign({ id: userId, sid: sessionId, role }, JWT_ACCESS_SECRET, {
-    expiresIn: ACCESS_TOKEN_EXPIRY,
-  });
-}
-
-/**
- * Generate a long-lived refresh token.
+ * Generate a single session token.
  * @param {string} userId
  * @param {string} sessionId
+ * @param {string} role
  * @param {boolean} rememberMe
  * @returns {string}
  */
-export function generateRefreshToken(userId, sessionId, rememberMe = false) {
-  return jwt.sign({ id: userId, sid: sessionId, rememberMe }, JWT_REFRESH_SECRET, {
-    expiresIn: REFRESH_TOKEN_EXPIRY,
+export function generateSessionToken(userId, sessionId, role = "user", rememberMe = false) {
+  const expiresIn = rememberMe ? "30d" : (SESSION_TOKEN_EXPIRY || "7d");
+  return jwt.sign({ id: userId, sid: sessionId, role }, SESSION_SECRET, {
+    expiresIn,
   });
 }
 
 /**
- * Verify an access token.
+ * Verify a session token.
  * @param {string} token
  * @returns {object} decoded payload
  */
-export function verifyAccessToken(token) {
-  return jwt.verify(token, JWT_ACCESS_SECRET);
+export function verifySessionToken(token) {
+  return jwt.verify(token, SESSION_SECRET);
 }
 
 /**
- * Verify a refresh token.
- * @param {string} token
- * @returns {object} decoded payload
+ * Set session token as httpOnly cookie and clear old token cookies.
+ * @param {object} res - Express response
+ * @param {string} sessionToken
+ * @param {boolean} rememberMe
  */
-export function verifyRefreshToken(token) {
-  return jwt.verify(token, JWT_REFRESH_SECRET);
-}
-
-/**
- * Set access + refresh tokens as httpOnly cookies.
- */
-export function setTokenCookies(res, accessToken, refreshToken, rememberMe = false) {
+export function setSessionCookie(res, sessionToken, rememberMe = false) {
   const isProduction = NODE_ENV === "production";
+  const maxAge = (rememberMe ? 30 : 7) * 24 * 60 * 60 * 1000; // 30 days or 7 days
 
-  res.cookie("accessToken", accessToken, {
+  res.cookie("sessionToken", sessionToken, {
     httpOnly: true,
     secure: isProduction,
     sameSite: isProduction ? "strict" : "lax",
-    maxAge: 15 * 60 * 1000, // 15 minutes
+    maxAge,
     path: "/",
   });
 
-  const refreshCookieOptions = {
-    httpOnly: true,
-    secure: isProduction,
-    sameSite: isProduction ? "strict" : "lax",
-     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    path: "/",
-  };
-
-  if (rememberMe) {
-    refreshCookieOptions.maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days
-  }
-
-  res.cookie("refreshToken", refreshToken, refreshCookieOptions);
-}
-
-export function clearTokenCookies(res) {
+  // Clear legacy access and refresh cookies
   res.clearCookie("accessToken", { path: "/" });
   res.clearCookie("refreshToken", { path: "/" });
 }
+
+/**
+ * Clear all auth cookies (sessionToken and legacy cookies).
+ * @param {object} res - Express response
+ */
+export function clearTokenCookies(res) {
+  res.clearCookie("sessionToken", { path: "/" });
+  res.clearCookie("accessToken", { path: "/" });
+  res.clearCookie("refreshToken", { path: "/" });
+}
+
+// ─── Backward-compatible Aliases ──────────────────────────────
+export const generateAccessToken = (userId, sessionId, role = "user") =>
+  generateSessionToken(userId, sessionId, role, false);
+
+export const generateRefreshToken = (userId, sessionId, rememberMe = false) =>
+  generateSessionToken(userId, sessionId, "user", rememberMe);
+
+export const verifyAccessToken = verifySessionToken;
+export const verifyRefreshToken = verifySessionToken;
+
+export const setTokenCookies = (res, accessToken, _refreshToken, rememberMe = false) => {
+  setSessionCookie(res, accessToken, rememberMe);
+};
 
 /**
  * Short-lived token granting access to a password-protected public share.

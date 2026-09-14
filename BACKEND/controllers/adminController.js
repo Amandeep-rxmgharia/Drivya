@@ -122,6 +122,8 @@ export const changeUserRole = async (req, res, next) => {
 
     // Revoke target user's active sessions to force re-authentication (so JWT updates)
     await Session.deleteMany({ userId: targetUser._id });
+    const { deleteUserSessionsFromRedis } = await import("../services/sessionRedisService.js");
+    await deleteUserSessionsFromRedis(targetUser._id);
 
     // Log action
     await AuditLog.create({
@@ -166,8 +168,10 @@ export const toggleSuspend = async (req, res, next) => {
     const action = targetUser.isActive ? AUDIT_ACTIONS.USER_UNSUSPEND : AUDIT_ACTIONS.USER_SUSPEND;
 
     if (!targetUser.isActive) {
-      // Force log out immediately by deleting sessions
+      // Force log out immediately by deleting sessions from DB and Redis
       await Session.deleteMany({ userId: targetUser._id });
+      const { deleteUserSessionsFromRedis } = await import("../services/sessionRedisService.js");
+      await deleteUserSessionsFromRedis(targetUser._id);
     }
 
     // Log action
@@ -222,6 +226,10 @@ export const deleteUser = async (req, res, next) => {
       // Since this is a production-level architecture plan, we will keep it simple and clean DB records first.
       
       await User.findByIdAndDelete(targetUser._id).session(session);
+
+      // Invalidate Redis sessions
+      const { deleteUserSessionsFromRedis } = await import("../services/sessionRedisService.js");
+      await deleteUserSessionsFromRedis(targetUser._id);
 
       // Log action
       await AuditLog.create([{

@@ -10,54 +10,19 @@ const api = axios.create({
   },
 });
 
-// ─── Flag to prevent multiple refresh calls at once ──────────
-let isRefreshing = false;
-let failedQueue = [];
-
-function processQueue(error) {
-  failedQueue.forEach((prom) => {
-    if (error) {
-      prom.reject(error);
-    } else {
-      prom.resolve();
-    }
-  });
-  failedQueue = [];
-}
-
-// ─── Response Interceptor: auto-refresh on 401 ──────────────
+// ─── Response Interceptor: handle session expiry ──────────────
 api.interceptors.response.use(
   (response) => response,
-  async (error) => {
-    const originalRequest = error.config;
-
-    // If 401 with TOKEN_EXPIRED and not already retried
-    if (
-      error.response?.status === 401 &&
-      error.response?.data?.code === "TOKEN_EXPIRED" &&
-      !originalRequest._retry
-    ) {
-      if (isRefreshing) {
-        // Queue requests while refresh is in progress
-        return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject });
-        }).then(() => api(originalRequest));
-      }
-
-      originalRequest._retry = true;
-      isRefreshing = true;
-
-      try {
-        await api.post("/auth/refresh");
-        processQueue(null);
-        return api(originalRequest);
-      } catch (refreshError) {
-        processQueue(refreshError);
-        // Redirect to login on refresh failure
-        window.location.href = "/auth";
-        return Promise.reject(refreshError);
-      } finally {
-        isRefreshing = false;
+  (error) => {
+    // If 401 (unauthorized or session expired) on a protected page, redirect to /auth
+    if (error.response?.status === 401) {
+      if (typeof window !== "undefined") {
+        const path = window.location.pathname;
+        const isAuthPage = path.startsWith("/auth");
+        const isPublicPage = path.startsWith("/s/") || path === "/";
+        if (!isAuthPage && !isPublicPage) {
+          window.location.href = "/auth";
+        }
       }
     }
 
@@ -83,8 +48,8 @@ export const logoutUser = async () => {
 };
 
 export const refreshToken = async () => {
-  const response = await api.post("/auth/refresh");
-  return response.data;
+  // Single session token in use; no token refresh needed
+  return { message: "Single session token in use." };
 };
 
 export const getCurrentUser = async () => {

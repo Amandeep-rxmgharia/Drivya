@@ -473,6 +473,9 @@ export const deleteAccount = async (req, res, next) => {
       await User.findByIdAndDelete(user._id).session(session);
     });
 
+    const { deleteUserSessionsFromRedis } = await import("../services/sessionRedisService.js");
+    await deleteUserSessionsFromRedis(user._id);
+
     clearTokenCookies(res);
 
     return res.json({ message: "Account deleted successfully." });
@@ -493,9 +496,12 @@ export const deactivateAccount = async (req, res, next) => {
     user.isDeactivated = true;
     await user.save();
 
-    // Revoke all active sessions for this user
+    // Revoke all active sessions for this user in MongoDB and Redis
     const Session = (await import("../models/sessionModel.js")).default;
     await Session.deleteMany({ userId: user._id });
+
+    const { deleteUserSessionsFromRedis } = await import("../services/sessionRedisService.js");
+    await deleteUserSessionsFromRedis(user._id);
 
     clearTokenCookies(res);
 
