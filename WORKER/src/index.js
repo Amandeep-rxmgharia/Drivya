@@ -1,12 +1,15 @@
 /**
  * Cloudflare Worker: Drivya Fast Edge CDN File Proxy
- * 
+ *
  * Features:
  * - High-speed Web Crypto HMAC-SHA256 JWT validation (<1ms)
  * - Zero-latency Cloudflare R2 bucket binding access
  * - Global edge caching via caches.default (RAM/SSD cache, sub-10ms TTFB)
  * - HTTP Range requests (206 Partial Content) for instant video/audio streaming
  * - Strict access control per file key
+ *
+ * NOTE: Debug logging is included (lines tagged "[cache]"). Remove once
+ * caching behavior is confirmed working in production.
  */
 
 // ─── Web Crypto JWT Verification ─────────────────────────────────
@@ -63,6 +66,8 @@ const CORS_HEADERS = {
   "Access-Control-Expose-Headers": "Content-Length, Content-Range, Content-Disposition, ETag, Cache-Control, CF-Cache-Status, Last-Modified",
   "Access-Control-Max-Age": "86400",
 };
+
+const MAX_CACHE_BODY_SIZE = 256 * 1024 * 1024; // 256 MB
 
 // ─── Worker Fetch Handler ────────────────────────────────────────
 
@@ -148,19 +153,32 @@ export default {
     }
 
     // 5. Cloudflare Edge Cache Lookup (caches.default)
-    // Strip dynamic ?token= so all authorized requests share the edge cache
+    // Use a plain URL string as cache key — simpler and avoids Request
+    // header matching issues. Strip ?token= so all authorized requests
+    // for the same file share one cache entry.
     const cache = typeof caches !== "undefined" ? caches.default : null;
     const cacheUrl = new URL(request.url);
     cacheUrl.searchParams.delete("token");
-    const cacheKey = new Request(cacheUrl.toString(), {
-      method: "GET",
-      headers: request.headers,
-    });
+    const cacheKeyUrl = cacheUrl.toString();
 
     const isRangeRequest = request.headers.has("range");
+    const clientIfNoneMatch = request.headers.get("if-none-match");
+
+    console.log(
+      "[cache] incoming:",
+      cacheKeyUrl,
+      "| cf-ray:",
+      request.headers.get("cf-ray"),
+      "| range:",
+      isRangeRequest,
+      "| if-none-match:",
+      clientIfNoneMatch,
+    );
 
     if (cache && !isRangeRequest && request.method === "GET") {
-      const cachedResponse = await cache.match(cacheKey);
+      const cachedResponse = await cache.match(cacheKeyUrl);
+      console.log("[cache] match result:", cachedResponse ? "FOUND" : "NOT FOUND");
+
       if (cachedResponse) {
         const responseHeaders = new Headers(cachedResponse.headers);
         responseHeaders.set("CF-Cache-Status", "HIT");
@@ -171,10 +189,9 @@ export default {
           responseHeaders.set(k, v);
         }
 
-        // Handle client conditional If-None-Match
-        const clientEtag = request.headers.get("if-none-match");
+        // Client already has the current version cached locally — 304
         const cachedEtag = responseHeaders.get("etag");
-        if (clientEtag && cachedEtag && (clientEtag === cachedEtag || clientEtag === "*")) {
+        if (clientIfNoneMatch && cachedEtag && (clientIfNoneMatch === cachedEtag || clientIfNoneMatch === "*")) {
           return new Response(null, {
             status: 304,
             headers: responseHeaders,
@@ -197,17 +214,27 @@ export default {
       });
     }
 
+    // IMPORTANT: We deliberately do NOT pass `onlyIf` based on the client's
+    // If-None-Match header here. If we did, R2 would return a bodyless
+    // object whenever the client's ETag matched, which meant we could
+    // never buffer + cache.put() the object on repeat visits — this was
+    // the root cause of "always MISS". We always fetch the full object
+    // from R2 (letting the edge cache above handle repeat-hit short
+    // circuiting), and only decide on 304 ourselves once we know the etag.
     const getOptions = {};
     if (isRangeRequest) {
       getOptions.range = request.headers;
     }
-    if (request.headers.has("if-match") || request.headers.has("if-none-match")) {
-      getOptions.onlyIf = request.headers;
+    if (request.headers.has("if-match")) {
+      getOptions.onlyIf = { etagMatches: request.headers.get("if-match") };
     }
 
     const object = await env.BUCKET.get(requestedKey, getOptions);
 
+    console.log("[cache] R2 object:", object ? "FOUND" : "NULL", "| key:", requestedKey, "| size:", object?.size);
+
     if (!object) {
+      console.warn("[cache] R2 returned null — returning 404 for key:", requestedKey);
       return new Response(JSON.stringify({ error: "File not found" }), {
         status: 404,
         headers: { "Content-Type": "application/json", ...CORS_HEADERS },
@@ -219,6 +246,10 @@ export default {
     if (typeof object.writeHttpMetadata === "function") {
       object.writeHttpMetadata(headers);
     }
+
+    // Remove any Vary header injected by R2 writeHttpMetadata — it causes
+    // cache variant fragmentation with our headerless cache key
+    headers.delete("Vary");
 
     const etag = object.httpEtag || `"${object.etag || requestedKey}"`;
     headers.set("etag", etag);
@@ -235,15 +266,6 @@ export default {
 
     for (const [k, v] of Object.entries(CORS_HEADERS)) {
       headers.set(k, v);
-    }
-
-    // Handle client conditional If-None-Match (304 Not Modified)
-    const ifNoneMatch = request.headers.get("if-none-match");
-    if (ifNoneMatch && (ifNoneMatch === etag || ifNoneMatch === "*")) {
-      return new Response(null, {
-        status: 304,
-        headers,
-      });
     }
 
     // Content-Type override (from token or object metadata)
@@ -263,8 +285,12 @@ export default {
     }
 
     // Determine status & content-range for HTTP Range streaming
+    // IMPORTANT: Do not rely on `object.range` truthiness alone — some R2
+    // binding versions attach a full-file range object even when no Range
+    // header was requested, which was incorrectly forcing every response
+    // to 206 and breaking edge caching (cache only stores true 200s).
     let status = 200;
-    if (object.range) {
+    if (isRangeRequest && object.range) {
       status = 206;
       headers.set("content-range", `bytes ${object.range.offset}-${object.range.offset + object.range.length - 1}/${object.size}`);
       headers.set("content-length", object.range.length.toString());
@@ -272,21 +298,79 @@ export default {
       headers.set("content-length", object.size.toString());
     }
 
-    const response = new Response(request.method === "HEAD" ? null : object.body, {
-      headers,
-      status,
-    });
-
     // 8. Store in Cloudflare Edge Cache for subsequent requests
-    if (cache && status === 200 && !isRangeRequest && request.method === "GET") {
-      const responseToCache = response.clone();
+    // IMPORTANT: R2 ReadableStream bodies silently fail when cloned/tee'd
+    // for cache.put(). Buffer as ArrayBuffer so cache.put reliably stores
+    // the full response. Skip caching for files > 256 MB to avoid memory pressure.
+    // This now runs BEFORE any 304 decision, so caching happens on every
+    // fresh visit regardless of what the client's own conditional headers say.
+    const shouldCache = cache
+      && status === 200
+      && !isRangeRequest
+      && request.method === "GET"
+      && (object.size === undefined || object.size <= MAX_CACHE_BODY_SIZE);
+
+    console.log(
+      "[cache] shouldCache decision:",
+      shouldCache,
+      "| cache exists:",
+      !!cache,
+      "| status:",
+      status,
+      "| isRangeRequest:",
+      isRangeRequest,
+      "| method:",
+      request.method,
+      "| object.size:",
+      object.size,
+    );
+
+    let body = null;
+
+    if (shouldCache) {
+      // Buffer the R2 body — ArrayBuffer works reliably with cache.put
+      body = await object.arrayBuffer();
+      headers.set("content-length", body.byteLength.toString());
+
+      const responseToCache = new Response(body, {
+        status: 200,
+        headers: new Headers(headers),
+      });
+
+      console.log("[cache] attempting PUT key:", cacheKeyUrl, "| size:", body.byteLength);
+
       if (ctx && typeof ctx.waitUntil === "function") {
-        ctx.waitUntil(cache.put(cacheKey, responseToCache));
+        ctx.waitUntil(
+          cache
+            .put(cacheKeyUrl, responseToCache)
+            .then(() => console.log("[cache] PUT success:", cacheKeyUrl))
+            .catch((err) => {
+              // cache.put can fail on eviction pressure — not fatal
+              console.error("[cache] PUT failed:", err && err.message, "| key:", cacheKeyUrl);
+            }),
+        );
       } else {
-        await cache.put(cacheKey, responseToCache);
+        console.warn("[cache] no ctx.waitUntil available — skipping cache.put");
       }
     }
 
-    return response;
+    // 9. Now it's safe to honor the client's own conditional request
+    if (clientIfNoneMatch && (clientIfNoneMatch === etag || clientIfNoneMatch === "*")) {
+      return new Response(null, {
+        status: 304,
+        headers,
+      });
+    }
+
+    if (shouldCache) {
+      // Return a separate Response to the client from the same buffer
+      return new Response(body, { headers, status });
+    }
+
+    // Non-cacheable path (range requests, HEAD, oversized files)
+    return new Response(request.method === "HEAD" ? null : object.body, {
+      headers,
+      status,
+    });
   },
 };

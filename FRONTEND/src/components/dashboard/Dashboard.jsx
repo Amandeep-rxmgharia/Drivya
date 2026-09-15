@@ -58,6 +58,7 @@ import {
   clearNotifications as apiClearNotifications,
   NOTIFICATION_STREAM_BASE,
 } from "../../../api/notifications.js";
+import { detectFileKind, getFileTypeStyle } from "@/lib/file-types";
 
 const API_BASE = "http://localhost:3000";
 
