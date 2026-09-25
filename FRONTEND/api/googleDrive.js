@@ -1,6 +1,6 @@
 import api from "./auth.js";
 
-const API_BASE = "http://localhost:3000";
+const API_BASE = "https://api.drivya.cloud";
 
 /**
  * Get the Google OAuth consent URL.

@@ -38,7 +38,7 @@ import {
 } from "../../../../api/account.js";
 import { logoutUser } from "../../../../api/auth.js";
 
-const API_BASE = "http://localhost:3000";
+const API_BASE = "https://api.drivya.cloud";
 
 /* ─── helpers ───────────────────────────────────────────────── */
 

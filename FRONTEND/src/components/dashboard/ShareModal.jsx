@@ -181,7 +181,7 @@ export function ShareModal({ file, onClose, onShareUpdated }) {
 
 
   const handleCopyLink = async () => {
-    const url = shareLinkUrl || `http://localhost:5173/${file.id}`;
+    const url = shareLinkUrl || `https://drivya.cloud/${file.id}`;
     navigator.clipboard?.writeText?.(url);
     setCopied(true);
     addToast("Link copied to clipboard");
@@ -302,7 +302,7 @@ export function ShareModal({ file, onClose, onShareUpdated }) {
   };
 
   const kind = detectFileKind(file.name, file.kind);
-  const shareLinkDisplay = shareLinkUrl || `http://localhost:5173/${file.id}`;
+  const shareLinkDisplay = shareLinkUrl || `https://drivya.cloud/${file.id}`;
 
   const removeToast = (id) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
