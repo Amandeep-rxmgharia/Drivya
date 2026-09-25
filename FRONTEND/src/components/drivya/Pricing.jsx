@@ -1,55 +1,77 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "motion/react";
-import { Check } from "lucide-react";
+import { Check, Zap, Rocket, Shield, Crown, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Section, SectionHeading } from "./Section";
 import { easeSmooth } from "@/lib/motion-presets";
 
 const plans = [
   {
-    name: "Free",
-    price: { m: 0, y: 0 },
-    desc: "For personal projects and getting started.",
+    name: "Lite",
+    icon: Rocket,
+    price: { m: 39, y: 399 },
+    desc: "For creators and everyday users.",
     features: [
-      "10 GB storage",
-      "Basic sharing",
-      "2-device sync",
-      "Community support",
+      "50 GB storage",
+      "25 GB monthly bandwidth",
+      "Up to 2 GB file upload",
+      "Email support",
+      "15-day trash recovery",
     ],
-    cta: "Get Started",
+    cta: "Start Lite",
+    planKey: "spark_go",
+  },
+  {
+    name: "Plus",
+    icon: Shield,
+    price: { m: 149, y: 1499 },
+    desc: "For power users who need more room.",
+    features: [
+      "100 GB storage",
+      "70 GB monthly bandwidth",
+      "Up to 10 GB file upload",
+      "Priority email support",
+      "30-day trash recovery",
+    ],
+    cta: "Start Plus",
+    planKey: "boost",
   },
   {
     name: "Pro",
-    price: { m: 12, y: 9 },
-    desc: "For creators and power users.",
+    icon: Crown,
+    price: { m: 399, y: 3999 },
+    desc: "For professionals and growing teams.",
     features: [
-      "2 TB storage",
-      "Advanced sharing & links",
-      "Unlimited devices",
-      "Priority support",
-      "AI search",
+      "500 GB storage",
+      "300 GB monthly bandwidth",
+      "Up to 50 GB file upload",
+      "24/7 priority support",
+      "45-day trash recovery",
     ],
-    cta: "Start Pro Trial",
+    cta: "Start Pro",
     highlighted: true,
+    planKey: "pro",
   },
   {
-    name: "Team",
-    price: { m: 24, y: 19 },
-    desc: "For growing teams and businesses.",
+    name: "Max",
+    icon: Sparkles,
+    price: { m: 699, y: 6999 },
+    desc: "For those who need it all.",
     features: [
-      "Per-seat 5 TB",
-      "SSO & SCIM",
-      "Audit logs",
-      "Admin controls",
-      "24/7 support",
+      "1 TB storage",
+      "700 GB monthly bandwidth",
+      "Unlimited file upload size",
+      "60-day trash recovery",
+      "Early access to features",
     ],
-    cta: "Contact Sales",
+    cta: "Start Max",
+    planKey: "apex",
   },
 ];
 
 export function Pricing() {
-  const [yearly, setYearly] = useState(true);
+  const [yearly, setYearly] = useState(false);
 
   return (
     <Section id="pricing">
@@ -63,17 +85,16 @@ export function Pricing() {
         <div className="inline-flex items-center gap-1 rounded-full glass p-1">
           {[
             { k: false, l: "Monthly" },
-            { k: true, l: "Yearly · save 25%" },
+            { k: true, l: "Yearly · save ~17%" },
           ].map((opt) => (
             <button
               key={opt.l}
               type="button"
               onClick={() => setYearly(opt.k)}
-              className={`px-4 py-1.5 text-sm rounded-full transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                yearly === opt.k
+              className={`px-4 py-1.5 text-sm rounded-full transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${yearly === opt.k
                   ? "bg-gradient-primary text-primary-foreground shadow-glow"
                   : "text-muted-foreground hover:text-foreground"
-              }`}
+                }`}
             >
               {opt.l}
             </button>
@@ -81,9 +102,10 @@ export function Pricing() {
         </div>
       </div>
 
-      <div className="mt-12 grid md:grid-cols-3 gap-5">
+      <div className="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
         {plans.map((p, i) => {
           const price = yearly ? p.price.y : p.price.m;
+          const Icon = p.icon;
           return (
             <motion.div
               key={p.name}
@@ -96,11 +118,10 @@ export function Pricing() {
                 ease: easeSmooth,
                 delay: i * 0.09,
               }}
-              className={`relative rounded-2xl p-7 transition-all duration-300 ${
-                p.highlighted
+              className={`relative rounded-2xl p-7 transition-all duration-300 ${p.highlighted
                   ? "glass border-primary/50 shadow-glow scale-[1.02]"
                   : "glass"
-              }`}
+                }`}
             >
               {p.highlighted && (
                 <>
@@ -110,23 +131,39 @@ export function Pricing() {
                   </span>
                 </>
               )}
-              <h3 className="font-display text-xl font-semibold">{p.name}</h3>
+
+              <div className="flex items-center gap-2 mb-3">
+                <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${p.highlighted ? "bg-primary/15 text-primary" : "bg-secondary/60 text-muted-foreground"
+                  }`}>
+                  <Icon className="h-4 w-4" strokeWidth={1.75} />
+                </div>
+                <h3 className="font-display text-xl font-semibold">{p.name}</h3>
+              </div>
+
               <p className="mt-1 text-sm text-muted-foreground">{p.desc}</p>
               <div className="mt-6 flex items-baseline gap-1">
-                <span className="font-display text-5xl font-semibold">
-                  ${price}
+                <span className="font-display text-4xl font-semibold tabular-nums">
+                  {price === 0 ? "Free" : `₹${price}`}
                 </span>
-                <span className="text-muted-foreground text-sm">/mo</span>
+                {price > 0 && (
+                  <span className="text-muted-foreground text-sm">
+                    /{yearly ? "yr" : "mo"}
+                  </span>
+                )}
               </div>
+              {yearly && price > 0 && (
+                <p className="mt-1 text-xs text-muted-foreground/70">
+                  ≈ ₹{Math.round(price / 12)}/mo billed annually
+                </p>
+              )}
               <Button
                 asChild
-                className={`mt-6 w-full cursor-pointer ${
-                  p.highlighted
+                className={`mt-6 w-full cursor-pointer ${p.highlighted
                     ? "bg-gradient-primary text-primary-foreground hover:opacity-90 shadow-glow"
                     : "bg-secondary text-foreground hover:bg-secondary/70"
-                }`}
+                  }`}
               >
-                <Link to={`/dashboard/payment?plan=${p.name.toLowerCase()}`}>
+                <Link to={`/dashboard/payment?plan=${p.planKey}`}>
                   {p.cta}
                 </Link>
               </Button>

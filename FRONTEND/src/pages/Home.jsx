@@ -5,7 +5,6 @@ import dropboxLogo from '../../assets/images/Dropbox-Icon.svg'
 import GDriveLogo from '../../assets/images/Google_Drive_Logo.svg'
 import {
   Box,
-  Cloud,
   Command,
 } from "lucide-react";
 import { RecentFilesView } from "@/components/recent/RecentFilesView";

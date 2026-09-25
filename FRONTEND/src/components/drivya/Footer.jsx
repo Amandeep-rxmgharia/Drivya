@@ -1,4 +1,5 @@
-import { Cloud, Twitter, Github, Linkedin } from "lucide-react";
+import { Twitter, Github, Linkedin } from "lucide-react";
+import logo from '../../../assets/images/logo-transparent.png';
 
 const cols = [
   { title: "Product", links: ["Features", "Pricing", "Security", "Changelog"] },
@@ -12,8 +13,8 @@ export function Footer() {
       <div className="mx-auto max-w-7xl px-6 py-16 grid md:grid-cols-5 gap-10">
         <div className="md:col-span-2">
           <div className="flex items-center gap-2">
-            <span className="h-8 w-8 rounded-lg bg-gradient-primary flex items-center justify-center shadow-glow">
-              <Cloud className="h-4 w-4 text-primary-foreground" />
+            <span className="relative flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-primary shadow-glow">
+              <img className="h-5 tracking-tight text-foreground" src={logo} alt="" />
             </span>
             <span className="font-display text-lg font-semibold">Drivya</span>
           </div>

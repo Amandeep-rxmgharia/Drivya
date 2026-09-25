@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import logo from '../../../assets/images/logo-transparent.png'
 import {
   Bell,
   ChevronDown,
@@ -149,7 +150,8 @@ function Sidebar({ collapsed, onClose, mobileOpen, userProfile }) {
             className="flex items-center gap-2.5 group"
           >
             <span className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-primary shadow-glow">
-              <Cloud className="h-4 w-4 text-primary-foreground" />
+              {/* <Cloud className="h-4 w-4 text-primary-foreground" /> */}
+              <img className="h-4 w-4 " src={logo} alt="" />
             </span>
             {!collapsed && (
               <div className="flex flex-col leading-none">

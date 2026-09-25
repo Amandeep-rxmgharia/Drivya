@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "motion/react";
+import logo from '../../assets/images/logo-transparent.png';
 import {
-  Cloud,
   ArrowLeft,
   ShieldCheck,
   Eye,
@@ -313,8 +313,8 @@ export default function PrivacyPolicy() {
             <div className="h-4 w-[1px] bg-border/40 hidden sm:block" />
 
             <Link to="/auth" className="flex items-center gap-2 group">
-              <span className="relative flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-primary shadow-glow">
-                <Cloud className="h-3.5 w-3.5 text-primary-foreground" />
+              <span className="relative flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-primary shadow-glow">
+                <img className="h-5 tracking-tight text-foreground" src={logo} alt="" />
               </span>
               <span className="font-display text-lg font-bold tracking-tight text-foreground">
                 Drivya

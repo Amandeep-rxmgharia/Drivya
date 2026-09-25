@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Cloud, Menu, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { easeSmooth, tweenEnter } from "@/lib/motion-presets";
 import { getCurrentUser } from "../../../api/auth";
+import logo from '../../../assets/images/logo-transparent.png'
 
 const links = [
   { label: "Features", href: "#features" },
@@ -54,9 +55,10 @@ export function Navbar({open,closeMobileMenu}) {
     >
       <nav className="mx-auto max-w-7xl px-6 h-16 flex items-center justify-between gap-3">
         <a href="#" className="flex shrink-0 items-center gap-2 group">
-          <span className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-primary shadow-glow">
-            <Cloud className="h-4 w-4 text-primary-foreground" />
-          </span>
+          <span className="relative flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-primary shadow-glow">
+                        <img className="h-5 tracking-tight text-foreground" src={logo} alt="" />
+            </span>
+
           <span className="font-display text-lg font-semibold tracking-tight text-foreground">
             Drivya
           </span>

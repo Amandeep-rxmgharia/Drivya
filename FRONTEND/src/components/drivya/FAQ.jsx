@@ -17,20 +17,12 @@ const faqs = [
   },
   {
     q: "Do you offer a free plan?",
-    a: "Yes — the Free plan includes 10 GB of storage, basic sharing, and sync across two devices. No credit card required.",
+    a: "Yes — the Free plan includes 2 GB of storage, basic sharing, and sync across two devices. No credit card required.",
   },
   {
     q: "Which platforms are supported?",
     a: "Drivya is available on macOS, Windows, Linux, iOS, Android and the web. Files stay in sync across every device.",
-  },
-  {
-    q: "How fast are uploads?",
-    a: "We use parallelized chunked transfers over QUIC, so most users see 5–10x faster uploads compared to legacy cloud storage.",
-  },
-  {
-    q: "Do you support team accounts?",
-    a: "Yes. The Team plan includes SSO, SCIM provisioning, audit logs and centralized admin controls.",
-  },
+  }
 ];
 
 export function FAQ() {
