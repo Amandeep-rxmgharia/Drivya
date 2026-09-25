@@ -1,28 +1,28 @@
 import { motion } from "motion/react";
-import { Shield, Lock, Server, KeyRound } from "lucide-react";
+import { Shield, Lock, Fingerprint, ShieldCheck } from "lucide-react";
 import { Section, SectionHeading } from "./Section";
 import { easeSmooth } from "@/lib/motion-presets";
 
 const items = [
   {
-    icon: Lock,
-    title: "End-to-end encryption",
-    desc: "AES-256 at rest, TLS 1.3 in flight, zero-knowledge keys.",
+    icon: Fingerprint,
+    title: "Two-factor authentication",
+    desc: "TOTP-based 2FA with encrypted secrets and one-time backup codes for account recovery.",
   },
   {
-    icon: Server,
-    title: "Secure cloud backups",
-    desc: "Geo-redundant snapshots across 3 regions, every 6 hours.",
+    icon: Lock,
+    title: "Protected sharing",
+    desc: "Password-protect any share link, set expiration dates, and control view or download permissions.",
   },
   {
     icon: Shield,
-    title: "Privacy-focused",
-    desc: "GDPR & SOC 2 Type II certified. We never train on your data.",
+    title: "Secure sessions",
+    desc: "HttpOnly cookie auth with Redis-backed sessions, login alerts, and instant session revocation.",
   },
   {
-    icon: KeyRound,
-    title: "Advanced protection",
-    desc: "SSO, SCIM, audit logs, 2FA and per-link passwords.",
+    icon: ShieldCheck,
+    title: "Attack prevention",
+    desc: "Built-in NoSQL injection and XSS sanitization, rate limiting, and Helmet security headers.",
   },
 ];
 
@@ -54,8 +54,8 @@ export function Security() {
         <div>
           <SectionHeading
             eyebrow="Security"
-            title="Protected by design."
-            description="Your files are sacred. We engineered Drivya so no one — not even us — can read them."
+            title="Your files, your control."
+            description="Every layer of Drivya is built with security in mind — from authentication to file sharing."
             center={false}
           />
           <div className="mt-10 grid sm:grid-cols-2 gap-4">
