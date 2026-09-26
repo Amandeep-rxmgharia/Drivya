@@ -2,9 +2,8 @@ import { Twitter, Github, Linkedin } from "lucide-react";
 import logo from '../../../assets/images/logo-transparent.png';
 
 const cols = [
-  { title: "Product", links: ["Features", "Pricing", "Security", "Changelog"] },
-  { title: "Company", links: ["About", "Blog", "Careers", "Press"] },
-  { title: "Resources", links: ["Docs", "API", "Status", "Help center"] },
+  { title: "Product", links: ["Features", "Pricing", "Security"] },
+  { title: "Legal", links: ["Privacy", "Terms"] },
 ];
 
 export function Footer() {
@@ -22,7 +21,7 @@ export function Footer() {
             The cloud storage built for modern teams. Fast, beautiful and
             private by design.
           </p>
-          <div className="mt-5 flex gap-3">
+          {/* <div className="mt-5 flex gap-3">
             {[Twitter, Github, Linkedin].map((Icon, i) => (
               <a
                 key={i}
@@ -32,7 +31,7 @@ export function Footer() {
                 <Icon className="h-4 w-4 text-muted-foreground" />
               </a>
             ))}
-          </div>
+          </div> */}
         </div>
 
         {cols.map((c) => (
@@ -42,7 +41,7 @@ export function Footer() {
               {c.links.map((l) => (
                 <li key={l}>
                   <a
-                    href="#"
+                    href={c.title != 'Legal' ? `#${l.toLowerCase()}` : l.toLowerCase()}
                     className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                   >
                     {l}

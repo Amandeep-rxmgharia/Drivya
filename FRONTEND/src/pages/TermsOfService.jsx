@@ -29,7 +29,7 @@ const sections = [
     title: "1. Acceptance of Terms",
     content: [
       `By creating an account, accessing, or using Drivya ("the Service"), you agree to be bound by these Terms of Service ("Terms"). If you do not agree with any part of these Terms, you must not use the Service.`,
-      `These Terms constitute a legally binding agreement between you ("User," "you," or "your") and Drivya Technologies Inc. ("Drivya," "we," "us," or "our"). We reserve the right to update these Terms at any time. When we do, we will revise the "Last Updated" date at the top of this page and, for material changes, notify you via email or in-app notification. Your continued use of the Service after changes take effect constitutes acceptance of the revised Terms.`,
+      `These Terms constitute a legally binding agreement between you ("User," "you," or "your") and Drivya. ("Drivya," "we," "us," or "our"). We reserve the right to update these Terms at any time. When we do, we will revise the "Last Updated" date at the top of this page and, for material changes, notify you via email or in-app notification. Your continued use of the Service after changes take effect constitutes acceptance of the revised Terms.`,
     ],
   },
   {
@@ -97,7 +97,7 @@ const sections = [
     title: "7. Intellectual Property & Ownership",
     content: [
       `You retain full ownership of all files and content you upload to Drivya. We do not claim any intellectual property rights over your content. By uploading content, you grant Drivya a limited, non-exclusive license to store, process, transmit, and display your content solely for the purpose of providing the Service to you.`,
-      `All rights, title, and interest in the Drivya platform — including its design, code, branding, trademarks, and proprietary technology — remain the exclusive property of Drivya Technologies Inc. You may not copy, modify, reverse-engineer, or create derivative works of any part of the Service.`,
+      `All rights, title, and interest in the Drivya platform — including its design, code, branding, trademarks, and proprietary technology — remain the exclusive property of Drivya. You may not copy, modify, reverse-engineer, or create derivative works of any part of the Service.`,
     ],
   },
   {
@@ -136,7 +136,7 @@ const sections = [
     title: "11. Governing Law & Dispute Resolution",
     content: [
       `These Terms shall be governed by and construed in accordance with the laws of India, without regard to its conflict of law provisions. Any disputes arising from these Terms or the Service shall be subject to the exclusive jurisdiction of the courts located in New Delhi, India.`,
-      `Before initiating any formal legal proceedings, you agree to first attempt to resolve disputes informally by contacting us at support@drivya.com. We will make good-faith efforts to resolve any issues within 30 days of receiving your notice.`,
+      `Before initiating any formal legal proceedings, you agree to first attempt to resolve disputes informally by contacting us at drivya.app@gmail.com. We will make good-faith efforts to resolve any issues within 30 days of receiving your notice.`,
     ],
   },
   {
@@ -231,7 +231,7 @@ export default function TermsOfService() {
             Terms of Service
           </h1>
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span>Drivya Technologies Inc.</span>
+            <span>Drivya </span>
             <span>•</span>
             <span className="font-mono">Last updated: {EFFECTIVE_DATE}</span>
           </div>
@@ -290,24 +290,22 @@ export default function TermsOfService() {
                     <div className="mt-4 p-4 rounded-xl bg-muted/20 border border-border/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                       <div>
                         <p className="font-bold text-foreground">
-                          Drivya Technologies Inc.
+                          Drivya 
                         </p>
                         <p className="text-muted-foreground mt-0.5">
                           Questions? Contact our support or legal team.
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <a
-                          href="mailto:support@drivya.com"
+                        <p
                           className="px-3.5 py-1.5 rounded-lg bg-primary text-primary-foreground font-semibold hover:opacity-90 transition-all shadow-glow"
                         >
-                          support@drivya.com
-                        </a>
+                          drivya.app@gmail.com
+                        </p>
                         <a
-                          href="mailto:legal@drivya.com"
                           className="px-3.5 py-1.5 rounded-lg border border-border bg-background hover:bg-muted text-foreground font-semibold transition-all"
                         >
-                          legal@drivya.com
+                          drivya.app@gmail.com
                         </a>
                       </div>
                     </div>
@@ -320,7 +318,7 @@ export default function TermsOfService() {
 
         {/* Footer Note */}
         <footer className="mt-14 pt-6 border-t border-border/15 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-muted-foreground">
-          <p>© {new Date().getFullYear()} Drivya Technologies Inc. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} Drivya </p>
           <div className="flex items-center gap-3">
             <Link to="/privacy" className="hover:text-foreground text-primary font-semibold">
               Privacy Policy →

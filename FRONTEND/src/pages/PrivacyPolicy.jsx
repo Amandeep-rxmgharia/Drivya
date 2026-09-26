@@ -30,7 +30,7 @@ const sections = [
     icon: Eye,
     title: "1. Overview",
     content: [
-      `This Privacy Policy explains how Drivya Technologies Inc. ("Drivya," "we," "us," or "our") collects, uses, stores, shares, and protects your personal information when you use the Drivya platform and related services ("the Service").`,
+      `This Privacy Policy explains how Drivya ("Drivya," "we," "us," or "our") collects, uses, stores, shares, and protects your personal information when you use the Drivya platform and related services ("the Service").`,
       `We are committed to protecting your privacy and handling your data transparently. This policy applies to all users of Drivya, whether using free or paid subscription plans, and covers interactions through our website, web application, and API.`,
       `By creating an account or using the Service, you consent to the practices described in this Privacy Policy. If you do not agree, please do not use the Service.`,
     ],
@@ -224,7 +224,7 @@ const sections = [
       "Withdrawal of Consent — Withdraw consent for optional processing activities at any time.",
     ],
     afterList: [
-      `To exercise any of these rights, contact us at privacy@drivya.com. We will respond to verified requests within 30 days. You can also delete your account, manage connected integrations, and download your data directly through the Settings page.`,
+      `To exercise any of these rights, contact us at drivya.app@gmail.com. We will respond to verified requests within 30 days. You can also delete your account, manage connected integrations, and download your data directly through the Settings page.`,
     ],
   },
   {
@@ -233,7 +233,7 @@ const sections = [
     title: "10. Children's Privacy",
     content: [
       `Drivya is not intended for use by children under the age of 16. We do not knowingly collect personal information from children under 16. If we discover that we have collected data from a child under 16 without verifiable parental consent, we will delete such data promptly.`,
-      `If you are a parent or guardian and believe your child has provided personal information to Drivya, please contact us at privacy@drivya.com so we can take appropriate action.`,
+      `If you are a parent or guardian and believe your child has provided personal information to Drivya, please contact us at drivya.app@gmail.com so we can take appropriate action.`,
     ],
   },
   {
@@ -358,7 +358,7 @@ export default function PrivacyPolicy() {
             Privacy Policy
           </h1>
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span>Drivya Technologies Inc.</span>
+            <span>Drivya </span>
             <span>•</span>
             <span className="font-mono">Last updated: {EFFECTIVE_DATE}</span>
           </div>
@@ -474,18 +474,11 @@ export default function PrivacyPolicy() {
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <a
-                          href="mailto:privacy@drivya.com"
+                        <p
                           className="px-3.5 py-1.5 rounded-lg bg-primary text-primary-foreground font-semibold hover:opacity-90 transition-all shadow-glow"
                         >
-                          privacy@drivya.com
-                        </a>
-                        <a
-                          href="mailto:dpo@drivya.com"
-                          className="px-3.5 py-1.5 rounded-lg border border-border bg-background hover:bg-muted text-foreground font-semibold transition-all"
-                        >
-                          dpo@drivya.com
-                        </a>
+                          drivya.app@gmail.com
+                        </p>
                       </div>
                     </div>
                   )}
@@ -497,7 +490,7 @@ export default function PrivacyPolicy() {
 
         {/* Footer Note */}
         <footer className="mt-14 pt-6 border-t border-border/15 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-muted-foreground">
-          <p>© {new Date().getFullYear()} Drivya Technologies Inc. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} Drivya.</p>
           <div className="flex items-center gap-3">
             <Link to="/terms" className="hover:text-foreground text-primary font-semibold">
               Terms of Service →

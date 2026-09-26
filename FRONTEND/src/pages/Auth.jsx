@@ -1085,7 +1085,7 @@ export default function Auth() {
 
         {/* Footer Meta */}
         <div className="relative z-10 flex items-center justify-between text-xs text-muted-foreground">
-          <span>© {new Date().getFullYear()} Drivya Technologies Inc.</span>
+          <span>© {new Date().getFullYear()} Drivya</span>
           <div className="flex items-center gap-2">
             <Link to="/privacy" className="hover:text-foreground transition-colors">
               Privacy Policy
