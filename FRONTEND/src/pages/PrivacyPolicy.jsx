@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
-const EFFECTIVE_DATE = "July 28, 2026";
+const EFFECTIVE_DATE = "September 26, 2026";
 
 const sections = [
   {
@@ -30,9 +30,10 @@ const sections = [
     icon: Eye,
     title: "1. Overview",
     content: [
-      `This Privacy Policy explains how Drivya ("Drivya," "we," "us," or "our") collects, uses, stores, shares, and protects your personal information when you use the Drivya platform and related services ("the Service").`,
+      `This Privacy Policy explains how Drivya, developed and maintained by Amandeep Singh ("Drivya," "we," "us," or "our"), collects, uses, stores, shares, and protects your personal information when you use the Drivya platform and related services ("the Service").`,
       `We are committed to protecting your privacy and handling your data transparently. This policy applies to all users of Drivya, whether using free or paid subscription plans, and covers interactions through our website, web application, and API.`,
       `By creating an account or using the Service, you consent to the practices described in this Privacy Policy. If you do not agree, please do not use the Service.`,
+      `The data controller responsible for your personal data is Amandeep Singh, reachable at drivya.app@gmail.com.`,
     ],
   },
   {
@@ -79,7 +80,9 @@ const sections = [
     id: "data-usage",
     icon: UserCheck,
     title: "3. How We Use Your Information",
-    content: [`We use your information for the following purposes:`],
+    content: [
+      `We process your information based on the following legal bases: your consent (e.g., creating an account), contractual necessity (e.g., providing the Service you signed up for), legitimate interests (e.g., security, fraud prevention), and compliance with legal obligations (e.g., tax and financial records). Specifically, we use your information for the following purposes:`,
+    ],
     list: [
       "Provide, maintain, and improve the Service — including file storage, sharing, and sync functionality.",
       "Authenticate your identity and secure your account, including 2FA verification and login alerts.",
@@ -137,7 +140,7 @@ const sections = [
       {
         name: "Google OAuth",
         purpose:
-          "Optional sign-in provider. Receives basic profile data (name, email) upon user consent.",
+          "Optional sign-in provider. We request the email, profile, and openid OAuth scopes to receive your name and email upon consent. We do not request access to your Gmail, Google Calendar, or other Google services beyond authentication.",
         url: "https://policies.google.com/privacy",
       },
       {
@@ -147,10 +150,16 @@ const sections = [
         url: "https://docs.github.com/en/site-policy/privacy-policies",
       },
       {
-        name: "Google Drive & Dropbox",
+        name: "Google Drive",
         purpose:
-          "Optional cloud integrations. OAuth tokens are encrypted at rest (AES-256-GCM). Access can be revoked any time from Settings.",
-        url: null,
+          "Optional cloud integration for importing and exporting files. OAuth tokens are encrypted at rest (AES-256-GCM). Access can be revoked any time from Settings.",
+        url: "https://policies.google.com/privacy",
+      },
+      {
+        name: "Dropbox",
+        purpose:
+          "Optional cloud integration for importing and exporting files. OAuth tokens are encrypted at rest (AES-256-GCM). Access can be revoked any time from Settings.",
+        url: "https://www.dropbox.com/privacy",
       },
     ],
     afterList: [
@@ -225,6 +234,7 @@ const sections = [
     ],
     afterList: [
       `To exercise any of these rights, contact us at drivya.app@gmail.com. We will respond to verified requests within 30 days. You can also delete your account, manage connected integrations, and download your data directly through the Settings page.`,
+      `We process your data in compliance with applicable data protection laws, including the Indian Digital Personal Data Protection Act (DPDPA) 2023 and the EU General Data Protection Regulation (GDPR) where applicable.`,
     ],
   },
   {
@@ -467,18 +477,25 @@ export default function PrivacyPolicy() {
                     <div className="mt-4 p-4 rounded-xl bg-muted/20 border border-border/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                       <div>
                         <p className="font-bold text-foreground">
-                          Drivya Privacy & Data Protection Team
+                          Drivya — Amandeep Singh
                         </p>
                         <p className="text-muted-foreground mt-0.5">
                           Questions about privacy or exercising data rights?
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <p
+                        <a
+                        href='mailto:drivya.app@gmail.com'
                           className="px-3.5 py-1.5 rounded-lg bg-primary text-primary-foreground font-semibold hover:opacity-90 transition-all shadow-glow"
                         >
                           drivya.app@gmail.com
-                        </p>
+                        </a>
+                        <a
+                        href='mailto:aman9251813@gmail.com'
+                          className="px-3.5 py-1.5 rounded-lg bg-primary text-primary-foreground font-semibold hover:opacity-90 transition-all shadow-glow"
+                        >
+                          aman9251813@gmail.com
+                        </a>
                       </div>
                     </div>
                   )}

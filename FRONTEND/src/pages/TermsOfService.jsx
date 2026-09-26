@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
-const EFFECTIVE_DATE = "July 28, 2026";
+const EFFECTIVE_DATE = "September 26, 2026";
 
 const sections = [
   {
@@ -29,7 +29,7 @@ const sections = [
     title: "1. Acceptance of Terms",
     content: [
       `By creating an account, accessing, or using Drivya ("the Service"), you agree to be bound by these Terms of Service ("Terms"). If you do not agree with any part of these Terms, you must not use the Service.`,
-      `These Terms constitute a legally binding agreement between you ("User," "you," or "your") and Drivya. ("Drivya," "we," "us," or "our"). We reserve the right to update these Terms at any time. When we do, we will revise the "Last Updated" date at the top of this page and, for material changes, notify you via email or in-app notification. Your continued use of the Service after changes take effect constitutes acceptance of the revised Terms.`,
+      `These Terms constitute a legally binding agreement between you ("User," "you," or "your") and Drivya, developed and maintained by Amandeep Singh ("Drivya," "we," "us," or "our"). We reserve the right to update these Terms at any time. When we do, we will revise the "Last Updated" date at the top of this page and, for material changes, notify you via email or in-app notification. Your continued use of the Service after changes take effect constitutes acceptance of the revised Terms.`,
     ],
   },
   {
@@ -115,7 +115,7 @@ const sections = [
     icon: AlertTriangle,
     title: "9. Limitation of Liability",
     content: [
-      `TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, DRIVYA AND ITS OFFICERS, DIRECTORS, EMPLOYEES, AGENTS, AND AFFILIATES SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, INCLUDING BUT NOT LIMITED TO LOSS OF DATA, PROFITS, REVENUE, OR BUSINESS OPPORTUNITIES, REGARDLESS OF THE CAUSE OF ACTION OR THEORY OF LIABILITY.`,
+      `TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, DRIVYA AND ITS DEVELOPER SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, INCLUDING BUT NOT LIMITED TO LOSS OF DATA, PROFITS, REVENUE, OR BUSINESS OPPORTUNITIES, REGARDLESS OF THE CAUSE OF ACTION OR THEORY OF LIABILITY.`,
       `Our total aggregate liability for any claims arising from or relating to these Terms or the Service shall not exceed the total amount you have paid to Drivya in subscription fees during the twelve (12) months immediately preceding the event giving rise to the claim.`,
       `This limitation applies even if Drivya has been advised of the possibility of such damages and regardless of whether the remedy fails of its essential purpose.`,
     ],
@@ -290,20 +290,22 @@ export default function TermsOfService() {
                     <div className="mt-4 p-4 rounded-xl bg-muted/20 border border-border/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                       <div>
                         <p className="font-bold text-foreground">
-                          Drivya 
+                          Drivya — Amandeep Singh
                         </p>
                         <p className="text-muted-foreground mt-0.5">
-                          Questions? Contact our support or legal team.
+                          Questions? Reach out to us.
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <p
+                       <a
+                        href='mailto:aman9251813@gmail.com'
                           className="px-3.5 py-1.5 rounded-lg bg-primary text-primary-foreground font-semibold hover:opacity-90 transition-all shadow-glow"
                         >
-                          drivya.app@gmail.com
-                        </p>
+                          aman9251813@gmail.com
+                        </a>
                         <a
-                          className="px-3.5 py-1.5 rounded-lg border border-border bg-background hover:bg-muted text-foreground font-semibold transition-all"
+                          href="mailto:drivya.app@gmail.com"
+                          className="px-3.5 py-1.5 rounded-lg bg-primary text-primary-foreground font-semibold hover:opacity-90 transition-all shadow-glow"
                         >
                           drivya.app@gmail.com
                         </a>
