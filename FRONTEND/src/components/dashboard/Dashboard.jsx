@@ -1152,7 +1152,7 @@ function Topbar({
                     }
                     // Clear profile state and redirect to Auth
                     localStorage.removeItem("drivya-user-profile");
-                    // navigate("/auth");
+                    navigate("/auth");
                   }}
                   className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-[12.5px] font-semibold text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 transition-all group"
                 >
@@ -1504,7 +1504,7 @@ export function DashboardLayout() {
         }
       } catch (err) {
         console.error("Failed to fetch user profile:", err);
-        // navigate("/auth");
+        navigate("/auth");
       }
     };
 
