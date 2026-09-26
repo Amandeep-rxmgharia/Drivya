@@ -56,7 +56,7 @@ export function Navbar({open,closeMobileMenu}) {
       <nav className="mx-auto max-w-7xl px-6 h-16 flex items-center justify-between gap-3">
         <a href="#" className="flex shrink-0 items-center gap-2 group">
           <span className="relative flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-primary shadow-glow">
-                        <img className="h-5 tracking-tight text-foreground" src={logo} alt="" />
+                        <img className="h-5" src={logo} alt="" />
             </span>
 
           <span className="font-display text-lg font-semibold tracking-tight text-foreground">
