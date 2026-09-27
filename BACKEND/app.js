@@ -58,8 +58,9 @@ const app = express();
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:5174",
+  "https://drivya.cloud",
   CORS_ORIGIN
-];
+].filter((v, i, a) => a.indexOf(v) === i); // deduplicate
 
 // ─── Security Headers ────────────────────────────────────────
 app.use(
@@ -68,7 +69,7 @@ app.use(
       directives: {
         ...helmet.contentSecurityPolicy.getDefaultDirectives(),
         "frame-ancestors": ["'self'", ...allowedOrigins],
-        "connect-src": ["'self'", "http://localhost:3000", "http://localhost:5173", "http://localhost:5174"],
+        "connect-src": ["'self'", "https://api.drivya.cloud", "https://drivya.cloud", "http://localhost:3000", "http://localhost:5173", "http://localhost:5174"],
       },
     },
     crossOriginResourcePolicy: { policy: "cross-origin" },
@@ -142,3 +143,4 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`Server is listening on http://localhost:${PORT}`);
 });
+

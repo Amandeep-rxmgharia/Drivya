@@ -24,6 +24,7 @@ export const handleRazorpayWebhook = async (req, res) => {
       .createHmac("sha256", RAZORPAY_WEBHOOK_SECRET)
       .update(rawBody)
       .digest("hex");
+console.log(expectedSignature);
 
     if (expectedSignature !== signature) {
       console.warn("[Webhook] Signature mismatch.");
