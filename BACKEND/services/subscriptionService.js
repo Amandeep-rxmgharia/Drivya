@@ -50,7 +50,7 @@ export async function createSubscription(userId, planKey, period) {
   // 2. Check for existing active subscription
   const existingSub = await Subscription.findOne({
     userId,
-    status: { $in: [SUBSCRIPTION_STATUS.ACTIVE, SUBSCRIPTION_STATUS.CREATED, SUBSCRIPTION_STATUS.AUTHENTICATED] },
+    status: { $in: [SUBSCRIPTION_STATUS.ACTIVE, SUBSCRIPTION_STATUS.AUTHENTICATED] },
   });
 
   if (existingSub) {
