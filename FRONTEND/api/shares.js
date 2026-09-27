@@ -56,7 +56,7 @@ export function normalizeShare(share) {
   };
 }
 
-const API_BASE = api.defaults?.baseURL || "http://localhost:3000";
+const API_BASE = api.defaults?.baseURL || "https://api.drivya.cloud";
 
 const resolveAvatarUrl = (url) => {
   if (!url) return null;

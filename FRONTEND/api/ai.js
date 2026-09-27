@@ -2,7 +2,7 @@ import axios from "axios";
 
 // ─── Axios Instance ──────────────────────────────────────────
 const api = axios.create({
-    baseURL: "http://localhost:3000",
+    baseURL: "https://api.drivya.cloud",
     withCredentials: true,
     timeout: 20000,
     headers: {

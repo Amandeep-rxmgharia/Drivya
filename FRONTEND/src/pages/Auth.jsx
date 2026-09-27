@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
+import logo from '../../assets/images/logo-transparent.png';
 import {
-  Cloud,
   Eye,
   EyeOff,
   User,
@@ -961,7 +961,7 @@ export default function Auth() {
         {/* Brand Header */}
         <div className="relative z-10 flex items-center gap-2 group cursor-default">
           <span className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-primary shadow-glow">
-            <Cloud className="h-5 w-5 text-primary-foreground" />
+            <img className="h-5" src={logo} alt="" />
           </span>
           <span className="font-display text-2xl font-bold tracking-tight text-foreground">
             Drivya
@@ -1085,7 +1085,7 @@ export default function Auth() {
 
         {/* Footer Meta */}
         <div className="relative z-10 flex items-center justify-between text-xs text-muted-foreground">
-          <span>© {new Date().getFullYear()} Drivya Technologies Inc.</span>
+          <span>© {new Date().getFullYear()} Drivya</span>
           <div className="flex items-center gap-2">
             <Link to="/privacy" className="hover:text-foreground transition-colors">
               Privacy Policy
@@ -1114,7 +1114,7 @@ export default function Auth() {
           {/* Mobile Only Header Logo */}
           <div className="md:hidden flex flex-col items-center justify-center gap-2 mb-8 select-none">
             <span className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-primary shadow-glow">
-              <Cloud className="h-5 w-5 text-primary-foreground" />
+              <img className="h-5 tracking-tight text-foreground" src={logo} alt="" />
             </span>
             <span className="font-display text-2xl font-bold tracking-tight text-foreground">
               Drivya

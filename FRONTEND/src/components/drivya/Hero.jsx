@@ -79,13 +79,6 @@ export function Hero() {
               Get Started Free
               <ArrowRight className="ml-1 h-4 w-4 transition-transform duration-300 ease-out group-hover:translate-x-0.5" />
             </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              className="border-border bg-secondary/30 backdrop-blur"
-            >
-              <Play className="mr-1 h-4 w-4" /> Watch Demo
-            </Button>
           </motion.div>
 
           <motion.div
@@ -93,7 +86,7 @@ export function Hero() {
             className="mt-10 flex flex-wrap gap-x-8 gap-y-3 text-sm text-muted-foreground"
           >
             {[
-              { icon: HardDrive, label: "10GB Free Storage" },
+              { icon: HardDrive, label: "2GB Free Storage" },
               { icon: Shield, label: "End-to-End Encryption" },
               { icon: Zap, label: "Lightning Fast Uploads" },
             ].map((t) => (

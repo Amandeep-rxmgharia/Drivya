@@ -48,7 +48,7 @@ import {
   Kbd,
 } from "@/components/dashboard/dashboard-tokens";
 
-const API_BASE = "http://localhost:3000";
+const API_BASE = "https://api.drivya.cloud";
 
 /* ────────────────────────── helpers ────────────────────────── */
 

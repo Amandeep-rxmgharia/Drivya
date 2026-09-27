@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "motion/react";
+import logo from '../../assets/images/logo-transparent.png';
 import {
-  Cloud,
   ArrowLeft,
   ShieldCheck,
   Eye,
@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
-const EFFECTIVE_DATE = "July 28, 2026";
+const EFFECTIVE_DATE = "September 26, 2026";
 
 const sections = [
   {
@@ -30,9 +30,10 @@ const sections = [
     icon: Eye,
     title: "1. Overview",
     content: [
-      `This Privacy Policy explains how Drivya Technologies Inc. ("Drivya," "we," "us," or "our") collects, uses, stores, shares, and protects your personal information when you use the Drivya platform and related services ("the Service").`,
+      `This Privacy Policy explains how Drivya, developed and maintained by Amandeep Singh ("Drivya," "we," "us," or "our"), collects, uses, stores, shares, and protects your personal information when you use the Drivya platform and related services ("the Service").`,
       `We are committed to protecting your privacy and handling your data transparently. This policy applies to all users of Drivya, whether using free or paid subscription plans, and covers interactions through our website, web application, and API.`,
       `By creating an account or using the Service, you consent to the practices described in this Privacy Policy. If you do not agree, please do not use the Service.`,
+      `The data controller responsible for your personal data is Amandeep Singh, reachable at drivya.app@gmail.com.`,
     ],
   },
   {
@@ -79,7 +80,9 @@ const sections = [
     id: "data-usage",
     icon: UserCheck,
     title: "3. How We Use Your Information",
-    content: [`We use your information for the following purposes:`],
+    content: [
+      `We process your information based on the following legal bases: your consent (e.g., creating an account), contractual necessity (e.g., providing the Service you signed up for), legitimate interests (e.g., security, fraud prevention), and compliance with legal obligations (e.g., tax and financial records). Specifically, we use your information for the following purposes:`,
+    ],
     list: [
       "Provide, maintain, and improve the Service — including file storage, sharing, and sync functionality.",
       "Authenticate your identity and secure your account, including 2FA verification and login alerts.",
@@ -137,7 +140,7 @@ const sections = [
       {
         name: "Google OAuth",
         purpose:
-          "Optional sign-in provider. Receives basic profile data (name, email) upon user consent.",
+          "Optional sign-in provider. We request the email, profile, and openid OAuth scopes to receive your name and email upon consent. We do not request access to your Gmail, Google Calendar, or other Google services beyond authentication.",
         url: "https://policies.google.com/privacy",
       },
       {
@@ -147,10 +150,16 @@ const sections = [
         url: "https://docs.github.com/en/site-policy/privacy-policies",
       },
       {
-        name: "Google Drive & Dropbox",
+        name: "Google Drive",
         purpose:
-          "Optional cloud integrations. OAuth tokens are encrypted at rest (AES-256-GCM). Access can be revoked any time from Settings.",
-        url: null,
+          "Optional cloud integration for importing and exporting files. OAuth tokens are encrypted at rest (AES-256-GCM). Access can be revoked any time from Settings.",
+        url: "https://policies.google.com/privacy",
+      },
+      {
+        name: "Dropbox",
+        purpose:
+          "Optional cloud integration for importing and exporting files. OAuth tokens are encrypted at rest (AES-256-GCM). Access can be revoked any time from Settings.",
+        url: "https://www.dropbox.com/privacy",
       },
     ],
     afterList: [
@@ -224,7 +233,8 @@ const sections = [
       "Withdrawal of Consent — Withdraw consent for optional processing activities at any time.",
     ],
     afterList: [
-      `To exercise any of these rights, contact us at privacy@drivya.com. We will respond to verified requests within 30 days. You can also delete your account, manage connected integrations, and download your data directly through the Settings page.`,
+      `To exercise any of these rights, contact us at drivya.app@gmail.com. We will respond to verified requests within 30 days. You can also delete your account, manage connected integrations, and download your data directly through the Settings page.`,
+      `We process your data in compliance with applicable data protection laws, including the Indian Digital Personal Data Protection Act (DPDPA) 2023 and the EU General Data Protection Regulation (GDPR) where applicable.`,
     ],
   },
   {
@@ -233,7 +243,7 @@ const sections = [
     title: "10. Children's Privacy",
     content: [
       `Drivya is not intended for use by children under the age of 16. We do not knowingly collect personal information from children under 16. If we discover that we have collected data from a child under 16 without verifiable parental consent, we will delete such data promptly.`,
-      `If you are a parent or guardian and believe your child has provided personal information to Drivya, please contact us at privacy@drivya.com so we can take appropriate action.`,
+      `If you are a parent or guardian and believe your child has provided personal information to Drivya, please contact us at drivya.app@gmail.com so we can take appropriate action.`,
     ],
   },
   {
@@ -313,8 +323,8 @@ export default function PrivacyPolicy() {
             <div className="h-4 w-[1px] bg-border/40 hidden sm:block" />
 
             <Link to="/auth" className="flex items-center gap-2 group">
-              <span className="relative flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-primary shadow-glow">
-                <Cloud className="h-3.5 w-3.5 text-primary-foreground" />
+              <span className="relative flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-primary shadow-glow">
+                <img className="h-5" src={logo} alt="" />
               </span>
               <span className="font-display text-lg font-bold tracking-tight text-foreground">
                 Drivya
@@ -358,7 +368,7 @@ export default function PrivacyPolicy() {
             Privacy Policy
           </h1>
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span>Drivya Technologies Inc.</span>
+            <span>Drivya </span>
             <span>•</span>
             <span className="font-mono">Last updated: {EFFECTIVE_DATE}</span>
           </div>
@@ -467,7 +477,7 @@ export default function PrivacyPolicy() {
                     <div className="mt-4 p-4 rounded-xl bg-muted/20 border border-border/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                       <div>
                         <p className="font-bold text-foreground">
-                          Drivya Privacy & Data Protection Team
+                          Drivya — Amandeep Singh
                         </p>
                         <p className="text-muted-foreground mt-0.5">
                           Questions about privacy or exercising data rights?
@@ -475,16 +485,16 @@ export default function PrivacyPolicy() {
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <a
-                          href="mailto:privacy@drivya.com"
+                        href='mailto:drivya.app@gmail.com'
                           className="px-3.5 py-1.5 rounded-lg bg-primary text-primary-foreground font-semibold hover:opacity-90 transition-all shadow-glow"
                         >
-                          privacy@drivya.com
+                          drivya.app@gmail.com
                         </a>
                         <a
-                          href="mailto:dpo@drivya.com"
-                          className="px-3.5 py-1.5 rounded-lg border border-border bg-background hover:bg-muted text-foreground font-semibold transition-all"
+                        href='mailto:aman9251813@gmail.com'
+                          className="px-3.5 py-1.5 rounded-lg bg-primary text-primary-foreground font-semibold hover:opacity-90 transition-all shadow-glow"
                         >
-                          dpo@drivya.com
+                          aman9251813@gmail.com
                         </a>
                       </div>
                     </div>
@@ -497,7 +507,7 @@ export default function PrivacyPolicy() {
 
         {/* Footer Note */}
         <footer className="mt-14 pt-6 border-t border-border/15 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-muted-foreground">
-          <p>© {new Date().getFullYear()} Drivya Technologies Inc. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} Drivya.</p>
           <div className="flex items-center gap-3">
             <Link to="/terms" className="hover:text-foreground text-primary font-semibold">
               Terms of Service →
