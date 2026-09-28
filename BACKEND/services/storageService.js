@@ -4,6 +4,7 @@ import {
   DeleteObjectCommand,
   DeleteObjectsCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { r2Client, R2_BUCKET_NAME } from "../config/r2Client.js";
@@ -249,3 +250,41 @@ export async function deleteFiles(storagePaths) {
   }
 }
 
+/**
+ * Delete ALL objects under a given R2 key prefix.
+ * This is the efficient way to remove an entire user "folder" (e.g. "{userId}/")
+ * without needing to know individual file keys upfront.
+ * @param {string} prefix - R2 key prefix (e.g. "userId/" or "avatars/userId_")
+ */
+export async function deleteByPrefix(prefix) {
+  if (!prefix) return;
+
+  let continuationToken;
+
+  do {
+    const listResponse = await r2Client.send(
+      new ListObjectsV2Command({
+        Bucket: R2_BUCKET_NAME,
+        Prefix: prefix,
+        MaxKeys: 1000,
+        ...(continuationToken && { ContinuationToken: continuationToken }),
+      }),
+    );
+
+    const contents = listResponse.Contents;
+    if (!contents || contents.length === 0) break;
+
+    // Batch delete the listed objects
+    const objects = contents.map((obj) => ({ Key: obj.Key }));
+    await r2Client.send(
+      new DeleteObjectsCommand({
+        Bucket: R2_BUCKET_NAME,
+        Delete: { Objects: objects, Quiet: true },
+      }),
+    );
+
+    continuationToken = listResponse.IsTruncated
+      ? listResponse.NextContinuationToken
+      : undefined;
+  } while (continuationToken);
+}

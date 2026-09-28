@@ -5,7 +5,10 @@ import Directory from "../models/directoryModel.js";
 import File from "../models/fileModel.js";
 import Session from "../models/sessionModel.js";
 import Share from "../models/shareModel.js";
+import Notification from "../models/notificationModel.js";
+import Activity from "../models/activityModel.js";
 import { AUDIT_ACTIONS, ROLE_HIERARCHY, ROLES } from "../constants/rbacConstants.js";
+import { deleteByPrefix, deleteFile } from "../services/storageService.js";
 
 /**
  * List all users with pagination, sorting, and search.
@@ -194,6 +197,7 @@ export const toggleSuspend = async (req, res, next) => {
 
 /**
  * Permanently delete a user and all their files, directories, shares, and sessions.
+ * Also removes the entire user folder and avatar from Cloudflare R2 storage.
  * Permission: users:delete (2FA step-up required by route)
  */
 export const deleteUser = async (req, res, next) => {
@@ -216,15 +220,14 @@ export const deleteUser = async (req, res, next) => {
     }
 
     await session.withTransaction(async () => {
-      // Delete user's sessions, shares, files, directories
+      // Delete user's sessions, shares, files, directories, notifications, activities
       await Session.deleteMany({ userId: targetUser._id }).session(session);
       await Share.deleteMany({ ownerId: targetUser._id }).session(session);
       await File.deleteMany({ userId: targetUser._id }).session(session);
       await Directory.deleteMany({ userId: targetUser._id }).session(session);
-      
-      // Note: Disk cleanup of stored files is usually handled asynchronously or in clean-up jobs.
-      // Since this is a production-level architecture plan, we will keep it simple and clean DB records first.
-      
+      await Notification.deleteMany({ userId: targetUser._id }).session(session);
+      await Activity.deleteMany({ userId: targetUser._id }).session(session);
+
       await User.findByIdAndDelete(targetUser._id).session(session);
 
       // Invalidate Redis sessions
@@ -240,6 +243,27 @@ export const deleteUser = async (req, res, next) => {
         ip: req.ip || "",
       }], { session });
     });
+
+    // ── R2 cleanup (outside transaction — best-effort) ──────────────────
+
+    const userId = targetUser._id.toString();
+
+    // Delete the entire user folder (prefix: "{userId}/") — lists and removes all objects
+    try {
+      await deleteByPrefix(`${userId}/`);
+    } catch (e) {
+      console.error(`[Admin deleteUser] Failed to delete R2 folder for user ${id}:`, e.message);
+    }
+
+    // Delete user's avatar (single file)
+    if (targetUser.avatarUrl) {
+      try {
+        const avatarFilename = targetUser.avatarUrl.split("/").pop();
+        await deleteFile(`avatars/${avatarFilename}`);
+      } catch (e) {
+        console.error(`[Admin deleteUser] Failed to delete R2 avatar for user ${id}:`, e.message);
+      }
+    }
 
     return res.json({ message: "User and all associated data permanently deleted." });
   } catch (err) {
