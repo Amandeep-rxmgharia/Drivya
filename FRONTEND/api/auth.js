@@ -16,10 +16,17 @@ api.interceptors.response.use(
   (error) => {
     // If 401 (unauthorized or session expired) on a protected page, redirect to /auth
     if (error.response?.status === 401) {
-      if (typeof window !== "undefined") {
+      // Never redirect for share-specific 401s — PublicShare handles these itself
+      const errorCode = error.response?.data?.code;
+      const isShareError =
+        errorCode === "SHARE_PASSWORD_REQUIRED" ||
+        errorCode === "AUTH_REQUIRED";
+
+      if (!isShareError && typeof window !== "undefined") {
         const path = window.location.pathname;
         const isAuthPage = path.startsWith("/auth");
-        const isPublicPage = path.startsWith("/s/") || path === "/";
+        const isPublicPage =
+          path.startsWith("/sh/") || path === "/";
         if (!isAuthPage && !isPublicPage) {
           window.location.href = "/auth";
         }
