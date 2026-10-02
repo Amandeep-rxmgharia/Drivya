@@ -185,7 +185,7 @@ export default function Payment() {
   const [status, setStatus] = useState("idle"); // idle | creating | verifying | success | error
   const [errorMsg, setErrorMsg] = useState("");
   const [successPlan, setSuccessPlan] = useState(null);
-  const [currentPeriod, setCurrentPeriod] = useState(null); // "monthly" | "yearly" | null
+  const [currentPeriod, setCurrentPeriod] = useState(null); // "monthly"   | "yearly" | null
   const handleBack = () => navigate("/dashboard/settings/billing");
 
   // Fetch current subscription period on mount
