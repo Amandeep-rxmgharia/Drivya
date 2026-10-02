@@ -4,7 +4,6 @@ import { disconnectRedis } from "./redisClient.js";
 const { MONGO_URI, DB_NAME = "Drivya" } = process.env;
 
 export async function connectDb() {
-  console.log(MONGO_URI);
   try {
     await mongoose.connect(MONGO_URI, {
       dbName: DB_NAME,
