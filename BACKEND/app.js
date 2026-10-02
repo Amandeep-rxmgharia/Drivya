@@ -142,5 +142,6 @@ app.use((err, req, res, next) => {
 // ─── Start Server ────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`Server is listening on http://localhost:${PORT}`);
+ if (process.send) process.send('ready');
 });
 
