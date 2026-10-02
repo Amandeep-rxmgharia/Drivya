@@ -1,0 +1,22 @@
+name: Deploy Backend
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'BACKEND/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Server pe connect karo
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd /home/ubuntu/Drivya/BACKEND
+            git pull origin main
+            npm install
+            pm2 reload Drivya
