@@ -562,7 +562,7 @@ export default function AdminPanel() {
             className={`${ghostBtn} h-9 px-3.5 text-xs active:scale-95 cursor-pointer`}
           >
             <RefreshCw className="h-3.5 w-3.5" />
-            Refresh
+            REFRESH
           </button>
         </div>
       </div>
