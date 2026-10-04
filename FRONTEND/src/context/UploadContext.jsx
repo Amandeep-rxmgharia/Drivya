@@ -12,7 +12,7 @@ import { importDropboxFiles, cancelDropboxImport } from "../../api/dropbox.js";
 
 const UploadContext = createContext(null);
 
-const MAX_CONCURRENT_UPLOADS = 2;
+const MAX_CONCURRENT_UPLOADS = 1;
 
 function formatBytes(bytes) {
   if (!bytes || bytes === 0) return "0 B";
